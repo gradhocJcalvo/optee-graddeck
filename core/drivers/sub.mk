@@ -78,6 +78,7 @@ srcs-$(CFG_VERSAL_HUK) += versal_huk.c
 srcs-$(CFG_CBMEM_CONSOLE) += cbmem_console.c
 srcs-$(CFG_RISCV_PLIC) += plic.c
 subdirs-y += crypto
+subdirs-y += firewall
 subdirs-$(CFG_BNXT_FW) += bnxt
 subdirs-$(CFG_DRIVERS_CLK) += clk
 subdirs-$(CFG_DRIVERS_GPIO) += gpio
