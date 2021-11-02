@@ -44,4 +44,10 @@ void gic_cpu_init(void);
 
 /* Print GIC state to console */
 void gic_dump_state(void);
+
+/* Set the Priority Mask Regarding and return its previous value */
+uint8_t gic_set_pmr(uint8_t mask);
+
+/* Set the targe tinterrupt priority mask and return its previous value */
+uint8_t gic_set_ipriority(size_t it, uint8_t mask);
 #endif /*__DRIVERS_GIC_H*/
