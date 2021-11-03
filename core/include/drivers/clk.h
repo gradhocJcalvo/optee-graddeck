@@ -47,6 +47,7 @@ struct clk {
 /**
  * struct clk_ops
  *
+ * @is_enabled: Get effective state of the clock (on / off)
  * @enable: Enable the clock
  * @disable: Disable the clock
  * @set_parent: Set the clock parent based on index
@@ -56,6 +57,7 @@ struct clk {
  * @get_rates_array: Get the supported clock rates as array
  */
 struct clk_ops {
+	bool (*is_enabled)(struct clk *clk);
 	TEE_Result (*enable)(struct clk *clk);
 	void (*disable)(struct clk *clk);
 	TEE_Result (*set_parent)(struct clk *clk, size_t index);
