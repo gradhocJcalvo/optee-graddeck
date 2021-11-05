@@ -16,6 +16,10 @@
 #include <tee_api_types.h>
 #include <types_ext.h>
 
+/* SoC versioning and device ID */
+TEE_Result stm32mp1_dbgmcu_get_chip_version(uint32_t *chip_version);
+TEE_Result stm32mp1_dbgmcu_get_chip_dev_id(uint32_t *chip_dev_id);
+
 /* Backup registers and RAM utils */
 vaddr_t stm32mp_bkpreg(unsigned int idx);
 
