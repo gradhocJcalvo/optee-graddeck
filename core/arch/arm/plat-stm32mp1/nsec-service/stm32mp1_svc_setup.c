@@ -9,7 +9,6 @@
 #include <sm/sm.h>
 #include <sm/std_smc.h>
 
-#include "bsec_svc.h"
 #include "low_power_svc.h"
 #include "pwr_svc.h"
 #include "stm32mp1_smc.h"
@@ -31,9 +30,6 @@ static enum sm_handler_ret sip_service(struct sm_ctx *ctx __unused,
 		args->a2 = STM32_SIP_SVC_UID_2;
 		args->a3 = STM32_SIP_SVC_UID_3;
 		break;
-	case STM32_SIP_SVC_FUNC_BSEC:
-		bsec_main(args);
-		break;
 	case STM32_SIP_SVC_FUNC_PWR:
 		args->a0 = pwr_scv_handler(args->a1, args->a2, args->a3);
 		break;
@@ -41,6 +37,7 @@ static enum sm_handler_ret sip_service(struct sm_ctx *ctx __unused,
 		args->a0 = pm_domain_scv_handler(args->a1, args->a2);
 		break;
 	/* Deprecated function IDs */
+	case STM32_SIP_SVC_FUNC_BSEC:
 	case STM32_SIP_SVC_FUNC_SCMI_AGENT:
 	case STM32_SIP_SVC_FUNC_SCMI_AGENT1:
 		args->a0 = ARM_SMCCC_RET_NOT_SUPPORTED;
