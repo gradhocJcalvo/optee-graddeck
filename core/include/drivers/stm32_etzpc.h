@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
  * Copyright (c) 2014, ARM Limited and Contributors. All rights reserved.
- * Copyright (c) 2018-2019, STMicroelectronics
+ * Copyright (c) 2018-2023, STMicroelectronics
  */
 
 #ifndef __DRIVERS_STM32_ETZPC_H
@@ -20,6 +20,12 @@ enum etzpc_decprot_attributes {
 
 #define ETZPC_TZMA_ALL_SECURE		GENMASK_32(9, 0)
 #define ETZPC_TZMA_ALL_NO_SECURE	0x0
+
+#ifdef CFG_STM32_ETZPC
+void stm32_etzpc_init(paddr_t base);
+#else
+static inline void stm32_etzpc_init(paddr_t __unused base) {}
+#endif
 
 /*
  * Load a DECPROT configuration
