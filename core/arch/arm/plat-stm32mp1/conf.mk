@@ -264,6 +264,10 @@ ifneq ($(CFG_WITH_SOFTWARE_PRNG),y)
 $(call force,CFG_STM32_RNG,y,Required by HW RNG when CFG_WITH_SOFTWARE_PRNG=n)
 endif
 
+ifeq ($(CFG_STM32_ETZPC),y)
+$(call force,CFG_STM32_FIREWALL,y)
+endif
+
 ifeq ($(CFG_STPMIC1),y)
 $(call force,CFG_STM32_I2C,y)
 $(call force,CFG_STM32_GPIO,y)
