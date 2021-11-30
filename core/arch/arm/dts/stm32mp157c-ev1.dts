@@ -5,6 +5,8 @@
  */
 /dts-v1/;
 
+#include <dt-bindings/soc/stm32mp15-etzpc.h>
+
 #include "stm32mp157c-ed1.dts"
 #include <dt-bindings/gpio/gpio.h>
 
