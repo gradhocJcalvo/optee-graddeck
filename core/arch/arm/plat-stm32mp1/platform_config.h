@@ -73,6 +73,8 @@
 #define I2C6_BASE			0x5c009000
 #define IWDG1_BASE			0x5c003000
 #define IWDG2_BASE			0x5a002000
+#define LTDC_BASE			0x5a001000
+#define MDMA_BASE			0x58000000
 #define PWR_BASE			0x50001000
 #define RCC_BASE			0x50000000
 #ifdef CFG_STM32MP13
@@ -89,6 +91,7 @@
 #define SRAM3_BASE			0x30040000
 #define SRAM4_BASE			0x30050000
 #endif
+#define STGEN_BASE			0x5c008000
 #define SYSCFG_BASE			0x50020000
 #ifdef CFG_STM32MP13
 #define SYSRAM_BASE			0x2ffe0000

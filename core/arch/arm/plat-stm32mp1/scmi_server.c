@@ -11,13 +11,14 @@
 #include <drivers/rstctrl.h>
 #include <drivers/scmi-msg.h>
 #include <drivers/scmi.h>
+#include <drivers/stm32_firewall.h>
+#include <drivers/stm32mp_dt_bindings.h>
 #include <drivers/stm32_vrefbuf.h>
 #include <drivers/stm32mp1_pmic.h>
 #include <drivers/stm32mp1_pwr.h>
 #include <drivers/stm32mp13_regulator_iod.h>
 #include <drivers/stpmic1.h>
 #include <drivers/stpmic1_regulator.h>
-#include <drivers/stm32mp_dt_bindings.h>
 #include <initcall.h>
 #include <mm/core_memprot.h>
 #include <mm/core_mmu.h>
@@ -51,11 +52,13 @@ struct stm32_scmi_clk {
 /*
  * struct stm32_scmi_rd - Data for the exposed reset controller
  * @reset_id: Reset identifier in RCC reset driver
+ * @base: Physical controller address
  * @name: Reset string ID exposed to channel
  * @rstctrl: Reset controller device
  */
 struct stm32_scmi_rd {
 	unsigned long reset_id;
+	paddr_t base;
 	const char *name;
 	struct rstctrl *rstctrl;
 };
@@ -105,9 +108,10 @@ register_phys_mem(MEM_AREA_IO_NSEC, CFG_STM32MP1_SCMI_SHM_BASE,
 		.enabled = (_init_enabled), \
 	}
 
-#define RESET_CELL(_scmi_id, _id, _name) \
+#define RESET_CELL(_scmi_id, _id, _base, _name) \
 	[(_scmi_id)] = { \
 		.reset_id = (_id), \
+		.base = (_base), \
 		.name = (_name), \
 	}
 
@@ -194,25 +198,26 @@ static struct stm32_scmi_clk stm32_scmi_clock[] = {
 
 #ifdef CFG_STM32MP13
 static struct stm32_scmi_rd stm32_scmi_reset_domain[] = {
-	RESET_CELL(RST_SCMI_LTDC, LTDC_R, "ltdc"),
-	RESET_CELL(RST_SCMI_MDMA, MDMA_R, "mdma"),
+	RESET_CELL(RST_SCMI_LTDC, LTDC_R, LTDC_BASE, "ltdc"),
+	RESET_CELL(RST_SCMI_MDMA, MDMA_R, MDMA_BASE, "mdma"),
 };
 #endif
 
 #ifdef CFG_STM32MP15
 static struct stm32_scmi_rd stm32_scmi_reset_domain[] = {
-	RESET_CELL(RST_SCMI_SPI6, SPI6_R, "spi6"),
-	RESET_CELL(RST_SCMI_I2C4, I2C4_R, "i2c4"),
-	RESET_CELL(RST_SCMI_I2C6, I2C6_R, "i2c6"),
-	RESET_CELL(RST_SCMI_USART1, USART1_R, "usart1"),
-	RESET_CELL(RST_SCMI_STGEN, STGEN_R, "stgen"),
-	RESET_CELL(RST_SCMI_GPIOZ, GPIOZ_R, "gpioz"),
-	RESET_CELL(RST_SCMI_CRYP1, CRYP1_R, "cryp1"),
-	RESET_CELL(RST_SCMI_HASH1, HASH1_R, "hash1"),
-	RESET_CELL(RST_SCMI_RNG1, RNG1_R, "rng1"),
-	RESET_CELL(RST_SCMI_MDMA, MDMA_R, "mdma"),
-	RESET_CELL(RST_SCMI_MCU, MCU_R, "mcu"),
-	RESET_CELL(RST_SCMI_MCU_HOLD_BOOT, MCU_HOLD_BOOT_R, "mcu_hold_boot"),
+	RESET_CELL(RST_SCMI_SPI6, SPI6_R, SPI6_BASE, "spi6"),
+	RESET_CELL(RST_SCMI_I2C4, I2C4_R, I2C4_BASE, "i2c4"),
+	RESET_CELL(RST_SCMI_I2C6, I2C6_R, I2C6_BASE, "i2c6"),
+	RESET_CELL(RST_SCMI_USART1, USART1_R, USART1_BASE, "usart1"),
+	RESET_CELL(RST_SCMI_STGEN, STGEN_R, STGEN_BASE, "stgen"),
+	RESET_CELL(RST_SCMI_GPIOZ, GPIOZ_R, GPIOZ_BASE, "gpioz"),
+	RESET_CELL(RST_SCMI_CRYP1, CRYP1_R, CRYP1_BASE, "cryp1"),
+	RESET_CELL(RST_SCMI_HASH1, HASH1_R, HASH1_BASE, "hash1"),
+	RESET_CELL(RST_SCMI_RNG1, RNG1_R, RNG1_BASE, "rng1"),
+	RESET_CELL(RST_SCMI_MDMA, MDMA_R, MDMA_BASE, "mdma"),
+	RESET_CELL(RST_SCMI_MCU, MCU_R, 0, "mcu"),
+	RESET_CELL(RST_SCMI_MCU_HOLD_BOOT, MCU_HOLD_BOOT_R, 0,
+		   "mcu_hold_boot"),
 };
 #endif
 
@@ -529,11 +534,15 @@ int32_t plat_scmi_rd_autonomous(unsigned int channel_id, unsigned int scmi_id,
 				uint32_t state)
 {
 	const struct stm32_scmi_rd *rd = find_rd(channel_id, scmi_id);
+	const struct stm32_firewall_cfg nsec_cfg[] = {
+		{ FWLL_NSEC_RW | FWLL_MASTER(0) },
+		{ }, /* Null terminated */
+	};
 
 	if (!rd)
 		return SCMI_NOT_FOUND;
 
-	if (!rd->rstctrl || !stm32mp_nsec_can_access_reset(rd->reset_id))
+	if (rd->base && stm32_firewall_check_access(rd->base, 0, nsec_cfg))
 		return SCMI_DENIED;
 	assert(rd->rstctrl);
 
@@ -561,12 +570,16 @@ int32_t plat_scmi_rd_set_state(unsigned int channel_id, unsigned int scmi_id,
 			       bool assert_not_deassert)
 {
 	const struct stm32_scmi_rd *rd = find_rd(channel_id, scmi_id);
+	const struct stm32_firewall_cfg nsec_cfg[] = {
+		{ FWLL_NSEC_RW | FWLL_MASTER(0) },
+		{ }, /* Null terminated */
+	};
 	TEE_Result res = TEE_ERROR_GENERIC;
 
 	if (!rd)
 		return SCMI_NOT_FOUND;
 
-	if (!rd->rstctrl || !stm32mp_nsec_can_access_reset(rd->reset_id))
+	if (rd->base && stm32_firewall_check_access(rd->base, 0, nsec_cfg))
 		return SCMI_DENIED;
 	assert(rd->rstctrl);
 
@@ -876,13 +889,8 @@ static TEE_Result stm32mp1_init_scmi_server(void)
 			    strlen(rd->name) >= SCMI_RD_NAME_SIZE)
 				panic("SCMI reset domain name invalid");
 
-			if (stm32mp_nsec_can_access_clock(rd->reset_id))
-				continue;
-
 			rstctrl = stm32mp_rcc_reset_id_to_rstctrl(rd->reset_id);
 			assert(rstctrl);
-			if (rstctrl_get_exclusive(rstctrl))
-				continue;
 
 			rd->rstctrl = rstctrl;
 		}
