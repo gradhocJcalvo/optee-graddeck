@@ -5,6 +5,7 @@
 
 #include <config.h>
 #include <drivers/pinctrl.h>
+#include <drivers/stm32_bsec.h>
 #include <drivers/stm32_etzpc.h>
 #include <drivers/stm32_gpio.h>
 #include <drivers/stm32mp1_rcc.h>
