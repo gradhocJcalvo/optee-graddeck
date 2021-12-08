@@ -303,7 +303,8 @@ endif
 # SiP/OEM service for non-secure world
 # BSEC fuse access, PWR services, SCMI transport.
 CFG_STM32_BSEC_SIP ?= n
-CFG_STM32_PWR_SIP ?= $(CFG_STM32MP15)
+CFG_STM32_LOWPOWER_SIP ?= y
+CFG_STM32_PWR_SIP ?= y
 CFG_STM32MP1_SCMI_SIP ?= n
 ifeq ($(CFG_STM32MP1_SCMI_SIP),y)
 $(call force,CFG_SCMI_MSG_DRIVERS,y,Mandated by CFG_STM32MP1_SCMI_SIP)
