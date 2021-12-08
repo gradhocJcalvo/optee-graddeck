@@ -47,6 +47,23 @@ struct clk {
 };
 
 /**
+ * struct clk_rate_request
+ *
+ * @rate:		Requested clock rate. This field will be adjusted by
+ *			clock drivers according to hardware capabilities.
+ * @best_parent_rate:	The best parent rate a parent can provide to fulfill the
+ *			requested constraints.
+ * @best_parent:	The most appropriate parent clock that fulfills the
+ *			requested constraints.
+ *
+ */
+struct clk_rate_request {
+	unsigned long rate;
+	unsigned long best_parent_rate;
+	struct clk *best_parent;
+};
+
+/**
  * struct clk_ops
  *
  * @is_enabled: Get effective state of the clock (on / off)
@@ -58,6 +75,9 @@ struct clk {
  * @get_rate: Get the clock rate
  * @get_rates_array: Get the supported clock rates as array
  * @get_rates_steps: Get support clock rates by min/max/step representation
+ * @determine_rate: Given a target rate as input, returns the closest rate
+ *		actually supported by the clock, and optionally the parent clock
+ *		that should be used to provide the clock rate
  */
 struct clk_ops {
 	bool (*is_enabled)(struct clk *clk);
@@ -73,6 +93,8 @@ struct clk_ops {
 				      unsigned long *rates, size_t *nb_elts);
 	TEE_Result (*get_rates_steps)(struct clk *clk, unsigned long *min,
 				      unsigned long *max, unsigned long *step);
+	TEE_Result (*determine_rate)(struct clk *clk,
+				     struct clk_rate_request *req);
 };
 
 /**
