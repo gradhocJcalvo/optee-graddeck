@@ -45,6 +45,7 @@ $(call force,CFG_HALT_CORES_ON_PANIC_SGI,15)
 $(call force,CFG_INIT_CNTVOFF,y)
 $(call force,CFG_SECURE_TIME_SOURCE_CNTPCT,y)
 $(call force,CFG_STM32_SHARED_IO,y)
+$(call force,CFG_STM32_FIREWALL,y)
 $(call force,CFG_STM32MP_CLK_CORE,y)
 $(call force,CFG_STM32MP25_CLK,y)
 $(call force,CFG_STM32MP25_RSTCTRL,y)
@@ -65,6 +66,7 @@ CFG_STM32MP_OPP_COUNT ?= 3
 
 CFG_STM32_GPIO ?= y
 CFG_STM32_RIF ?= y
+CFG_STM32_RIFSC ?= y
 CFG_STM32_UART ?= y
 
 # Default enable some test facitilites
