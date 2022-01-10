@@ -12,6 +12,7 @@
 #include <drivers/gpio.h>
 #include <drivers/pinctrl.h>
 #include <drivers/stm32_gpio.h>
+#include <drivers/stm32_rif.h>
 #include <io.h>
 #include <kernel/dt.h>
 #include <kernel/boot.h>
@@ -43,8 +44,41 @@
 #define GPIO_AFRL_OFFSET	U(0x20)
 #define GPIO_AFRH_OFFSET	U(0x24)
 #define GPIO_SECR_OFFSET	U(0x30)
+#define GPIO_PRIVCFGR_OFFSET	U(0x34)
+#define GPIO_RCFGLOCKR_OFFSET	U(0x38)
+#define GPIO_CIDCFGR(x)		(U(0x50) + U(0x8) * (x))
+#define GPIO_SEMCR(x)		(U(0x54) + U(0x8) * (x))
 
 #define GPIO_ALT_LOWER_LIMIT	U(0x8)
+
+/*
+ * CIDCFGR register bitfields
+ */
+#define GPIO_CIDCFGR_SEMWL_MASK	GENMASK_32(23, 16)
+#define GPIO_CIDCFGR_SCID_MASK	GENMASK_32(6, 4)
+#define GPIO_CIDCFGR_CONF_MASK	(_CIDCFGR_CFEN | _CIDCFGR_SEMEN |	\
+				 GPIO_CIDCFGR_SCID_MASK |		\
+				 GPIO_CIDCFGR_SEMWL_MASK)
+
+/*
+ * PRIVCFGR register bitfields
+ */
+#define GPIO_PRIVCFGR_MASK	GENMASK_32(15, 0)
+
+/*
+ * SECCFGR register bitfields
+ */
+#define GPIO_SECCFGR_MASK	GENMASK_32(15, 0)
+
+/*
+ * RCFGLOCKR register bitfields
+ */
+#define GPIO_RCFGLOCKR_MASK	GENMASK_32(15, 0)
+
+/*
+ * SEMCR register bitfields
+ */
+#define GPIO_SEMCR_SCID_M	GENMASK_32(6, 4)
 
 #define GPIO_MODE_MASK		GENMASK_32(1, 0)
 #define GPIO_OSPEED_MASK	GENMASK_32(1, 0)
@@ -78,6 +112,8 @@
 
 #define GPIO_OD_LEVEL_LOW	U(0x0)
 #define GPIO_OD_LEVEL_HIGH	U(0x1)
+
+#define GPIO_MAX_CID_SUPPORTED	U(3)
 
 /*
  * GPIO configuration description structured as single 16bit word
@@ -131,8 +167,9 @@ struct stm32_pinctrl_array {
  * @ngpios: number of GPIOs.
  * @bank_id: Id of the bank.
  * @lock: lock protecting the GPIO bank access.
- * @sec_support: True if bank supports pin security protection, otherwise false
- * @seccfgr: Secure configuration register value.
+ * @rif_cfg: RIF configuration data
+ * @sec_support: True if bank supports pin security protection, else false
+ * @ready: True if configuration is applied, else false
  * @link: Link in bank list
  */
 struct stm32_gpio_bank {
@@ -142,8 +179,10 @@ struct stm32_gpio_bank {
 	unsigned int ngpios;
 	unsigned int bank_id;
 	unsigned int lock;
+	struct rif_conf_data *rif_cfg;
 	uint32_t seccfgr;
 	bool sec_support;
+	bool ready;
 	STAILQ_ENTRY(stm32_gpio_bank) link;
 };
 
@@ -152,10 +191,12 @@ struct stm32_gpio_bank {
  *
  * @gpioz: True if bank is a GPIOZ bank
  * @secure_control: Identify GPIO security bank capability.
+ * @secure_control: Identify RIF presence.
  */
 struct bank_compat {
 	bool gpioz;
 	bool secure_control;
+	bool secure_extended;
 };
 
 static unsigned int gpio_lock;
@@ -608,6 +649,164 @@ static bool bank_is_registered(const void *fdt, int node)
 	return false;
 }
 
+static TEE_Result apply_rif_config(struct stm32_gpio_bank *bank)
+{
+	TEE_Result res = TEE_ERROR_GENERIC;
+	uint32_t cidcfgr = 0;
+	unsigned int i = 0;
+
+	if (clk_enable(bank->clock))
+		panic();
+
+	for (i = 0; i < bank->ngpios; i++) {
+		if (!(BIT(i) & bank->rif_cfg->access_mask[0]))
+			continue;
+
+		/*
+		 * Whatever the TDCID state, try to clear the configurable part
+		 * of the CIDCFGR register.
+		 * If TDCID, register will be cleared, if not, the clear will
+		 * be ignored.
+		 * When TDCID, OP-TEE should be the one to set the CID filtering
+		 * configuration. Clearing previous configuration prevents
+		 * undesired events during the only legitimate configuration.
+		 */
+		io_clrbits32(bank->base + GPIO_CIDCFGR(i),
+			     GPIO_CIDCFGR_CONF_MASK);
+
+		cidcfgr = io_read32(bank->base + GPIO_CIDCFGR(i));
+
+		/* Check if the controller is in semaphore mode */
+		if (SEM_MODE_INCORRECT(cidcfgr))
+			continue;
+
+		/* If not TDCID, we want to acquire semaphores assigned to us */
+		res = stm32_rif_acquire_semaphore(bank->base + GPIO_SEMCR(i),
+						  GPIO_MAX_CID_SUPPORTED);
+		if (res) {
+			EMSG("Could not acquire semaphore for pin %u", i);
+			goto out;
+		}
+	}
+
+	/* Security and privilege RIF configuration */
+	io_clrsetbits32(bank->base + GPIO_PRIVCFGR_OFFSET, GPIO_PRIVCFGR_MASK,
+			bank->rif_cfg->priv_conf[0]);
+	io_clrsetbits32(bank->base + GPIO_SECR_OFFSET, GPIO_SECCFGR_MASK,
+			bank->rif_cfg->sec_conf[0]);
+
+	for (i = 0; i < bank->ngpios; i++) {
+		if (!(BIT(i) & bank->rif_cfg->access_mask[0]))
+			continue;
+
+		io_clrsetbits32(bank->base + GPIO_CIDCFGR(i),
+				GPIO_CIDCFGR_CONF_MASK,
+				bank->rif_cfg->cid_confs[i]);
+
+		cidcfgr = io_read32(bank->base + GPIO_CIDCFGR(i));
+
+		/*
+		 * Take semaphore if the resource is in semaphore mode
+		 * and secured.
+		 */
+		if (SEM_MODE_INCORRECT(cidcfgr) ||
+		    !(io_read32(bank->base + GPIO_SECR_OFFSET) & BIT(i))) {
+			res = stm32_rif_release_semaphore(bank->base +
+				GPIO_SEMCR(i),
+				GPIO_MAX_CID_SUPPORTED);
+			if (res) {
+				EMSG("Could not release semaphore for pin%u",
+				     i);
+				goto out;
+			}
+		} else {
+			res = stm32_rif_acquire_semaphore(bank->base +
+				GPIO_SEMCR(i),
+				GPIO_MAX_CID_SUPPORTED);
+			if (res) {
+				EMSG("Could not acquire semaphore for pin%u",
+				     i);
+				goto out;
+			}
+		}
+	}
+
+	/*
+	 * Lock RIF configuration if configured. This cannot be undone until
+	 * next reset.
+	 */
+	io_clrsetbits32(bank->base + GPIO_RCFGLOCKR_OFFSET, GPIO_RCFGLOCKR_MASK,
+			bank->rif_cfg->lock_conf[0]);
+
+	if (IS_ENABLED(CFG_TEE_CORE_DEBUG)) {
+		/* Check that RIF config are applied, panic otherwise */
+		if ((io_read32(bank->base + GPIO_PRIVCFGR_OFFSET) &
+		     bank->rif_cfg->access_mask[0]) !=
+		    bank->rif_cfg->priv_conf[0]) {
+			EMSG("GPIO bank priv conf (ID: %u) is incorrect",
+			     bank->bank_id);
+			panic();
+		}
+
+		if ((io_read32(bank->base + GPIO_SECR_OFFSET) &
+		     bank->rif_cfg->access_mask[0]) !=
+		    bank->rif_cfg->sec_conf[0]) {
+			EMSG("GPIO bank sec conf (ID: %u) is incorrect",
+			     bank->bank_id);
+			panic();
+		}
+	}
+
+out:
+	clk_disable(bank->clock);
+
+	return TEE_SUCCESS;
+}
+
+static void stm32_gpio_save_rif_config(struct stm32_gpio_bank *bank)
+{
+	size_t i = 0;
+
+	for (i = 0; i < bank->ngpios; i++)
+		bank->rif_cfg->cid_confs[i] = io_read32(bank->base +
+							 GPIO_CIDCFGR(i));
+
+	bank->rif_cfg->priv_conf[0] = io_read32(bank->base +
+						 GPIO_PRIVCFGR_OFFSET);
+	bank->rif_cfg->sec_conf[0] = io_read32(bank->base +
+						 GPIO_SECR_OFFSET);
+	bank->rif_cfg->lock_conf[0] = io_read32(bank->base +
+						 GPIO_RCFGLOCKR_OFFSET);
+}
+
+static void stm32_parse_gpio_rif_conf(struct stm32_gpio_bank *bank,
+				      const void *fdt, int node)
+{
+	unsigned int i = 0;
+	unsigned int nb_rif_conf = 0;
+	int lenp = 0;
+	const fdt32_t *cuint = NULL;
+
+	cuint = fdt_getprop(fdt, node, "st,protreg", &lenp);
+	if (!cuint)
+		panic("No RIF configuration available");
+
+	nb_rif_conf = MIN((unsigned int)(lenp / sizeof(uint32_t)),
+			  bank->ngpios);
+
+	bank->rif_cfg->cid_confs = calloc(bank->ngpios, sizeof(uint32_t));
+	bank->rif_cfg->priv_conf = calloc(1, sizeof(uint32_t));
+	bank->rif_cfg->lock_conf = calloc(1, sizeof(uint32_t));
+	bank->rif_cfg->access_mask = calloc(1, sizeof(uint32_t));
+	if (!bank->rif_cfg->cid_confs || !bank->rif_cfg->access_mask ||
+	    !bank->rif_cfg->priv_conf || !bank->rif_cfg->lock_conf)
+		panic("Missing memory capacity for GPIOS RIF configuration");
+
+	for (i = 0; i < nb_rif_conf; i++)
+		stm32_rif_parse_cfg(fdt32_to_cpu(cuint[i]), bank->rif_cfg,
+				    GPIO_MAX_CID_SUPPORTED, bank->ngpios);
+}
+
 /* Get GPIO bank information from the DT */
 static TEE_Result dt_stm32_gpio_bank(const void *fdt, int node,
 				     const void *compat_data,
@@ -656,18 +855,6 @@ static TEE_Result dt_stm32_gpio_bank(const void *fdt, int node,
 	bank->clock = clk;
 	bank->gpio_chip.ops = &stm32_gpio_ops;
 	bank->sec_support = compat->secure_control;
-	if (bank->sec_support) {
-		/* Secure configuration */
-		bank->base = io_pa_or_va_secure(&pa_va, blen);
-		cuint = fdt_getprop(fdt, node, "st,protreg", NULL);
-		if (cuint)
-			bank->seccfgr = fdt32_to_cpu(*cuint);
-		else
-			DMSG("GPIO bank %c assigned to non-secure",
-			     bank->bank_id + 'A');
-	} else {
-		bank->base = io_pa_or_va_nsec(&pa_va, blen);
-	}
 
 	/* Parse gpio-ranges with its 4 parameters */
 	cuint = fdt_getprop(fdt, node, "gpio-ranges", &len);
@@ -683,10 +870,44 @@ static TEE_Result dt_stm32_gpio_bank(const void *fdt, int node,
 		cuint += 4;
 	}
 
+	if (compat->secure_extended) {
+		bank->rif_cfg = calloc(1, sizeof(*bank->rif_cfg));
+		if (!bank->rif_cfg) {
+			free(bank);
+			return TEE_ERROR_OUT_OF_MEMORY;
+		}
+
+		bank->rif_cfg->sec_conf = calloc(1, sizeof(uint32_t));
+		if (!bank->rif_cfg->sec_conf) {
+			free(bank->rif_cfg);
+			free(bank);
+			return TEE_ERROR_OUT_OF_MEMORY;
+		}
+	}
+
+	if (bank->rif_cfg) {
+		/* RIF configuration */
+		bank->base = io_pa_or_va_secure(&pa_va, blen);
+
+		stm32_parse_gpio_rif_conf(bank, fdt, node);
+	} else if (bank->sec_support) {
+		/* Secure configuration */
+		bank->base = io_pa_or_va_secure(&pa_va, blen);
+		cuint = fdt_getprop(fdt, node, "st,protreg", NULL);
+		if (cuint)
+			bank->seccfgr = fdt32_to_cpu(*cuint);
+		else
+			DMSG("GPIO bank %c assigned to non-secure",
+			     bank->bank_id + 'A');
+	} else {
+		bank->base = io_pa_or_va_nsec(&pa_va, blen);
+	}
+
 	if (compat->gpioz)
 		stm32mp_register_gpioz_pin_count(bank->ngpios);
 
 	*out_bank = bank;
+
 	return TEE_SUCCESS;
 }
 
@@ -941,8 +1162,24 @@ static TEE_Result stm32_gpio_pm_resume(void)
 {
 	struct stm32_gpio_bank *bank = NULL;
 
-	STAILQ_FOREACH(bank, &bank_list, link)
-		stm32_gpio_set_conf_sec(bank);
+	STAILQ_FOREACH(bank, &bank_list, link) {
+		if (bank->rif_cfg) {
+			bool is_tdcid = false;
+
+			if (stm32_rifsc_check_tdcid(&is_tdcid))
+				panic();
+
+			if (!is_tdcid)
+				continue;
+
+			bank->rif_cfg->access_mask[0] = GENMASK_32(bank->ngpios,
+								   0);
+
+			apply_rif_config(bank);
+		} else {
+			stm32_gpio_set_conf_sec(bank);
+		}
+	}
 
 	return TEE_SUCCESS;
 }
@@ -951,8 +1188,19 @@ static TEE_Result stm32_gpio_pm_suspend(void)
 {
 	struct stm32_gpio_bank *bank = NULL;
 
-	STAILQ_FOREACH(bank, &bank_list, link)
-		stm32_gpio_get_conf_sec(bank);
+	STAILQ_FOREACH(bank, &bank_list, link) {
+		if (bank->rif_cfg) {
+			bool is_tdcid = false;
+
+			if (stm32_rifsc_check_tdcid(&is_tdcid))
+				panic();
+
+			if (is_tdcid)
+				stm32_gpio_save_rif_config(bank);
+		} else {
+			stm32_gpio_get_conf_sec(bank);
+		}
+	}
 
 	return TEE_SUCCESS;
 }
@@ -964,7 +1212,7 @@ stm32_gpio_pm(enum pm_op op, unsigned int pm_hint __unused,
 	TEE_Result ret = 0;
 
 	if (!IS_ENABLED(CFG_STM32MP13) && !IS_ENABLED(CFG_STM32MP15) &&
-	    !PM_HINT_IS_STATE(pm_hint, CONTEXT))
+	    pm_hint != PM_HINT_CONTEXT_STATE)
 		return TEE_SUCCESS;
 
 	if (op == PM_OP_RESUME)
@@ -976,12 +1224,44 @@ stm32_gpio_pm(enum pm_op op, unsigned int pm_hint __unused,
 }
 DECLARE_KEEP_PAGER(stm32_gpio_pm);
 
+/*
+ * Several pinctrl nodes can be probed. Their bank will be put in the unique
+ * bank_list. To avoid multiple configuration set for a bank when looping
+ * over each bank in the bank list, ready is set to true when a bank is
+ * configured. Therefore, during other bank probes, the configuration won't
+ * be set again.
+ */
+static TEE_Result apply_sec_cfg(void)
+{
+	TEE_Result res = TEE_ERROR_GENERIC;
+	struct stm32_gpio_bank *bank = NULL;
+
+	STAILQ_FOREACH(bank, &bank_list, link) {
+		if (bank->ready)
+			continue;
+
+		if (bank->rif_cfg) {
+			res = apply_rif_config(bank);
+			if (res) {
+				EMSG("Failed to set GPIO RIF, bank %u",
+				     bank->bank_id);
+				return res;
+			}
+		} else {
+			stm32_gpio_set_conf_sec(bank);
+		}
+
+		bank->ready = true;
+	}
+
+	return TEE_SUCCESS;
+}
+
 static TEE_Result stm32_pinctrl_probe(const void *fdt, int node,
 				      const void *compat_data)
 {
 	static bool pm_register;
 	TEE_Result res = TEE_ERROR_GENERIC;
-	struct stm32_gpio_bank *bank = NULL;
 
 	/* Register GPIO banks described in this pin control node */
 	res = dt_stm32_gpio_pinctrl(fdt, node, compat_data);
@@ -990,12 +1270,8 @@ static TEE_Result stm32_pinctrl_probe(const void *fdt, int node,
 
 	if (STAILQ_EMPTY(&bank_list))
 		DMSG("no gpio bank for that driver");
-	else
-		STAILQ_FOREACH(bank, &bank_list, link) {
-			stm32_gpio_set_conf_sec(bank);
-			DMSG("Registered GPIO bank %c (%d pins) @%lx",
-			     bank->bank_id + 'A', bank->ngpios, bank->base);
-		}
+	else if (apply_sec_cfg())
+		panic();
 
 	if (!pm_register) {
 		/* Register to PM once for all probed banks */
@@ -1003,7 +1279,6 @@ static TEE_Result stm32_pinctrl_probe(const void *fdt, int node,
 					    "stm32-gpio-service");
 		pm_register = true;
 	}
-
 
 #ifdef CFG_DRIVERS_PINCTRL
 	res = pinctrl_register_provider(fdt, node, stm32_pinctrl_dt_get,
@@ -1020,12 +1295,14 @@ static const struct dt_device_match stm32_pinctrl_match_table[] = {
 		.compatible = "st,stm32mp135-pinctrl",
 		.compat_data = &(struct bank_compat){
 			.secure_control = true,
+			.secure_extended = false,
 		},
 	},
 	{
 		.compatible = "st,stm32mp157-pinctrl",
 		.compat_data = &(struct bank_compat){
 			.secure_control = false,
+			.secure_extended = false,
 		},
 	},
 	{
@@ -1033,12 +1310,14 @@ static const struct dt_device_match stm32_pinctrl_match_table[] = {
 		.compat_data = &(struct bank_compat){
 			.gpioz = true,
 			.secure_control = true,
+			.secure_extended = false,
 		},
 	},
 	{
 		.compatible = "st,stm32mp257-pinctrl",
 		.compat_data = &(struct bank_compat){
 			.secure_control = true,
+			.secure_extended = true,
 		},
 	},
 	{
@@ -1046,6 +1325,7 @@ static const struct dt_device_match stm32_pinctrl_match_table[] = {
 		.compat_data = &(struct bank_compat){
 			.gpioz = true,
 			.secure_control = true,
+			.secure_extended = true,
 		},
 	},
 	{ }
