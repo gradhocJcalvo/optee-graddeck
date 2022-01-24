@@ -163,6 +163,7 @@ $(call force,CFG_DRIVERS_CLK_FIXED,y)
 $(call force,CFG_SECONDARY_INIT_CNTFRQ,n)
 $(call force,CFG_STM32_EXTI,y)
 $(call force,CFG_STM32_GPIO,y)
+$(call force,CFG_STM32_HSE_MONITORING,y)
 $(call force,CFG_STM32_VREFBUF,y)
 $(call force,CFG_STM32MP_CLK_CORE,y)
 $(call force,CFG_STM32MP1_OPTEE_IN_SYSRAM,n)
@@ -296,6 +297,10 @@ endif
 # If any crypto driver is enabled, enable the crypto-framework layer
 ifeq ($(call cfg-one-enabled, CFG_STM32_CRYP CFG_STM32_SAES),y)
 $(call force,CFG_STM32_CRYPTO_DRIVER,y)
+endif
+
+ifeq ($(CFG_STM32_HSE_MONITORING),y)
+$(call force,CFG_STM32_LPTIMER,y)
 endif
 
 ifeq ($(call cfg-one-enabled, CFG_STM32_LPTIMER CFG_STM32_TIM),y)
