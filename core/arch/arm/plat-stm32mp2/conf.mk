@@ -64,6 +64,7 @@ CFG_TEE_CORE_NB_CORE ?= 2
 CFG_STM32MP_OPP_COUNT ?= 3
 
 CFG_STM32_GPIO ?= y
+CFG_STM32_RIF ?= y
 CFG_STM32_UART ?= y
 
 # Default enable some test facitilites
