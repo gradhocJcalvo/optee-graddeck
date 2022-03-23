@@ -97,6 +97,19 @@ $(call force,CFG_DRIVERS_RSTCTRL,y)
 $(call force,CFG_STM32_RSTCTRL,y)
 endif
 
+# Enable BSEC PTA for fuses access management
+CFG_STM32_BSEC_PTA ?= y
+ifeq ($(CFG_STM32_BSEC_PTA),y)
+$(call force,CFG_STM32_BSEC3,y,Mandated by CFG_STM32_BSEC_PTA)
+endif
+
+# Enable Early TA NVMEM for provisioning management
+CFG_TA_STM32MP_NVMEM ?= y
+ifeq ($(CFG_TA_STM32MP_NVMEM),y)
+$(call force,CFG_STM32_BSEC_PTA,y,Mandated by CFG_TA_STM32MP_NVMEM)
+CFG_IN_TREE_EARLY_TAS += stm32mp_nvmem/1a8342cc-81a5-4512-99fe-9e2b3e37d626
+endif
+
 # Optional behavior upon receiving illegal access events
 CFG_STM32_PANIC_ON_IAC_EVENT ?= y
 ifeq ($(CFG_TEE_CORE_DEBUG),y)
