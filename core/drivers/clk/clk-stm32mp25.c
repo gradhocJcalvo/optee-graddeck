@@ -4,14 +4,17 @@
  */
 
 #include <assert.h>
+#include <config.h>
 #include <libfdt.h>
 #include <drivers/clk.h>
 #include <drivers/clk_dt.h>
+#include <drivers/stm32_rif.h>
 #include <drivers/stm32mp25_rcc.h>
 #include <dt-bindings/clock/stm32mp25-clks.h>
 #include <dt-bindings/clock/stm32mp25-clksrc.h>
 #include <kernel/boot.h>
 #include <kernel/delay.h>
+#include <initcall.h>
 #include <io.h>
 #include <kernel/dt.h>
 #include <mm/core_memprot.h>
@@ -28,19 +31,24 @@
 #define A35_SS_PLL_FREQ1	0x0080
 #define A35_SS_PLL_FREQ2	0x0090
 #define A35_SS_PLL_ENABLE	0x00a0
+#define RCC_SECCFGR(x)		(U(0x0) + U(0x4) * (x))
+#define RCC_PRIVCFGR(x)		(U(0x10) + U(0x4) * (x))
+#define RCC_RCFGLOCKR(x)	(U(0x20) + U(0x4) * (x))
+#define RCC_CIDCFGR(x)		(U(0x030) + U(0x08) * (x))
+#define RCC_SEMCR(x)		(U(0x034) + U(0x08) * (x))
 
 #define A35_SS_CHGCLKREQ_ARM_CHGCLKREQ		BIT(0)
 #define A35_SS_CHGCLKREQ_ARM_CHGCLKACK		BIT(1)
 
 #define A35_SS_PLL_FREQ1_FBDIV_MASK		GENMASK_32(11, 0)
-#define A35_SS_PLL_FREQ1_FBDIV_SHIFT		0
+#define A35_SS_PLL_FREQ1_FBDIV_SHIFT		U(0)
 #define A35_SS_PLL_FREQ1_REFDIV_MASK		GENMASK_32(21, 16)
-#define A35_SS_PLL_FREQ1_REFDIV_SHIFT		16
+#define A35_SS_PLL_FREQ1_REFDIV_SHIFT		U(16)
 
 #define A35_SS_PLL_FREQ2_POSTDIV1_MASK		GENMASK_32(2, 0)
-#define A35_SS_PLL_FREQ2_POSTDIV1_SHIFT		0
+#define A35_SS_PLL_FREQ2_POSTDIV1_SHIFT		U(0)
 #define A35_SS_PLL_FREQ2_POSTDIV2_MASK		GENMASK_32(5, 3)
-#define A35_SS_PLL_FREQ2_POSTDIV2_SHIFT		3
+#define A35_SS_PLL_FREQ2_POSTDIV2_SHIFT		U(3)
 
 #define A35_SS_PLL_FREQ1_MASK	(GENMASK_32(21, 16) | GENMASK_32(11, 0))
 #define A35_SS_PLL_FREQ2_MASK	GENMASK_32(5, 0)
@@ -64,11 +72,11 @@
 /* Parameters from XBAR_CFG in st,cksrc field */
 #define XBAR_CKSRC_CHANNEL		GENMASK_32(5, 0)
 #define XBAR_CKSRC_SRC			GENMASK_32(9, 6)
-#define XBAR_CKSRC_SRC_OFFSET		6
+#define XBAR_CKSRC_SRC_OFFSET		U(6)
 #define XBAR_CKSRC_PREDIV		GENMASK_32(19, 10)
-#define XBAR_CKSRC_PREDIV_OFFSET	10
+#define XBAR_CKSRC_PREDIV_OFFSET	U(10)
 #define XBAR_CKSRC_FINDIV		GENMASK_32(25, 20)
-#define XBAR_CKSRC_FINDIV_OFFSET	20
+#define XBAR_CKSRC_FINDIV_OFFSET	U(20)
 
 #define XBAR_CHANNEL_NB			U(64)
 #define XBAR_ROOT_CHANNEL_NB		U(7)
@@ -76,6 +84,47 @@
 #define RCC_0_MHZ	UL(0)
 #define RCC_4_MHZ	UL(4000000)
 #define RCC_16_MHZ	UL(16000000)
+
+/*
+ * CIDCFGR register bitfields
+ */
+#define RCC_CIDCFGR_SEMWL_MASK		GENMASK_32(23, 16)
+#define RCC_CIDCFGR_SCID_MASK		GENMASK_32(6, 4)
+#define RCC_CIDCFGR_CONF_MASK		(_CIDCFGR_CFEN |	\
+					 _CIDCFGR_SEMEN |	\
+					 RCC_CIDCFGR_SCID_MASK |\
+					 RCC_CIDCFGR_SEMWL_MASK)
+
+/*
+ * PRIVCFGR register bitfields
+ */
+#define RCC_PRIVCFGR_MASK		GENMASK_32(31, 0)
+
+/*
+ * RCFGLOCKR register bitfields
+ */
+#define RCC_RCFGLOCKR_MASK		GENMASK_32(31, 0)
+
+/*
+ * SECCFGR register bitfields
+ */
+#define RCC_SECCFGR_EN			BIT(0)
+#define RCC_SECCFGR_MASK		GENMASK_32(31, 0)
+
+/*
+ * SEMCR register bitfields
+ */
+#define RCC_SEMCR_SCID_MASK		GENMASK_32(6, 4)
+#define RCC_SEMCR_SCID_SHIFT		U(4)
+
+/*
+ * RIF miscellaneous
+ */
+
+#define RCC_NB_RIF_RES			U(114)
+#define RCC_NB_CONFS			((RCC_NB_RIF_RES / 32) + 1)
+
+#define RCC_NB_MAX_CID_SUPPORTED	U(7)
 
 enum pll_cfg {
 	FBDIV,
@@ -134,6 +183,8 @@ struct stm32_clk_platdata {
 	uint32_t *flexgen;
 	uint32_t c1msrd;
 	bool safe_rst;
+	struct rif_conf_data conf_data;
+	unsigned int nb_res;
 };
 
 #define A35SSC_BASE	0x48800000
@@ -1246,6 +1297,10 @@ static int stm32_clk_parse_fdt(const void *fdt, int node,
 			       struct stm32_clk_platdata *pdata)
 {
 	int err = 0;
+	uint32_t rif_conf = 0;
+	unsigned int i = 0;
+	int lenp = 0;
+	const fdt32_t *cuint = NULL;
 
 	err = stm32_clk_parse_fdt_all_oscillator(fdt, node, pdata);
 	if (err != 0)
@@ -1282,6 +1337,35 @@ static int stm32_clk_parse_fdt(const void *fdt, int node,
 
 	pdata->safe_rst = fdt_getprop(fdt, node, "st,safe_rst",
 				      NULL) ? true : false;
+
+	pdata->rcc_base = stm32_rcc_base();
+
+	cuint = fdt_getprop(fdt, node, "st,protreg", &lenp);
+	if (!cuint)
+		panic("No RIF configuration");
+
+	pdata->nb_res = (unsigned int)(lenp / sizeof(uint32_t));
+	assert(pdata->nb_res <= RCC_NB_RIF_RES);
+
+	pdata->conf_data.cid_confs = calloc(RCC_NB_RIF_RES,
+					    sizeof(uint32_t));
+	pdata->conf_data.sec_conf = calloc(RCC_NB_CONFS, sizeof(uint32_t));
+	pdata->conf_data.priv_conf = calloc(RCC_NB_CONFS, sizeof(uint32_t));
+	pdata->conf_data.lock_conf = calloc(RCC_NB_CONFS, sizeof(uint32_t));
+	pdata->conf_data.access_mask = calloc(RCC_NB_CONFS, sizeof(uint32_t));
+	if (!pdata->conf_data.cid_confs || !pdata->conf_data.sec_conf ||
+	    !pdata->conf_data.priv_conf || !pdata->conf_data.access_mask ||
+	    !pdata->conf_data.lock_conf)
+		panic("Missing memory capacity for RCC RIF configuration");
+
+	for (i = 0; i < pdata->nb_res; i++) {
+		rif_conf = fdt32_to_cpu(cuint[i]);
+
+		stm32_rif_parse_cfg(rif_conf,
+				    &pdata->conf_data,
+				    RCC_NB_MAX_CID_SUPPORTED,
+				    RCC_NB_RIF_RES);
+	}
 
 	return 0;
 }
@@ -1482,14 +1566,21 @@ static void clk_stm32_pll_config_csg(struct clk_stm32_priv *priv,
 	io_setbits32(pllxcfgr3, RCC_PLLxCFGR3_DACEN);
 }
 
-static int stm32_clk_configure_mux(struct clk_stm32_priv *priv, uint32_t data);
-
 static inline struct stm32_pll_dt_cfg *clk_stm32_pll_get_pdata(int pll_idx)
 {
 	struct clk_stm32_priv *priv = clk_stm32_get_priv();
 	struct stm32_clk_platdata *pdata = priv->pdata;
 
 	return  &pdata->pll[pll_idx];
+}
+
+static int clk_stm32_pll_set_mux(__maybe_unused struct clk_stm32_priv *priv,
+				 uint32_t src)
+{
+	int mux = (src & MUX_ID_MASK) >> MUX_ID_SHIFT;
+	int sel = (src & MUX_SEL_MASK) >> MUX_SEL_SHIFT;
+
+	return stm32_mux_set_parent(mux, sel);
 }
 
 static int clk_stm32_pll1_init(struct clk_stm32_priv *priv,
@@ -1507,7 +1598,7 @@ static int clk_stm32_pll1_init(struct clk_stm32_priv *priv,
 
 	stm32mp2_a35_ss_on_hsi();
 
-	ret = stm32_clk_configure_mux(priv, pll_conf->src);
+	ret = clk_stm32_pll_set_mux(priv, pll_conf->src);
 	if (ret != 0)
 		panic();
 
@@ -1549,7 +1640,7 @@ static int clk_stm32_pll_init(struct clk_stm32_priv *priv, int pll_idx,
 
 	stm32_gate_rdy_disable(pll->gate_id);
 
-	ret = stm32_clk_configure_mux(priv, pll_conf->src);
+	ret = clk_stm32_pll_set_mux(priv, pll_conf->src);
 	if (ret != 0)
 		panic();
 
@@ -1767,13 +1858,70 @@ static int stm32_clk_configure_div(__maybe_unused struct clk_stm32_priv *priv,
 	return stm32_div_set_value(div_id, div_n);
 }
 
+struct mux_rifsc_cfg {
+	bool	is_rifsc;
+	int	rifsc_id;
+};
+
+/* Muxes which RIF config is inherited from the RIFSC */
+#define MUX_RIFSC_CFG(_mux_id, _rifsc_id)\
+	[(_mux_id)] = {\
+		.rifsc_id	= (_rifsc_id),\
+		.is_rifsc	= (true),\
+	}
+
+#define _RIFSC_RISC_PER0_CIDCFGR	U(0x100)
+#define _RIFSC_RISC_PER0_SEMCR		U(0x104)
+
+#define _OFST_PERX_CIDCFGR		U(0x8)
+
+struct mux_rifsc_cfg tab_mux_rifsc[MUX_NB] = {
+	MUX_RIFSC_CFG(MUX_ADC12, STM32MP25_RIFSC_ADC12_ID),
+	MUX_RIFSC_CFG(MUX_ADC3, STM32MP25_RIFSC_ADC3_ID),
+	MUX_RIFSC_CFG(MUX_USB2PHY1, STM32MP25_RIFSC_USBH_ID),
+	MUX_RIFSC_CFG(MUX_USB2PHY2, STM32MP25_RIFSC_USBH_ID),
+	MUX_RIFSC_CFG(MUX_USB3PCIEPHY, STM32MP25_RIFSC_USB3DR_ID),
+	MUX_RIFSC_CFG(MUX_LVDSPHY, STM32MP25_RIFSC_LVDS_ID),
+	MUX_RIFSC_CFG(MUX_DSIBLANE, STM32MP25_RIFSC_DSI_CMN_ID),
+	MUX_RIFSC_CFG(MUX_DSIPHY, STM32MP25_RIFSC_DSI_CMN_ID),
+	MUX_RIFSC_CFG(MUX_DTS, STM32MP25_RIFSC_DTS_ID),
+};
+
 static int stm32_clk_configure_mux(__maybe_unused struct clk_stm32_priv *priv,
 				   uint32_t data)
 {
 	int mux = (data & MUX_ID_MASK) >> MUX_ID_SHIFT;
 	int sel = (data & MUX_SEL_MASK) >> MUX_SEL_SHIFT;
+	unsigned int rifsc_id = tab_mux_rifsc[mux].rifsc_id;
+	uintptr_t per_offset = _OFST_PERX_CIDCFGR * rifsc_id;
+	struct io_pa_va rifsc_addr = { .pa = RIFSC_BASE };
+	vaddr_t rifsc_base = io_pa_or_va(&rifsc_addr, 1);
+	uint32_t cidcfgr = io_read32(rifsc_base + _RIFSC_RISC_PER0_CIDCFGR +
+				     per_offset);
+	bool sem_taken = false;
+	int ret = 0;
 
-	return stm32_mux_set_parent(mux, sel);
+	if (tab_mux_rifsc[mux].is_rifsc && SEM_EN_AND_OK(cidcfgr, RIF_CID1)) {
+		if (stm32_rif_acquire_semaphore(rifsc_base +
+						_RIFSC_RISC_PER0_SEMCR +
+						per_offset,
+						MAX_CID_SUPPORTED))
+			return -1;
+
+		sem_taken = true;
+	}
+
+	ret = stm32_mux_set_parent(mux, sel);
+
+	if (sem_taken) {
+		if (stm32_rif_release_semaphore(rifsc_base +
+						_RIFSC_RISC_PER0_SEMCR +
+						per_offset,
+						MAX_CID_SUPPORTED))
+			return -1;
+	}
+
+	return ret;
 }
 
 static int stm32_clk_configure_by_addr_val(struct clk_stm32_priv *priv,
@@ -3441,6 +3589,142 @@ static struct clk_stm32_priv stm32mp25_clock_data = {
 	.clk_refs		= stm32mp25_clk_provided,
 	.is_critical		= clk_stm32_clock_is_critical,
 };
+
+static TEE_Result apply_rcc_rif_config(bool is_tdcid)
+{
+	TEE_Result res = TEE_ERROR_ACCESS_DENIED;
+	struct stm32_clk_platdata *pdata = &stm32mp25_clock_pdata;
+	uint32_t cidcfgr = 0;
+	unsigned int i = 0;
+	unsigned int index = 0;
+
+	for (i = 0; i < RCC_NB_RIF_RES; i++) {
+		index = i / 32;
+		if (!(BIT(i % 32) & pdata->conf_data.access_mask[index]))
+			continue;
+
+		/*
+		 * When TDCID, OP-TEE should be the one to set the CID filtering
+		 * configuration. Clearing previous configuration prevents
+		 * undesired events during the only legitimate configuration.
+		 */
+		if (is_tdcid)
+			io_clrbits32(pdata->rcc_base + RCC_CIDCFGR(i),
+				     RCC_CIDCFGR_CONF_MASK);
+
+		cidcfgr = io_read32(pdata->rcc_base + RCC_CIDCFGR(i));
+
+		/* Check if the resource is in semaphore mode */
+		if (SEM_MODE_INCORRECT(cidcfgr))
+			continue;
+
+		/* If not TDCID, we want to acquire semaphores assigned to us */
+		res = stm32_rif_acquire_semaphore(pdata->rcc_base +
+						  RCC_SEMCR(i),
+						  RCC_NB_MAX_CID_SUPPORTED);
+		if (res) {
+			EMSG("Couldn't acquire semaphore for resource %u", i);
+			return res;
+		}
+	}
+
+	/* Security and privilege RIF configuration */
+	for (index = 0; index < RCC_NB_CONFS; index++) {
+		io_clrsetbits32(pdata->rcc_base + RCC_PRIVCFGR(index),
+				RCC_PRIVCFGR_MASK &
+				pdata->conf_data.access_mask[index],
+				pdata->conf_data.priv_conf[index]);
+		io_clrsetbits32(pdata->rcc_base + RCC_SECCFGR(index),
+				RCC_SECCFGR_MASK &
+				pdata->conf_data.access_mask[index],
+				pdata->conf_data.sec_conf[index]);
+	}
+
+	if (!is_tdcid)
+		goto end;
+
+	for (i = 0; i < RCC_NB_RIF_RES; i++) {
+		index = i / 32;
+
+		if (!(BIT(i % 32) & pdata->conf_data.access_mask[index]))
+			continue;
+
+		io_clrsetbits32(pdata->rcc_base + RCC_CIDCFGR(i),
+				RCC_CIDCFGR_CONF_MASK,
+				pdata->conf_data.cid_confs[i]);
+
+		cidcfgr = io_read32(pdata->rcc_base + RCC_CIDCFGR(i));
+
+		/*
+		 * Take semaphore if the resource is in semaphore mode
+		 * and secured
+		 */
+		if (SEM_MODE_INCORRECT(cidcfgr) ||
+		    !(io_read32(pdata->rcc_base + RCC_SECCFGR(index)) &
+		      BIT(i % 32))) {
+			res =
+			stm32_rif_release_semaphore(pdata->rcc_base +
+						    RCC_SEMCR(i),
+						    RCC_NB_MAX_CID_SUPPORTED);
+			if (res) {
+				EMSG("Couldn't release semaphore for res%u", i);
+				return res;
+			}
+		} else {
+			res =
+			stm32_rif_acquire_semaphore(pdata->rcc_base +
+						    RCC_SEMCR(i),
+						    RCC_NB_MAX_CID_SUPPORTED);
+			if (res) {
+				EMSG("Couldn't acquire semaphore for res%u", i);
+				return res;
+			}
+		}
+	}
+
+	for (index = 0; index < RCC_NB_CONFS; index++) {
+		io_clrsetbits32(pdata->rcc_base + RCC_RCFGLOCKR(index),
+				RCC_RCFGLOCKR_MASK &
+				pdata->conf_data.access_mask[index],
+				pdata->conf_data.lock_conf[index]);
+	}
+
+end:
+	if (IS_ENABLED(CFG_TEE_CORE_DEBUG)) {
+		for (index = 0; index < RCC_NB_CONFS; index++) {
+			/* Check that RIF config are applied, panic otherwise */
+			if ((io_read32(pdata->rcc_base + RCC_PRIVCFGR(index)) &
+			     pdata->conf_data.access_mask[index]) !=
+			    pdata->conf_data.priv_conf[index]) {
+				EMSG("rcc resource prv conf is incorrect");
+				panic();
+			}
+
+			if ((io_read32(pdata->rcc_base + RCC_SECCFGR(index)) &
+			     pdata->conf_data.access_mask[index]) !=
+			    pdata->conf_data.sec_conf[index]) {
+				EMSG("rcc resource sec conf is incorrect");
+				panic();
+			}
+		}
+	}
+
+	return TEE_SUCCESS;
+}
+
+static TEE_Result rcc_rif_config(void)
+{
+	TEE_Result res = TEE_ERROR_ACCESS_DENIED;
+	bool is_tdcid = false;
+
+	res = stm32_rifsc_check_tdcid(&is_tdcid);
+	if (res)
+		return res;
+
+	return apply_rcc_rif_config(is_tdcid);
+}
+
+driver_init_late(rcc_rif_config);
 
 static TEE_Result stm32mp2_clk_probe(const void *fdt, int node,
 				     const void *compat_data __unused)
