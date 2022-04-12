@@ -80,6 +80,7 @@ enum stm32_tamp_id {
 struct stm32_bkpregs_conf {
 	uint32_t nb_zone1_regs;
 	uint32_t nb_zone2_regs;
+	uint32_t *rif_offsets;
 };
 
 /* Define TAMPER modes */
@@ -145,13 +146,6 @@ TEE_Result stm32_tamp_set_mask(enum stm32_tamp_id id);
 TEE_Result stm32_tamp_unset_mask(enum stm32_tamp_id id);
 
 /*
- * stm32_tamp_set_secure_bkpregs: Configure backup registers zone.
- * @conf - Configuration to be programmed
- */
-TEE_Result stm32_tamp_set_secure_bkpregs(struct stm32_bkpregs_conf
-					 *bkpregs_conf);
-
-/*
  * stm32_tamp_set_config: Apply configuration.
  * Default one if no previous call to any of:
  * stm32_tamp_configure_passive()
@@ -174,29 +168,30 @@ TEE_Result stm32_tamp_set_config(void);
 #define TAMP_HAS_RIF_SUPPORT		BIT(31)
 
 struct stm32_tamp_compat {
-	int nb_monotonic_counter;
-	uint32_t tags;
-	struct stm32_tamp_conf *int_tamp;
-	uint32_t int_tamp_size;
 	struct stm32_tamp_conf *ext_tamp;
-	uint32_t ext_tamp_size;
+	struct stm32_tamp_conf *int_tamp;
 	const struct stm32_tamp_pin_map *pin_map;
+	int nb_monotonic_counter;
+	uint32_t ext_tamp_size;
+	uint32_t int_tamp_size;
 	uint32_t pin_map_size;
+	uint32_t tags;
 };
 
 struct stm32_tamp_platdata {
 	struct io_pa_va base;
 	struct clk *clock;
+	struct stm32_tamp_compat *compat;
+	struct rif_conf_data conf_data;
+	struct stm32_bkpregs_conf *bkpregs_conf;
 	struct stm32_exti_pdata *exti;
 	int it;
+	unsigned int nb_resources;
 	uint32_t passive_conf;
 	uint32_t active_conf;
 	uint32_t pins_conf;
 	uint32_t out_pins;
 	bool is_wakeup_source;
-	struct stm32_tamp_compat *compat;
-	struct rif_conf_data conf_data;
-	unsigned int nb_resources;
 };
 
 #endif /* __DRIVERS_STM32_TAMP_H__ */
