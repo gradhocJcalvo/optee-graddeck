@@ -1076,6 +1076,9 @@ endif
 # CFG_DRIVERS_REMOTEPROC, when enabled, embeds support for remote processor
 # management including generic DT bindings for the configuration.
 CFG_DRIVERS_REMOTEPROC ?= n
+# CFG_REMOTEPROC_PTA, when enabled, embeds remote processor management PTA
+# service.
+CFG_REMOTEPROC_PTA ?= n
 # User TA runtime context dump.
 # When this option is enabled, OP-TEE provides a debug method for
 # developer to dump user TA's runtime context, including TA's heap stats.
