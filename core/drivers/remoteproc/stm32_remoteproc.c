@@ -13,8 +13,13 @@
 #include <libfdt.h>
 #include <mm/core_memprot.h>
 #include <mm/core_mmu.h>
+#ifdef CFG_STM32MP25
+#include <stm32_sysconf.h>
+#endif /* CFG_STM32MP25 */
 
 #define TIMEOUT_US_1MS	U(1000)
+
+#define INITVTOR_MASK	GENMASK_32(31, 7)
 
 /**
  * struct stm32_rproc_mem - Memory regions used by the remote processor
@@ -41,6 +46,8 @@ struct stm32_rproc_mem {
  * @regions:	memory regions used
  * @mcu_rst:	remote processor reset control
  * @hold_boot:	remote processor hold boot control
+ * @boot_addr:	boot address
+ * @tzen:	indicate if the remote processor should enable the TrustZone
  */
 struct stm32_rproc_instance {
 	const struct stm32_rproc_compat_data *cdata;
@@ -49,15 +56,19 @@ struct stm32_rproc_instance {
 	struct stm32_rproc_mem *regions;
 	struct rstctrl *mcu_rst;
 	struct rstctrl *hold_boot;
+	paddr_t boot_addr;
+	bool tzen;
 };
 
 /**
  * struct stm32_rproc_compat_data - rproc associated data for compatible list
  *
- * @rproc_id:	identifies the remote processor
+ * @rproc_id:	Unique Id of the processor
+ * @start:	remote processor start routine
  */
 struct stm32_rproc_compat_data {
 	uint32_t rproc_id;
+	TEE_Result (*start)(struct stm32_rproc_instance *rproc);
 };
 
 static SLIST_HEAD(, stm32_rproc_instance) rproc_list =
@@ -74,6 +85,52 @@ void *stm32_rproc_get(uint32_t rproc_id)
 	return rproc;
 }
 
+static TEE_Result stm32mp2_rproc_start(struct stm32_rproc_instance *rproc)
+{
+	struct stm32_rproc_mem *mems = NULL;
+	unsigned int i = 0;
+	bool boot_addr_valid = false;
+
+	if (!rproc->boot_addr)
+		return TEE_ERROR_GENERIC;
+
+	mems = rproc->regions;
+
+	/* Check that the boot address is in declared regions */
+	for (i = 0; i < rproc->n_regions; i++) {
+		if (!core_is_buffer_inside(rproc->boot_addr, 1, mems[i].addr,
+					   mems[i].size))
+			continue;
+
+#ifdef CFG_STM32MP25
+		if ((!rproc->tzen && mems[i].type == MEM_AREA_RAM_SEC) ||
+		    (rproc->tzen && mems[i].type == MEM_AREA_RAM_NSEC))
+			return	TEE_ERROR_GENERIC;
+
+		if (rproc->tzen) {
+			stm32mp_syscfg_write(A35SSC_M33_INITSVTOR_CR,
+					     rproc->boot_addr, INITVTOR_MASK);
+
+			stm32mp_syscfg_write(A35SSC_M33_TZEN_CR,
+					     A35SSC_M33_TZEN_CR_CFG_SECEXT,
+					     A35SSC_M33_TZEN_CR_CFG_SECEXT);
+		} else {
+			stm32mp_syscfg_write(A35SSC_M33_INITNSVTOR_CR,
+					     rproc->boot_addr, INITVTOR_MASK);
+		}
+		boot_addr_valid = true;
+		break;
+#endif /* CFG_STM32MP25 */
+	}
+
+	if (!boot_addr_valid) {
+		EMSG("Invalid boot address");
+		return TEE_ERROR_GENERIC;
+	}
+
+	return TEE_SUCCESS;
+}
+
 TEE_Result stm32_rproc_start(uint32_t rproc_id)
 {
 	struct stm32_rproc_instance *rproc = stm32_rproc_get(rproc_id);
@@ -81,6 +138,12 @@ TEE_Result stm32_rproc_start(uint32_t rproc_id)
 
 	if (!rproc || !rproc->hold_boot)
 		return TEE_ERROR_GENERIC;
+
+	if (rproc->cdata->start) {
+		res = rproc->cdata->start(rproc);
+		if (res)
+			return res;
+	}
 
 	/*
 	 * The firmware is started by de-asserting the hold boot and
@@ -103,10 +166,22 @@ static TEE_Result rproc_stop(struct stm32_rproc_instance *rproc)
 		return TEE_ERROR_GENERIC;
 
 	res = rstctrl_assert_to(rproc->hold_boot, TIMEOUT_US_1MS);
-	if (!res)
-		res = rstctrl_assert_to(rproc->mcu_rst, TIMEOUT_US_1MS);
+	if (res)
+		return res;
+	res = rstctrl_assert_to(rproc->mcu_rst, TIMEOUT_US_1MS);
+	if (res)
+		return res;
 
-	return res;
+#ifdef CFG_STM32MP25
+	/* Disable the TrustZone */
+	stm32mp_syscfg_write(A35SSC_M33_TZEN_CR, 0,
+			     A35SSC_M33_TZEN_CR_CFG_SECEXT);
+#endif /* CFG_STM32MP25 */
+
+	rproc->boot_addr = 0;
+	rproc->tzen = false;
+
+	return TEE_SUCCESS;
 }
 
 TEE_Result stm32_rproc_stop(uint32_t rproc_id)
@@ -255,6 +330,40 @@ static TEE_Result stm32_rproc_get_dma_range(struct stm32_rproc_mem *region,
 	return TEE_ERROR_BAD_PARAMETERS;
 }
 
+TEE_Result stm32_rproc_set_boot_address(uint32_t rproc_id, paddr_t address)
+{
+	struct stm32_rproc_instance *rproc = stm32_rproc_get(rproc_id);
+
+	if (!rproc)
+		return TEE_ERROR_BAD_PARAMETERS;
+
+	if (rproc->boot_addr) {
+		DMSG("Firmware boot address already set");
+		return TEE_ERROR_GENERIC;
+	}
+
+	rproc->boot_addr = address;
+
+	return TEE_SUCCESS;
+}
+
+TEE_Result stm32_rproc_enable_sec_boot(uint32_t rproc_id)
+{
+	struct stm32_rproc_instance *rproc = stm32_rproc_get(rproc_id);
+
+	if (!rproc)
+		return TEE_ERROR_BAD_PARAMETERS;
+
+	if (rproc->tzen) {
+		DMSG("Firmware TrustZone already enabled");
+		return TEE_ERROR_GENERIC;
+	}
+
+	rproc->tzen = true;
+
+	return TEE_SUCCESS;
+}
+
 /* Get device tree memory regions reserved for the Cortex-M and the IPC */
 static TEE_Result stm32_rproc_parse_mems(struct stm32_rproc_instance *rproc,
 					 const void *fdt, int node)
@@ -360,7 +469,7 @@ static TEE_Result stm32_rproc_probe(const void *fdt, int node,
 	if (res)
 		goto err;
 
-	/* Ensure that the MCU is HOLD */
+	/* Ensure that the remote processor is in expected stop state */
 	if (rproc->mcu_rst) {
 		res = rproc_stop(rproc);
 		if (res)
@@ -390,6 +499,7 @@ static const struct stm32_rproc_compat_data stm32_rproc_m4_compat = {
 
 static const struct stm32_rproc_compat_data stm32_rproc_m33_compat = {
 	.rproc_id = STM32MP2_M33_RPROC_ID,
+	.start = stm32mp2_rproc_start,
 };
 
 static const struct dt_device_match stm32_rproc_match_table[] = {
