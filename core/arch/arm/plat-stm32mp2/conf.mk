@@ -110,6 +110,13 @@ $(call force,CFG_STM32_BSEC_PTA,y,Mandated by CFG_TA_STM32MP_NVMEM)
 CFG_IN_TREE_EARLY_TAS += stm32mp_nvmem/1a8342cc-81a5-4512-99fe-9e2b3e37d626
 endif
 
+# Provisioning support for BSEC shadow OTP is dedicated to insecure development
+# configuration only.
+CFG_STM32MP_PROVISIONING ?= y
+ifeq ($(CFG_STM32MP_PROVISIONING),y)
+$(call force,CFG_WARN_INSECURE,y,Required by CFG_STM32MP_PROVISIONING)
+endif
+
 # Optional behavior upon receiving illegal access events
 CFG_STM32_PANIC_ON_IAC_EVENT ?= y
 ifeq ($(CFG_TEE_CORE_DEBUG),y)
