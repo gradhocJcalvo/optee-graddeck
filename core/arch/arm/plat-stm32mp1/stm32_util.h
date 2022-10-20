@@ -28,6 +28,7 @@ bool stm32mp_supports_second_core(void);
 
 /* Backup registers and RAM utils */
 vaddr_t stm32mp_bkpreg(unsigned int idx);
+vaddr_t stm32mp_bkpsram_base(void);
 
 /* Get device ID from SYSCFG registers */
 uint32_t stm32mp_syscfg_get_chip_dev_id(void);
