@@ -4821,6 +4821,9 @@ static TEE_Result stm32mp2_clk_probe(const void *fdt, int node,
 #ifdef CFG_STM32_CLK_DEBUG
 	clk_print_tree();
 #endif
+	res = clk_stm32_init_calib(fdt, node);
+	if (res)
+		EMSG("Calibration error init");
 
 	register_pm_core_service_cb(stm32_rcc_pm, NULL, "stm32-rcc");
 
