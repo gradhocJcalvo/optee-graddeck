@@ -36,11 +36,11 @@ struct stm32_exti_bank {
 
 static uint32_t port_sel_bkp[4];
 
-struct stm32_exti_priv {
+struct stm32_exti_pdata {
 	vaddr_t base;
 };
 
-static struct stm32_exti_priv stm32_exti;
+static struct stm32_exti_pdata stm32_exti;
 
 static struct stm32_exti_bank stm32mp1_exti_b1 = {
 	.imr_ofst	= 0x80,
@@ -343,11 +343,20 @@ stm32_exti_pm(enum pm_op op, unsigned int pm_hint __unused,
 	return TEE_SUCCESS;
 }
 
+static TEE_Result
+stm32_exti_get_handle(struct dt_pargs *pargs __unused, void *data,
+		      struct stm32_exti_pdata **out_data)
+{
+	*out_data = data;
+	return TEE_SUCCESS;
+}
+
 static TEE_Result stm32_exti_probe(const void *fdt, int node,
 				   const void *comp_data __unused)
 {
 	struct dt_node_info dt_info = { };
 	struct io_pa_va base = { };
+	TEE_Result res = TEE_ERROR_GENERIC;
 
 	fdt_fill_device_info(fdt, &dt_info, node);
 
@@ -355,6 +364,14 @@ static TEE_Result stm32_exti_probe(const void *fdt, int node,
 
 	stm32_exti.base = io_pa_or_va_secure(&base, dt_info.reg_size);
 	assert(stm32_exti.base);
+
+	res = dt_driver_register_provider(fdt, node,
+					  (get_of_device_func)
+					  stm32_exti_get_handle,
+					  (void *)&stm32_exti,
+					  DT_DRIVER_INTERRUPT);
+	if (res)
+		return res;
 
 	register_pm_core_service_cb(stm32_exti_pm, NULL, "stm32-exti");
 
