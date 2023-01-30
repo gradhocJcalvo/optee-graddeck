@@ -228,6 +228,16 @@ static inline size_t clk_get_num_parents(struct clk *clk)
 struct clk *clk_get_parent_by_index(struct clk *clk, size_t pidx);
 
 /**
+ * clk_get_parent_idx - Get index of clock parent
+ *
+ * @clk: Clock which contains parent clocks
+ * @parent: Parent clock for which you want to known the index
+ * Return a TEE_Result compliant value and set index of the parent clock
+ */
+TEE_Result clk_get_parent_idx(struct clk *clk, struct clk *parent,
+			      size_t *pidx);
+
+/**
  * clk_set_parent - Set the current clock parent
  *
  * @clk: Clock for which the parent should be set
