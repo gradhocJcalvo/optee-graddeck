@@ -28,6 +28,7 @@
 
 struct stm32_exti_pdata {
 	vaddr_t base;
+	unsigned int lock;
 	uint32_t wake_active[_EXTI_BANK_NR];
 	uint32_t mask_cache[_EXTI_BANK_NR];
 	uint32_t rtsr_cache[_EXTI_BANK_NR];
@@ -37,9 +38,6 @@ struct stm32_exti_pdata {
 };
 
 static struct stm32_exti_pdata stm32_exti;
-
-/* EXTI access protection */
-static unsigned int lock = SPINLOCK_UNLOCK;
 
 static uint32_t stm32_exti_get_bank(uint32_t exti_line)
 {
@@ -84,12 +82,12 @@ void stm32_exti_set_type(uint32_t exti_line, uint32_t type)
 
 	i = stm32_exti_get_bank(exti_line);
 
-	exceptions = cpu_spin_lock_xsave(&lock);
+	exceptions = cpu_spin_lock_xsave(&stm32_exti.lock);
 
 	io_mask32(stm32_exti.base + _EXTI_RTSR(i), r_trig, mask);
 	io_mask32(stm32_exti.base + _EXTI_FTSR(i), f_trig, mask);
 
-	cpu_spin_unlock_xrestore(&lock, exceptions);
+	cpu_spin_unlock_xrestore(&stm32_exti.lock, exceptions);
 }
 
 void stm32_exti_mask(uint32_t exti_line)
@@ -101,14 +99,14 @@ void stm32_exti_mask(uint32_t exti_line)
 
 	i = stm32_exti_get_bank(exti_line);
 
-	exceptions = cpu_spin_lock_xsave(&lock);
+	exceptions = cpu_spin_lock_xsave(&stm32_exti.lock);
 
 	val = io_read32(stm32_exti.base + _EXTI_C1IMR(i));
 	val &= ~mask;
 	io_write32(stm32_exti.base + _EXTI_C1IMR(i), val);
 	stm32_exti.mask_cache[i] = val;
 
-	cpu_spin_unlock_xrestore(&lock, exceptions);
+	cpu_spin_unlock_xrestore(&stm32_exti.lock, exceptions);
 }
 
 void stm32_exti_unmask(uint32_t exti_line)
@@ -120,14 +118,14 @@ void stm32_exti_unmask(uint32_t exti_line)
 
 	i = stm32_exti_get_bank(exti_line);
 
-	exceptions = cpu_spin_lock_xsave(&lock);
+	exceptions = cpu_spin_lock_xsave(&stm32_exti.lock);
 
 	val = io_read32(stm32_exti.base + _EXTI_C1IMR(i));
 	val |= mask;
 	io_write32(stm32_exti.base + _EXTI_C1IMR(i), val);
 	stm32_exti.mask_cache[i] = val;
 
-	cpu_spin_unlock_xrestore(&lock, exceptions);
+	cpu_spin_unlock_xrestore(&stm32_exti.lock, exceptions);
 }
 
 void stm32_exti_enable_wake(uint32_t exti_line)
@@ -138,11 +136,11 @@ void stm32_exti_enable_wake(uint32_t exti_line)
 
 	i = stm32_exti_get_bank(exti_line);
 
-	exceptions = cpu_spin_lock_xsave(&lock);
+	exceptions = cpu_spin_lock_xsave(&stm32_exti.lock);
 
 	stm32_exti.wake_active[i] |= mask;
 
-	cpu_spin_unlock_xrestore(&lock, exceptions);
+	cpu_spin_unlock_xrestore(&stm32_exti.lock, exceptions);
 }
 
 void stm32_exti_disable_wake(uint32_t exti_line)
@@ -153,11 +151,11 @@ void stm32_exti_disable_wake(uint32_t exti_line)
 
 	i = stm32_exti_get_bank(exti_line);
 
-	exceptions = cpu_spin_lock_xsave(&lock);
+	exceptions = cpu_spin_lock_xsave(&stm32_exti.lock);
 
 	stm32_exti.wake_active[i] &= ~mask;
 
-	cpu_spin_unlock_xrestore(&lock, exceptions);
+	cpu_spin_unlock_xrestore(&stm32_exti.lock, exceptions);
 }
 
 void stm32_exti_clear(uint32_t exti_line)
@@ -168,12 +166,12 @@ void stm32_exti_clear(uint32_t exti_line)
 
 	i = stm32_exti_get_bank(exti_line);
 
-	exceptions = cpu_spin_lock_xsave(&lock);
+	exceptions = cpu_spin_lock_xsave(&stm32_exti.lock);
 
 	io_mask32(stm32_exti.base + _EXTI_RPR(i), mask, mask);
 	io_mask32(stm32_exti.base + _EXTI_FPR(i), mask, mask);
 
-	cpu_spin_unlock_xrestore(&lock, exceptions);
+	cpu_spin_unlock_xrestore(&stm32_exti.lock, exceptions);
 }
 
 void stm32_exti_set_tz(uint32_t exti_line)
@@ -184,11 +182,11 @@ void stm32_exti_set_tz(uint32_t exti_line)
 
 	i = stm32_exti_get_bank(exti_line);
 
-	exceptions = cpu_spin_lock_xsave(&lock);
+	exceptions = cpu_spin_lock_xsave(&stm32_exti.lock);
 
 	io_mask32(stm32_exti.base + _EXTI_SECCFGR(i), mask, mask);
 
-	cpu_spin_unlock_xrestore(&lock, exceptions);
+	cpu_spin_unlock_xrestore(&stm32_exti.lock, exceptions);
 }
 
 void stm32_exti_set_gpio_port_sel(uint8_t bank, uint8_t pin)
@@ -199,11 +197,11 @@ void stm32_exti_set_gpio_port_sel(uint8_t bank, uint8_t pin)
 	uint32_t mask = 0xff << shift;
 	uint32_t exceptions = 0;
 
-	exceptions = cpu_spin_lock_xsave(&lock);
+	exceptions = cpu_spin_lock_xsave(&stm32_exti.lock);
 
 	io_mask32(stm32_exti.base + reg, val, mask);
 
-	cpu_spin_unlock_xrestore(&lock, exceptions);
+	cpu_spin_unlock_xrestore(&stm32_exti.lock, exceptions);
 }
 
 static void stm32_exti_pm_suspend(void)
@@ -276,6 +274,8 @@ static TEE_Result stm32_exti_probe(const void *fdt, int node,
 	struct dt_node_info dt_info = { };
 	struct io_pa_va base = { };
 	TEE_Result res = TEE_ERROR_GENERIC;
+
+	stm32_exti.lock = SPINLOCK_UNLOCK;
 
 	fdt_fill_device_info(fdt, &dt_info, node);
 
