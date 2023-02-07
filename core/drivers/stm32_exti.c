@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 /*
- * Copyright (c) 2021, STMicroelectronics
+ * Copyright (c) 2021-2023, STMicroelectronics
  */
 
 #include <drivers/stm32_exti.h>
@@ -343,7 +343,6 @@ stm32_exti_pm(enum pm_op op, unsigned int pm_hint __unused,
 	return TEE_SUCCESS;
 }
 
-#ifdef CFG_EMBED_DTB
 static TEE_Result stm32_exti_probe(const void *fdt, int node,
 				   const void *comp_data __unused)
 {
@@ -373,4 +372,3 @@ DEFINE_DT_DRIVER(stm32_exti_dt_driver) = {
 	.match_table = stm32_exti_match_table,
 	.probe = &stm32_exti_probe,
 };
-#endif
