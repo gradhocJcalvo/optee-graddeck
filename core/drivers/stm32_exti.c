@@ -12,6 +12,7 @@
 #include <kernel/spinlock.h>
 #include <libfdt.h>
 #include <mm/core_memprot.h>
+#include <sys/queue.h>
 #include <tee_api_types.h>
 
 /* Registers */
@@ -35,9 +36,11 @@ struct stm32_exti_pdata {
 	uint32_t ftsr_cache[_EXTI_BANK_NR];
 	uint32_t seccfgr_cache[_EXTI_BANK_NR];
 	uint32_t port_sel_cache[_EXTI_MAX_CR];
+	SLIST_ENTRY(stm32_exti_pdata) link;
 };
 
-static struct stm32_exti_pdata stm32_exti;
+static SLIST_HEAD(, stm32_exti_pdata) stm32_exti_list =
+	SLIST_HEAD_INITIALIZER(stm32_exti_list);
 
 static uint32_t stm32_exti_get_bank(uint32_t exti_line)
 {
@@ -206,58 +209,64 @@ void stm32_exti_set_gpio_port_sel(struct stm32_exti_pdata *exti, uint8_t bank,
 	cpu_spin_unlock_xrestore(&exti->lock, exceptions);
 }
 
-static void stm32_exti_pm_suspend(void)
+static void stm32_exti_pm_suspend(struct stm32_exti_pdata *exti)
 {
-	uint32_t base = stm32_exti.base;
+	uint32_t base = exti->base;
 	uint32_t mask = 0;
 	uint32_t i = 0;
 
 	for (i = 0; i < _EXTI_BANK_NR; i++) {
 		/* Save ftsr, rtsr and seccfgr registers */
-		stm32_exti.ftsr_cache[i] = io_read32(base + _EXTI_FTSR(i));
-		stm32_exti.rtsr_cache[i] = io_read32(base + _EXTI_RTSR(i));
-		stm32_exti.seccfgr_cache[i] =
-			io_read32(base + _EXTI_SECCFGR(i));
+		exti->ftsr_cache[i] = io_read32(base + _EXTI_FTSR(i));
+		exti->rtsr_cache[i] = io_read32(base + _EXTI_RTSR(i));
+		exti->seccfgr_cache[i] = io_read32(base + _EXTI_SECCFGR(i));
 
 		/* Let enabled only the wakeup sources set */
-		mask = stm32_exti.wake_active[i];
+		mask = exti->wake_active[i];
 		io_mask32(base + _EXTI_C1IMR(i), mask, mask);
 	}
 
 	/* Save EXTI port selection */
 	for (i = 0; i < _EXTI_MAX_CR; i++)
-		stm32_exti.port_sel_cache[i] = io_read32(base + _EXTI_CR(i));
+		exti->port_sel_cache[i] = io_read32(base + _EXTI_CR(i));
 }
 
-static void stm32_exti_pm_resume(void)
+static void stm32_exti_pm_resume(struct stm32_exti_pdata *exti)
 {
-	uint32_t base = stm32_exti.base;
+	uint32_t base = exti->base;
 	uint32_t i = 0;
 
 	for (i = 0; i < _EXTI_BANK_NR; i++) {
 		/* Restore ftsr, rtsr and seccfgr registers */
-		io_write32(base + _EXTI_FTSR(i), stm32_exti.ftsr_cache[i]);
-		io_write32(base + _EXTI_RTSR(i), stm32_exti.rtsr_cache[i]);
-		io_write32(base + _EXTI_SECCFGR(i),
-			   stm32_exti.seccfgr_cache[i]);
+		io_write32(base + _EXTI_FTSR(i), exti->ftsr_cache[i]);
+		io_write32(base + _EXTI_RTSR(i), exti->rtsr_cache[i]);
+		io_write32(base + _EXTI_SECCFGR(i), exti->seccfgr_cache[i]);
 
 		/* Restore imr */
-		io_write32(base + _EXTI_C1IMR(i), stm32_exti.mask_cache[i]);
+		io_write32(base + _EXTI_C1IMR(i), exti->mask_cache[i]);
 	}
 
 	/* Restore EXTI port selection */
 	for (i = 0; i < _EXTI_MAX_CR; i++)
-		io_write32(base + _EXTI_CR(i), stm32_exti.port_sel_cache[i]);
+		io_write32(base + _EXTI_CR(i), exti->port_sel_cache[i]);
 }
 
 static TEE_Result
-stm32_exti_pm(enum pm_op op, unsigned int pm_hint __unused,
+stm32_exti_pm(enum pm_op op, unsigned int pm_hint,
 	      const struct pm_callback_handle *pm_handle __unused)
 {
-	if (op == PM_OP_SUSPEND)
-		stm32_exti_pm_suspend();
-	else
-		stm32_exti_pm_resume();
+	struct stm32_exti_pdata *exti = NULL;
+
+	if (!IS_ENABLED(CFG_STM32MP13) && !IS_ENABLED(CFG_STM32MP15) &&
+	    !PM_HINT_IS_STATE(pm_hint, CONTEXT))
+		return TEE_SUCCESS;
+
+	SLIST_FOREACH(exti, &stm32_exti_list, link) {
+		if (op == PM_OP_SUSPEND)
+			stm32_exti_pm_suspend(exti);
+		else
+			stm32_exti_pm_resume(exti);
+	}
 
 	return TEE_SUCCESS;
 }
@@ -273,30 +282,40 @@ stm32_exti_get_handle(struct dt_pargs *pargs __unused, void *data,
 static TEE_Result stm32_exti_probe(const void *fdt, int node,
 				   const void *comp_data __unused)
 {
+	struct stm32_exti_pdata *exti = NULL;
 	struct dt_node_info dt_info = { };
 	struct io_pa_va base = { };
 	TEE_Result res = TEE_ERROR_GENERIC;
 
-	stm32_exti.lock = SPINLOCK_UNLOCK;
+	exti = calloc(1, sizeof(*exti));
+	if (!exti)
+		panic("Out of memory");
+
+	exti->lock = SPINLOCK_UNLOCK;
 
 	fdt_fill_device_info(fdt, &dt_info, node);
 
 	base.pa = dt_info.reg;
 
-	stm32_exti.base = io_pa_or_va_secure(&base, dt_info.reg_size);
-	assert(stm32_exti.base);
+	exti->base = io_pa_or_va_secure(&base, dt_info.reg_size);
+	assert(exti->base);
 
 	res = dt_driver_register_provider(fdt, node,
 					  (get_of_device_func)
 					  stm32_exti_get_handle,
-					  (void *)&stm32_exti,
-					  DT_DRIVER_INTERRUPT);
+					  (void *)exti, DT_DRIVER_INTERRUPT);
 	if (res)
-		return res;
+		goto err;
+
+	SLIST_INSERT_HEAD(&stm32_exti_list, exti, link);
 
 	register_pm_core_service_cb(stm32_exti_pm, NULL, "stm32-exti");
 
 	return TEE_SUCCESS;
+
+err:
+	free(exti);
+	return res;
 }
 
 static const struct dt_device_match stm32_exti_match_table[] = {
