@@ -29,6 +29,7 @@
 #include <dt-bindings/reset/stm32mp25-resets.h>
 #include <dt-bindings/soc/stm32mp25-rif.h>
 #include <dt-bindings/soc/stm32mp25-rifsc.h>
+#include <dt-bindings/soc/stm32mp25-risab.h>
 #include <dt-bindings/soc/stm32mp25-risaf.h>
 #endif
 
