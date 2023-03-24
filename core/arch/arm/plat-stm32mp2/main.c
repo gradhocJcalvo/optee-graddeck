@@ -6,6 +6,7 @@
 #include <config.h>
 #include <console.h>
 #include <drivers/gic.h>
+#include <drivers/stm32_bsec.h>
 #include <drivers/stm32_rif.h>
 #include <drivers/stm32_risab.h>
 #include <drivers/stm32_risaf.h>
@@ -172,3 +173,13 @@ void plat_abort_handler(struct thread_abort_regs *regs __unused)
 	/* If fault is ignored, it could be due to a SERC event */
 	stm32_serc_handle_ilac();
 }
+
+#ifdef CFG_STM32_BSEC3
+void plat_bsec_get_static_cfg(struct stm32_bsec_static_cfg *cfg)
+{
+	cfg->base = BSEC3_BASE;
+	cfg->shadow = SRAM1_BASE;
+	cfg->upper_start = STM32MP2_UPPER_OTP_START;
+	cfg->max_id = STM32MP2_OTP_MAX_ID;
+}
+#endif
