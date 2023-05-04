@@ -86,10 +86,15 @@ $(call force,CFG_STM32_PWR,y)
 $(call force,CFG_STM32_PWR_REGUL,y)
 $(call force,CFG_STM32MP_CLK_CORE,y)
 $(call force,CFG_STM32MP_REMOTEPROC,y)
-$(call force,CFG_STM32MP25_CLK,y)
 $(call force,CFG_STM32MP25_RSTCTRL,y)
 $(call force,CFG_WITH_ARM_TRUSTED_FW,y)
 $(call force,CFG_WITH_LPAE,y)
+
+ifeq ($(CFG_STM32MP21),y)
+$(call force,CFG_STM32MP21_CLK,y)
+else
+$(call force,CFG_STM32MP25_CLK,y)
+endif
 
 CFG_TZDRAM_START ?= 0x82000000
 CFG_TZDRAM_SIZE  ?= 0x02000000
