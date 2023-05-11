@@ -1954,8 +1954,12 @@ DECLARE_KEEP_PAGER(clk_op_compute_rate);
 
 static TEE_Result clk_op_enable(struct clk *clk)
 {
-	if (clk_is_gate(clk))
+	if (clk_is_gate(clk)) {
 		__clk_enable(clk_to_gate_ref(clk));
+
+		/* Make sure the clock is enabled before returning to caller */
+		dsb();
+	}
 
 	return TEE_SUCCESS;
 }
@@ -1963,8 +1967,12 @@ DECLARE_KEEP_PAGER(clk_op_enable);
 
 static void clk_op_disable(struct clk *clk)
 {
-	if (clk_is_gate(clk))
+	if (clk_is_gate(clk)) {
+		/* Make sure the previous operations are visible */
+		dsb();
+
 		__clk_disable(clk_to_gate_ref(clk));
+	}
 }
 DECLARE_KEEP_PAGER(clk_op_disable);
 
@@ -4224,12 +4232,16 @@ static TEE_Result stm32_clock_pm(enum pm_op op, unsigned int pm_hint __unused,
 				 const struct pm_callback_handle *hdl __unused)
 {
 	if (op == PM_OP_SUSPEND) {
+		/* Make sure the pending operations are visible */
+		dsb();
 		stm32_clock_suspend();
 	} else {
 #ifdef CFG_STM32_CPU_OPP
 		pll1_config_from_opp_khz(current_opp_khz);
 #endif
 		stm32_clock_resume();
+		/* Make sure the clock are restored */
+		dsb();
 	}
 
 	return TEE_SUCCESS;
@@ -4239,6 +4251,9 @@ DECLARE_KEEP_PAGER(stm32_clock_pm);
 void stm32_reset_system(void)
 {
 	vaddr_t rcc = stm32_rcc_base();
+
+	/* Make sure the pending operations are visible */
+	dsb();
 
 	io_write32(rcc + RCC_MP_GRSTCSETR, RCC_MP_GRSTCSETR_MPSYSRST);
 }
