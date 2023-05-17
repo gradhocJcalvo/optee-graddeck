@@ -11,6 +11,7 @@
 #include <io.h>
 #include <kernel/boot.h>
 #include <kernel/dt.h>
+#include <kernel/pm.h>
 #include <kernel/tee_misc.h>
 #include <libfdt.h>
 #include <mm/core_memprot.h>
@@ -116,6 +117,12 @@
 	  _RISAF_REG_CIDCFGR_WRENC_SHIFT) | \
 	 ((((cfg) & DT_RISAF_READ_MASK) >> DT_RISAF_READ_SHIFT) << \
 	  _RISAF_REG_CIDCFGR_RDENC_SHIFT))
+
+#ifdef CFG_CORE_RESERVED_SHM
+#define TZDRAM_RESERVED_SIZE		(TZDRAM_SIZE + TEE_SHMEM_SIZE)
+#else
+#define TZDRAM_RESERVED_SIZE		TZDRAM_SIZE
+#endif
 
 struct stm32_risaf_region {
 	uint32_t cfg;
@@ -464,6 +471,107 @@ TEE_Result stm32_risaf_reconfigure(paddr_t base)
 	return TEE_SUCCESS;
 }
 
+static TEE_Result stm32_risaf_pm_resume(struct stm32_risaf_instance *risaf)
+{
+	struct stm32_risaf_region *regions = risaf->pdata.regions;
+	size_t i = 0;
+
+	for (i = 0; i < risaf->pdata.nregions; i++) {
+		uint32_t cfg = 0;
+		uint32_t cid_cfg = 0;
+		uintptr_t start_addr = 0;
+		uintptr_t end_addr = 0;
+		uint32_t id = _RISAF_GET_REGION_ID(regions[i].cfg);
+
+		if (!id)
+			continue;
+
+		cfg = _RISAF_GET_REGION_CFG(regions[i].cfg);
+		cid_cfg = _RISAF_GET_REGION_CID_CFG(regions[i].cfg);
+		start_addr = regions[i].addr;
+		end_addr = start_addr + regions[i].len - 1U;
+		if (risaf_configure_region(risaf, id, cfg, cid_cfg,
+					   start_addr, end_addr))
+			panic();
+	}
+
+	return TEE_SUCCESS;
+}
+
+static TEE_Result stm32_risaf_pm_suspend(struct stm32_risaf_instance *risaf)
+{
+	vaddr_t base = io_pa_or_va_secure(&risaf->pdata.base, 1);
+	size_t i = 0;
+
+	for (i = 0; i < risaf->pdata.nregions; i++) {
+		uint32_t cfg = 0;
+		uint32_t risaf_en = 0;
+		uint32_t risaf_sec = 0;
+		uint32_t risaf_enc = 0;
+		uint32_t risaf_priv = 0;
+		uint32_t cid_cfg = 0;
+		uint32_t rden = 0;
+		uint32_t wren = 0;
+		uintptr_t start_addr = 0;
+		uintptr_t end_addr = 0;
+		uint32_t id = _RISAF_GET_REGION_ID(risaf->pdata.regions[i].cfg);
+
+		/* Skip region not defined in DT, not configured in probe */
+		if (!id)
+			continue;
+
+		cfg = io_read32(base + _RISAF_REG_CFGR(id));
+		risaf_en = (cfg & _RISAF_REG_CFGR_BREN) << DT_RISAF_EN_SHIFT;
+		risaf_sec = ((cfg & _RISAF_REG_CFGR_SEC) >>
+			     _RISAF_REG_CFGR_SEC_SHIFT) << DT_RISAF_SEC_SHIFT;
+		risaf_enc = ((cfg & _RISAF_REG_CFGR_ENC) >>
+			     _RISAF_REG_CFGR_ENC_SHIFT) <<
+			    (DT_RISAF_ENC_SHIFT + 1);
+		risaf_priv = ((cfg & _RISAF_REG_CFGR_PRIVC_MASK) >>
+			      _RISAF_REG_CFGR_PRIVC_SHIFT) <<
+			     DT_RISAF_PRIV_SHIFT;
+		cid_cfg = io_read32(base + _RISAF_REG_CIDCFGR(id));
+		rden = (cid_cfg & _RISAF_REG_CIDCFGR_RDENC_MASK) <<
+		       DT_RISAF_READ_SHIFT;
+		wren = ((cid_cfg & _RISAF_REG_CIDCFGR_WRENC_MASK) >>
+			_RISAF_REG_CIDCFGR_WRENC_SHIFT) << DT_RISAF_WRITE_SHIFT;
+		risaf->pdata.regions[i].cfg = id | risaf_en | risaf_sec |
+					      risaf_enc | risaf_priv |
+					      rden | wren;
+		start_addr = io_read32(base + _RISAF_REG_STARTR(id));
+		end_addr = io_read32(base + _RISAF_REG_ENDR(id));
+		risaf->pdata.regions[i].addr = start_addr +
+					       risaf->pdata.mem_base;
+		risaf->pdata.regions[i].len = end_addr - start_addr + 1U;
+	}
+
+	return TEE_SUCCESS;
+}
+
+static TEE_Result
+stm32_risaf_pm(enum pm_op op, unsigned int pm_hint __unused,
+	       const struct pm_callback_handle *pm_handle)
+{
+	struct stm32_risaf_instance *risaf = pm_handle->handle;
+	TEE_Result res = TEE_ERROR_GENERIC;
+
+	if (!PM_HINT_IS_STATE(pm_hint, CONTEXT))
+		return TEE_SUCCESS;
+
+	res = clk_enable(risaf->pdata.clock);
+	if (res)
+		return res;
+
+	if (op == PM_OP_RESUME)
+		res = stm32_risaf_pm_resume(risaf);
+	else
+		res = stm32_risaf_pm_suspend(risaf);
+
+	clk_disable(risaf->pdata.clock);
+
+	return res;
+}
+
 static TEE_Result stm32_risaf_probe(const void *fdt, int node,
 				    const void *compat_data)
 {
@@ -556,11 +664,7 @@ static TEE_Result stm32_risaf_probe(const void *fdt, int node,
 
 		/* Skip 'op_tee' region, in which OP-TEE code is executed */
 		if (regions[i].addr == TZDRAM_BASE &&
-#ifdef CFG_CORE_RESERVED_SHM
-			regions[i].len == (TZDRAM_SIZE + TEE_SHMEM_SIZE)) {
-#else
-			regions[i].len == TZDRAM_SIZE) {
-#endif
+		    regions[i].len == TZDRAM_RESERVED_SIZE) {
 			continue;
 		}
 
@@ -599,6 +703,8 @@ static TEE_Result stm32_risaf_probe(const void *fdt, int node,
 	risaf->pdata.nregions = nregions;
 
 	SLIST_INSERT_HEAD(&risaf_list, risaf, link);
+
+	register_pm_core_service_cb(stm32_risaf_pm, risaf, "stm32-risaf");
 
 	return TEE_SUCCESS;
 err_ddata:
