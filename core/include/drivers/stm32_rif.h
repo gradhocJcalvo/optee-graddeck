@@ -98,6 +98,25 @@ static inline TEE_Result stm32_rifsc_check_tdcid(bool *tdcid_state)
 #endif
 
 /*
+ * Reconfigures a specific RIMU
+ *
+ * @id:		ID of the RIMU to reconfigure.
+ * @master_cid: CID that will be linked to the RIMU.
+ * @cid_sel:	Drives the inheritance of the CID of the RIMU.
+ * @sec:	Master is secure/non-secure
+ * @priv:	Master is privileged/non-privileged
+ *
+ * Returns TEE_SUCCESS in case of success.
+ * Returns TEE_ERROR_BAD_PARAMETERS if either the RIMU ID or the master cid is
+ * incorrect.
+ * Returns TEE_ERROR_ACCESS_DENIED if the RIMU can't be reconfigured.
+ * Returns any TEE_Result compliant code in case of error.
+ */
+TEE_Result stm32_rifsc_reconfigure_rimu(unsigned int id,
+					unsigned int master_cid,
+					bool cid_sel, bool sec, bool priv);
+
+/*
  * Check every possible configuration where accessing RIF
  * is possible :
  * -When no CID filtering is enabled on a controller

@@ -515,6 +515,46 @@ static TEE_Result stm32_rimu_setup(struct rifsc_platdata *pdata)
 	return 0;
 }
 
+TEE_Result stm32_rifsc_reconfigure_rimu(unsigned int id,
+					unsigned int master_cid,
+					bool cid_sel, bool sec, bool priv)
+{
+	struct rimu_cfg *rimu = NULL;
+	uint32_t rimu_conf = 0;
+	TEE_Result res = TEE_ERROR_GENERIC;
+
+	if (id > rifsc_pdata.drv_data->nb_rimu ||
+	    master_cid > MAX_CID_SUPPORTED)
+		return TEE_ERROR_BAD_PARAMETERS;
+
+	rimu = &rifsc_pdata.rimu[id];
+
+	if (io_read32(rifsc_pdata.base + _RIFSC_RIMC_CR) &
+	    _RIFSC_RIMC_CR_GLOCK) {
+		DMSG("RIMU configuration is locked");
+		return TEE_ERROR_ACCESS_DENIED;
+	}
+
+	if (cid_sel)
+		rimu_conf |= RIFSC_RIMC_MODE_MASK;
+	if (sec)
+		rimu_conf |= RIFSC_RIMC_MSEC_MASK;
+	if (priv)
+		rimu_conf |= RIFSC_RIMC_MPRIV_MASK;
+
+	rimu_conf |= master_cid << RIFSC_RIMC_MCID_SHIFT;
+
+	rimu->attr = rimu_conf;
+
+	res = stm32_rimu_cfg(&rifsc_pdata, rimu);
+	if (res) {
+		EMSG("RIMU %u reconfiguration error", id);
+		return res;
+	}
+
+	return TEE_SUCCESS;
+}
+
 static TEE_Result stm32_rifsc_sem_pm_suspend(void)
 {
 	int i = 0;
