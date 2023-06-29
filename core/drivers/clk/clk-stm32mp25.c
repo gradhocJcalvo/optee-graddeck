@@ -2785,6 +2785,25 @@ static unsigned long clk_stm32_flexgen_round_rate(struct clk *clk __unused,
 	return clk_stm32_flexgen_get_round_rate(rate, prate, &prediv, &findiv);
 }
 
+#ifdef CFG_PM
+static void clk_stm32_flexgen_pm_restore(struct clk *clk)
+{
+	TEE_Result ret = TEE_ERROR_GENERIC;
+	size_t pidx = 0;
+
+	ret = clk_get_parent_idx(clk, clk->parent, &pidx);
+	if (ret)
+		panic();
+
+	clk_stm32_flexgen_set_parent(clk, pidx);
+
+	clk_stm32_flexgen_set_rate(clk, clk->rate, clk->parent->rate);
+
+	if (clk_is_enabled(clk))
+		clk_stm32_flexgen_enable(clk);
+}
+#endif
+
 static const struct clk_ops clk_stm32_flexgen_ops = {
 	.get_rate	= clk_stm32_flexgen_get_rate,
 	.set_rate	= clk_stm32_flexgen_set_rate,
@@ -2794,6 +2813,7 @@ static const struct clk_ops clk_stm32_flexgen_ops = {
 	.disable	= clk_stm32_flexgen_disable,
 	.is_enabled	= clk_stm32_flexgen_is_enabled,
 	.round_rate	= clk_stm32_flexgen_round_rate,
+	.restore_context = clk_stm32_flexgen_pm_restore,
 };
 
 #define MUX_A35_OFFSET		A35_SS_CHGCLKREQ
