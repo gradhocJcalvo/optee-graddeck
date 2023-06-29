@@ -4317,6 +4317,43 @@ static TEE_Result rcc_rif_config(void)
 
 driver_init_late(rcc_rif_config);
 
+static TEE_Result stm32_rcc_pm_resume(void)
+{
+	/* Restore clock tree */
+	if (stm32mp2_init_clock_tree(&stm32mp25_clock_data,
+				     &stm32mp25_clock_pdata))
+		panic("failed to restore clock device tree");
+
+	/* Restore all clocks (gating / rating / parent) */
+	clk_restore_context();
+
+	return TEE_SUCCESS;
+}
+
+static TEE_Result stm32_rcc_pm_suspend(void)
+{
+	clk_save_context();
+
+	return TEE_SUCCESS;
+}
+
+static TEE_Result
+stm32_rcc_pm(enum pm_op op, unsigned int pm_hint,
+	     const struct pm_callback_handle *pm_handle __unused)
+{
+	TEE_Result res = TEE_ERROR_GENERIC;
+
+	if (!PM_HINT_IS_STATE(pm_hint, CONTEXT))
+		return TEE_SUCCESS;
+
+	if (op == PM_OP_RESUME)
+		res = stm32_rcc_pm_resume();
+	else
+		res = stm32_rcc_pm_suspend();
+
+	return res;
+}
+
 static TEE_Result stm32mp2_clk_probe(const void *fdt, int node,
 				     const void *compat_data __unused)
 {
@@ -4357,6 +4394,8 @@ static TEE_Result stm32mp2_clk_probe(const void *fdt, int node,
 		panic("Error when applying RCC config");
 
 	stm32mp_clk_provider_probe_final(fdt, node, priv);
+
+	register_pm_core_service_cb(stm32_rcc_pm, NULL, "stm32-rcc");
 
 	return TEE_SUCCESS;
 }
