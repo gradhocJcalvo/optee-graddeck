@@ -615,8 +615,19 @@ static TEE_Result initialize_pmic2_irq(const void *fdt, int node,
 {
 	struct itr_handler *hdl = NULL;
 	const fdt32_t *cuint = NULL;
+	uint32_t phandle = 0;
+	int wakeup_parent_node = 0;
+	int len = 0;
 
 	FMSG("Init stpmic2 irq");
+
+	cuint = fdt_getprop(fdt, node, "wakeup-parent", &len);
+	if (!cuint || len != sizeof(uint32_t))
+		panic("Missing wakeup-parent");
+
+	phandle = fdt32_to_cpu(*cuint);
+
+	wakeup_parent_node = fdt_node_offset_by_phandle(fdt, phandle);
 
 	cuint = fdt_getprop(fdt, node, "st,wakeup-pin-number", NULL);
 	if (cuint) {
@@ -625,7 +636,8 @@ static TEE_Result initialize_pmic2_irq(const void *fdt, int node,
 
 		it = fdt32_to_cpu(*cuint) - 1;
 
-		res = stm32mp25_pwr_itr_alloc_add(it, stpmic2_irq_handler,
+		res = stm32mp25_pwr_itr_alloc_add(fdt, wakeup_parent_node, it,
+						  stpmic2_irq_handler,
 						  PWR_WKUP_FLAG_FALLING |
 						  PWR_WKUP_FLAG_THREADED,
 						  pmic, &hdl);

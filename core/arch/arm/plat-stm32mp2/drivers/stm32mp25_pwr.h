@@ -34,8 +34,9 @@ enum pwr_wkup_pins {
 };
 
 TEE_Result
-stm32mp25_pwr_itr_alloc_add(size_t it, itr_handler_t handler, uint32_t flags,
-			    void *data, struct itr_handler **phdl);
+stm32mp25_pwr_itr_alloc_add(const void *fdt, int wp_node, size_t it,
+			    itr_handler_t handler, uint32_t flags, void *data,
+			    struct itr_handler **phdl);
 
 void stm32mp25_pwr_itr_enable(size_t it);
 void stm32mp25_pwr_itr_disable(size_t it);
