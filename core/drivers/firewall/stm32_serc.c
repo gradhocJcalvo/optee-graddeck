@@ -65,8 +65,6 @@ static void stm32_serc_get_hwdata(void)
 	uintptr_t base = pdata->base;
 	uint32_t regval = 0;
 
-	clk_enable(pdata->clock);
-
 	regval = io_read32(base + _SERC_HWCFGR);
 
 	ddata->num_ilac = _SERC_FLD_GET(_SERC_HWCFGR_CFG1, regval);
@@ -78,8 +76,6 @@ static void stm32_serc_get_hwdata(void)
 	     _SERC_FLD_GET(_SERC_VERR_MINREV, ddata->version));
 
 	DMSG("HW cap: num ilac:[%"PRIu8"]", ddata->num_ilac);
-
-	clk_disable(pdata->clock);
 }
 
 struct dt_id_attr {
@@ -162,7 +158,6 @@ static void stm32_serc_setup(void)
 	uint32_t nreg = DIV_ROUND_UP(ddata->num_ilac, _PERIPH_IDS_PER_REG);
 	uint32_t i = 0;
 
-	clk_enable(pdata->clock);
 	io_setbits32(pdata->base + _SERC_ENABLE, _SERC_ENABLE_SERFEN);
 
 	for (i = 0; i < nreg; i++) {
@@ -183,6 +178,10 @@ static TEE_Result probe_serc_device(void)
 	if (res)
 		return res;
 
+	/* Asymmetric clock enable to have the SERC running */
+	if (clk_enable(serc_dev.pdata.clock))
+		panic();
+
 	stm32_serc_get_hwdata();
 	stm32_serc_setup();
 
@@ -194,6 +193,25 @@ static TEE_Result probe_serc_device(void)
 		return res;
 
 	interrupt_enable(interrupt_get_main_chip(), serc_dev.itr->it);
+
+	return TEE_SUCCESS;
+}
+
+static TEE_Result stm32_serc_pm(enum pm_op op, unsigned int pm_hint,
+				const struct pm_callback_handle *hdl __unused)
+{
+	if (!PM_HINT_IS_STATE(pm_hint, CONTEXT))
+		return TEE_SUCCESS;
+
+	if (op == PM_OP_RESUME) {
+		/* Asymmetric clock enable to have the SERC running */
+		if (clk_enable(serc_dev.pdata.clock))
+			panic();
+		stm32_serc_setup();
+
+	} else {
+		clk_disable(serc_dev.pdata.clock);
+	}
 
 	return TEE_SUCCESS;
 }
@@ -219,10 +237,14 @@ static TEE_Result stm32_serc_probe(const void *fdt, int node,
 	serc_dev.node = node;
 
 	res = probe_serc_device();
-	if (res)
+	if (res) {
 		stm32_serc_free();
+		return res;
+	}
 
-	return res;
+	register_pm_core_service_cb(stm32_serc_pm, NULL, "stm32-serc");
+
+	return TEE_SUCCESS;
 }
 
 static const struct dt_device_match stm32_serc_match_table[] = {
