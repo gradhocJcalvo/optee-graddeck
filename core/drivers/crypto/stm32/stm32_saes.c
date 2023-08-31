@@ -13,6 +13,7 @@
 #include <kernel/dt.h>
 #include <kernel/huk_subkey.h>
 #include <kernel/mutex.h>
+#include <kernel/pm.h>
 #include <libfdt.h>
 #include <mm/core_memprot.h>
 #include <stdint.h>
@@ -142,6 +143,7 @@ static struct mutex saes_lock = MUTEX_INITIALIZER;
 static struct stm32_saes_platdata {
 	vaddr_t base;
 	struct clk *clk;
+	struct clk *clk_rng;
 	struct rstctrl *reset;
 } saes_pdata;
 
@@ -1358,10 +1360,6 @@ static TEE_Result stm32_saes_parse_fdt(struct stm32_saes_platdata *pdata,
 	    dt_saes.reg_size == DT_INFO_INVALID_REG_SIZE)
 		return TEE_ERROR_BAD_PARAMETERS;
 
-	res = clk_dt_get_by_index(fdt, node, 0, &pdata->clk);
-	if (res != TEE_SUCCESS)
-		return res;
-
 	res = rstctrl_dt_get_by_index(fdt, node, 0, &pdata->reset);
 	if (res != TEE_SUCCESS && res != TEE_ERROR_ITEM_NOT_FOUND)
 		return res;
@@ -1371,23 +1369,15 @@ static TEE_Result stm32_saes_parse_fdt(struct stm32_saes_platdata *pdata,
 	if (!pdata->base)
 		panic();
 
-	return TEE_SUCCESS;
-}
-
-static TEE_Result stm32_saes_probe(const void *fdt, int node,
-				   const void *compat_data __unused)
-{
-	TEE_Result res = TEE_SUCCESS;
-
-	assert(!saes_pdata.base);
-
-	res = stm32_saes_parse_fdt(&saes_pdata, fdt, node);
+	res = clk_dt_get_by_name(fdt, node, "bus", &pdata->clk);
 	if (res)
 		return res;
 
-	if (clk_enable(saes_pdata.clk))
-		panic();
+	return clk_dt_get_by_name(fdt, node, "rng", &pdata->clk_rng);
+}
 
+static void stm32_saes_reset(void)
+{
 	if (saes_pdata.reset) {
 		/* External reset of SAES */
 		if (rstctrl_assert_to(saes_pdata.reset, TIMEOUT_US_1MS))
@@ -1403,6 +1393,51 @@ static TEE_Result stm32_saes_probe(const void *fdt, int node,
 		udelay(SAES_RESET_DELAY);
 		io_clrbits32(saes_pdata.base + _SAES_CR, _SAES_CR_IPRST);
 	}
+}
+
+static TEE_Result stm32_saes_pm(enum pm_op op, uint32_t pm_hint,
+				const struct pm_callback_handle *hdl __unused)
+{
+	TEE_Result ret = TEE_ERROR_NOT_IMPLEMENTED;
+
+	switch (op) {
+	case PM_OP_SUSPEND:
+		clk_disable(saes_pdata.clk);
+		clk_disable(saes_pdata.clk_rng);
+		ret = TEE_SUCCESS;
+		break;
+	case PM_OP_RESUME:
+		if (clk_enable(saes_pdata.clk) ||
+		    clk_enable(saes_pdata.clk_rng))
+			panic();
+
+		if (PM_HINT_IS_STATE(pm_hint, CONTEXT))
+			stm32_saes_reset();
+
+		ret = TEE_SUCCESS;
+		break;
+	default:
+		break;
+	}
+
+	return ret;
+}
+
+static TEE_Result stm32_saes_probe(const void *fdt, int node,
+				   const void *compat_data __unused)
+{
+	TEE_Result res = TEE_SUCCESS;
+
+	assert(!saes_pdata.base);
+
+	res = stm32_saes_parse_fdt(&saes_pdata, fdt, node);
+	if (res)
+		return res;
+
+	if (clk_enable(saes_pdata.clk) || clk_enable(saes_pdata.clk_rng))
+		panic();
+
+	stm32_saes_reset();
 
 	if (IS_ENABLED(CFG_CRYPTO_DRV_CIPHER)) {
 		res = stm32_register_cipher(SAES_IP);
@@ -1411,6 +1446,8 @@ static TEE_Result stm32_saes_probe(const void *fdt, int node,
 			panic();
 		}
 	}
+
+	register_pm_core_service_cb(stm32_saes_pm, NULL, "stm32-saes");
 
 	return TEE_SUCCESS;
 }
