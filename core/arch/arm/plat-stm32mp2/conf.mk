@@ -131,6 +131,7 @@ CFG_STM32_I2C ?= y
 CFG_STM32_IAC ?= y
 CFG_STM32_IPCC ?= y
 CFG_STM32_IWDG ?= y
+CFG_STM32_LPTIMER ?= y
 CFG_STM32_OMM ?= y
 CFG_STM32_PWR_IRQ ?= y
 CFG_STM32_RIF ?= y
@@ -233,4 +234,9 @@ ifeq ($(CFG_TEE_CORE_DEBUG),y)
 CFG_STM32_PANIC_ON_SERC_EVENT ?= n
 else
 CFG_STM32_PANIC_ON_SERC_EVENT ?= y
+endif
+
+# Enable associated counter driver
+ifeq ($(CFG_STM32_LPTIMER),y)
+$(call force,CFG_COUNTER_DRIVER,y)
 endif
