@@ -1,0 +1,54 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause)
+/*
+ * Copyright (C) 2024, STMicroelectronics - All Rights Reserved
+ * Author: Alexandre Torgue <alexandre.torgue@foss.st.com> for STMicroelectronics.
+ */
+
+&rifsc {
+	cryp1: cryp@42030000 {
+		compatible = "st,stm32mp1-cryp";
+		reg = <0x42030000 0x400>;
+		interrupts = <GIC_SPI 144 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&rcc CK_BUS_CRYP1>;
+		resets = <&rcc CRYP1_R>;
+		status = "disabled";
+	};
+
+	hash1: hash@42030400 {
+		compatible = "st,stm32mp13-hash";
+		reg = <0x42030400  0x400>;
+		interrupts = <GIC_SPI 145 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&rcc CK_BUS_HASH1>;
+		resets = <&rcc HASH1_R>;
+		status = "disabled";
+	};
+
+	rng1: rng@42030800 {
+		compatible = "st,stm32mp25-rng";
+		reg = <0x42030800 0x400>;
+		clocks = <&clk_rcbsec>, <&rcc CK_BUS_RNG1>;
+		clock-names = "rng_clk", "rng_hclk";
+		resets = <&rcc RNG1_R>;
+		status = "disabled";
+	};
+
+	saes: saes@42030c00 {
+		compatible = "st,stm32mp13-saes";
+		reg = <0x42030c00 0x400>;
+		interrupts = <GIC_SPI 156 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&rcc CK_BUS_SAES>, <&rcc CK_BUS_RNG1>;
+		clock-names = "bus", "rng";
+		resets = <&rcc SAES_R>;
+		status = "disabled";
+	};
+
+	pka: pka@42032000 {
+		compatible = "st,stm32mp13-pka64";
+		reg = <0x42032000 0x2000>;
+		interrupts = <GIC_SPI 146 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&rcc CK_BUS_PKA>, <&rcc CK_BUS_RNG1>;
+		clock-names = "bus", "rng";
+		resets = <&rcc PKA_R>;
+		status = "disabled";
+	};
+};
