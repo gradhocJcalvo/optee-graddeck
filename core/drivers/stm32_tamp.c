@@ -1615,13 +1615,14 @@ stm32_tamp_parse_active_conf(const void *fdt, int node,
 	return TEE_SUCCESS;
 }
 
-static
-TEE_Result stm32_tamp_parse_fdt(struct stm32_tamp_platdata *pdata,
-				const void *fdt, int node, const void *compat)
+static TEE_Result stm32_tamp_parse_fdt(struct stm32_tamp_platdata *pdata,
+				       const void *fdt, int node,
+				       const void *compat)
 {
 	TEE_Result res = TEE_ERROR_GENERIC;
-	int pinnode = -1;
-	struct dt_node_info dt_tamp = { };
+	int pinnode = -FDT_ERR_NOTFOUND;
+	int subnode = -FDT_ERR_NOTFOUND;
+	struct dt_node_info dt_tamp = {};
 	bool is_tdcid = false;
 
 	fdt_fill_device_info(fdt, &dt_tamp, node);
@@ -1658,10 +1659,14 @@ TEE_Result stm32_tamp_parse_fdt(struct stm32_tamp_platdata *pdata,
 	if (res)
 		return res;
 
-	fdt_for_each_subnode(pinnode, fdt, node) {
-		res = stm32_tamp_configure_pin_from_dt(fdt, pinnode, pdata);
-		if (res)
-			return res;
+	fdt_for_each_subnode(subnode, fdt, node) {
+		if (fdt_getprop(fdt, subnode, "pinctrl-0", NULL)) {
+			res = stm32_tamp_configure_pin_from_dt(fdt, subnode,
+							       pdata);
+			if (res)
+				return res;
+			pinnode = subnode;
+		}
 	}
 
 	if (pinnode < 0 && pinnode != -FDT_ERR_NOTFOUND)
@@ -1724,6 +1729,7 @@ static TEE_Result stm32_tamp_probe(const void *fdt, int node,
 	uint32_t __maybe_unused revision = 0;
 	TEE_Result res = TEE_SUCCESS;
 	vaddr_t base = 0;
+	int subnode = -FDT_ERR_NOTFOUND;
 
 	/* Manage dependency on RTC driver */
 	res = stm32_rtc_driver_is_initialized();
@@ -1815,6 +1821,15 @@ static TEE_Result stm32_tamp_probe(const void *fdt, int node,
 	}
 
 	interrupt_enable(interrupt_get_main_chip(), stm32_tamp.itr->it);
+
+	fdt_for_each_subnode(subnode, fdt, node) {
+		res = dt_driver_maybe_add_probe_node(fdt, subnode);
+		if (res) {
+			EMSG("Failed on node %s with %#" PRIx32,
+			     fdt_get_name(fdt, subnode, NULL), res);
+			panic();
+		}
+	}
 
 	return TEE_SUCCESS;
 
