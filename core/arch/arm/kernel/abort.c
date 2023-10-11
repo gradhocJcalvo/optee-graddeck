@@ -548,15 +548,24 @@ static enum fault_type get_fault_type(struct abort_info *ai)
 	}
 }
 
+void __weak plat_abort_handler(struct thread_abort_regs *regs __unused)
+{
+	/* Do nothing */
+}
+
 void abort_handler(uint32_t abort_type, struct thread_abort_regs *regs)
 {
 	struct abort_info ai;
+	enum fault_type type;
 	bool handled;
 
 	set_abort_info(abort_type, regs, &ai);
 
-	switch (get_fault_type(&ai)) {
+	type = get_fault_type(&ai);
+	switch (type) {
 	case FAULT_TYPE_IGNORE:
+		/* Allow platform-specific handling */
+		plat_abort_handler(regs);
 		break;
 	case FAULT_TYPE_USER_MODE_PANIC:
 		DMSG("[abort] abort in User mode (TA will panic)");
