@@ -1478,6 +1478,216 @@ static int stm32_clk_parse_fdt(const void *fdt, int node,
 	return 0;
 }
 
+#ifdef CFG_STM32_CLK_DEBUG
+static void clk_stm32_debug_display_pll_cfg(int pll_id,
+					    struct stm32_pll_dt_cfg *pll)
+{
+	int mux = (pll->src & MUX_ID_MASK) >> MUX_ID_SHIFT;
+	int sel = (pll->src & MUX_SEL_MASK) >> MUX_SEL_SHIFT;
+
+	printf("PLL%d : %s ", pll_id + 1,
+	       pll->enabled ? "enabled" : "disabled");
+
+	if (!pll->enabled)
+		printf("\n");
+
+	printf("cfg = < ");
+
+	for (int j = 0; j < PLLCFG_NB; j++)
+		printf("%d ", pll->cfg[j]);
+
+	printf("> ");
+
+	printf("frac = %d ", pll->frac);
+
+	if (pll->csg_enabled) {
+		printf("csg = < ");
+
+		for (int j = 0; j < PLLCSG_NB; j++)
+			printf("%d ", pll->csg[j]);
+
+		printf("> ");
+	}
+
+	printf("mux id = %d sel = %d\n", mux, sel);
+}
+
+static void clk_stm32_debug_display_pll_dt_cfg(struct clk_stm32_priv *priv)
+{
+	struct stm32_clk_platdata *pdata = priv->pdata;
+	uint32_t i;
+
+	printf("\nNumber of PLLs = %d\n", pdata->npll);
+
+	for (i = 0; i < pdata->npll; i++) {
+		struct stm32_pll_dt_cfg *pll = &pdata->pll[i];
+		int mux = (pll->src & MUX_ID_MASK) >> MUX_ID_SHIFT;
+		int sel = (pll->src & MUX_SEL_MASK) >> MUX_SEL_SHIFT;
+
+		printf("PLL%d : %s ", i + 1,
+		       pll->enabled ? "enabled" : "disabled");
+
+		if (!pll->enabled) {
+			printf("\n");
+			continue;
+		}
+
+		printf("cfg = < ");
+
+		for (int j = 0; j < PLLCFG_NB; j++) {
+			printf("%d ", pll->cfg[j]);
+		}
+
+		printf("> ");
+
+		printf("frac = %d ", pll->frac);
+
+		if (pll->csg_enabled) {
+			printf("csg = < ");
+
+			for (int j = 0; j < PLLCSG_NB; j++) {
+				printf("%d ", pll->csg[j]);
+			}
+
+			printf("> ");
+		}
+
+		printf("mux id = %d sel = %d\n", mux, sel);
+	}
+}
+
+static void clk_stm32_debug_display_osc_dt_cfg(struct clk_stm32_priv *priv)
+{
+	struct stm32_clk_platdata *pdata = priv->pdata;
+	int nb = pdata->nosci;
+	int i;
+
+	printf("\nNumber of oscillators = %d\n", nb);
+
+	for (i = 0; i < nb; i++) {
+		struct stm32_osci_dt_cfg *osc = &pdata->osci[i];
+		struct clk_oscillator_data *osc_data = clk_oscillator_get_data(i);
+
+		printf("%s %ld bypass = %d digbyp = %d css = %d drive = %d\n",
+		       osc_data->name,
+		       osc->freq,
+		       osc->bypass,
+		       osc->digbyp,
+		       osc->css,
+		       osc->drive);
+	}
+}
+
+static void clk_stm32_debug_display_flex_dt_cfg(struct clk_stm32_priv *priv)
+{
+	struct stm32_clk_platdata *pdata = priv->pdata;
+	uint32_t i;
+
+	printf("nb st,flexgen = %d\n", pdata->nflexgen);
+
+	for (i = 0; i < pdata->nflexgen; i++) {
+		uint32_t val = pdata->flexgen[i];
+		uint32_t cmd, cmd_data;
+		unsigned int channel, clk_src, pdiv, fdiv;
+
+		cmd = (val & CMD_MASK) >> CMD_SHIFT;
+		cmd_data = val & ~CMD_MASK;
+
+		if (cmd != CMD_FLEXGEN) {
+			printf("\t ERRROR %d) 0x%x\n", i, pdata->flexgen[i]);
+			continue;
+		}
+
+		channel = (cmd_data & FLEX_ID_MASK) >> FLEX_ID_SHIFT;
+		clk_src = (cmd_data & FLEX_SEL_MASK) >> FLEX_SEL_SHIFT;
+		pdiv = (cmd_data & FLEX_PDIV_MASK) >> FLEX_PDIV_SHIFT;
+		fdiv = (cmd_data & FLEX_FDIV_MASK) >> FLEX_FDIV_SHIFT;
+
+		printf("\tch = %d src = %d pdiv = %d fdiv = %d\n", channel,
+			clk_src, pdiv, fdiv);
+
+	}
+
+	printf("\n");
+}
+
+static void clk_stm32_debug_display_bus_dt_cfg(struct clk_stm32_priv *priv)
+{
+	struct stm32_clk_platdata *pdata = priv->pdata;
+	uint32_t i;
+
+	printf("nb st,busclk = %d\n", pdata->nbusclk);
+
+	for (i = 0; i < pdata->nbusclk; i++)
+		printf("\t0x%x\n", pdata->busclk[i]);
+
+	printf("\n");
+}
+
+static void clk_stm32_debug_display_ker_dt_cfg(struct clk_stm32_priv *priv)
+{
+	struct stm32_clk_platdata *pdata = priv->pdata;
+	uint32_t i;
+
+	printf("nb st,kerclk = %d\n", pdata->nkernelclk);
+
+	for (i = 0; i < pdata->nkernelclk; i++)
+		printf("\t0x%x\n", pdata->kernelclk[i]);
+
+	printf("\n");
+}
+
+static void clk_stm32_debug_display_opp_cfg(const char *opp_name,
+					    struct stm32_clk_opp_cfg *opp_cfg)
+{
+	unsigned int i = 0;
+
+	printf("\nOPP %s :\n", opp_name);
+
+	for (i = 0; i < MAX_OPP; i++) {
+		if (opp_cfg->frq == 0UL || opp_cfg->frq == UINT32_MAX)
+			break;
+
+		printf("frequency = %d src = 0x%x ", opp_cfg->frq,
+		       opp_cfg->src);
+
+		clk_stm32_debug_display_pll_cfg(PLL1_ID, &opp_cfg->pll_cfg);
+
+		opp_cfg++;
+	}
+
+	printf("\n");
+}
+
+static void clk_stm32_debug_display_opp_dt_cfg(struct clk_stm32_priv *priv)
+{
+	struct stm32_clk_platdata *pdata = priv->pdata;
+	struct stm32_clk_opp_dt_cfg *opp = pdata->opp;
+
+	clk_stm32_debug_display_opp_cfg("st,ck_cpu1", opp->cpu1_opp);
+}
+
+static void clk_stm32_debug_display_others_dt_cfg(struct clk_stm32_priv *priv)
+{
+	struct stm32_clk_platdata *pdata = priv->pdata;
+
+	printf("c1msrd = %u\n", pdata->c1msrd);
+}
+
+static void clk_stm32_debug_display_pdata(void)
+{
+	struct clk_stm32_priv *priv = clk_stm32_get_priv();
+
+	clk_stm32_debug_display_pll_dt_cfg(priv);
+	clk_stm32_debug_display_opp_dt_cfg(priv);
+	clk_stm32_debug_display_osc_dt_cfg(priv);
+	clk_stm32_debug_display_flex_dt_cfg(priv);
+	clk_stm32_debug_display_bus_dt_cfg(priv);
+	clk_stm32_debug_display_ker_dt_cfg(priv);
+	clk_stm32_debug_display_others_dt_cfg(priv);
+}
+#endif
+
 static void stm32mp2_a35_ss_on_hsi(void)
 {
 	uintptr_t a35_ss_address = stm32_a35_base();
@@ -4629,6 +4839,10 @@ static TEE_Result stm32mp2_clk_probe(const void *fdt, int node,
 	if (rc)
 		return TEE_ERROR_GENERIC;
 
+#ifdef CFG_STM32_CLK_DEBUG
+	clk_stm32_debug_display_pdata();
+#endif
+
 	rc = stm32mp2_init_clock_tree(priv, pdata);
 	if (rc != 0)
 		return rc;
@@ -4640,6 +4854,10 @@ static TEE_Result stm32mp2_clk_probe(const void *fdt, int node,
 		panic("Error when applying RCC config");
 
 	stm32mp_clk_provider_probe_final(fdt, node, priv);
+
+#ifdef CFG_STM32_CLK_DEBUG
+	clk_print_tree();
+#endif
 
 	register_pm_core_service_cb(stm32_rcc_pm, NULL, "stm32-rcc");
 
