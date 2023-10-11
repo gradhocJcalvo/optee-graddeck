@@ -2663,7 +2663,8 @@ static STM32_GATE(ck_ker_fdcan, &ck_flexgen_26, 0, GATE_FDCAN);
 static STM32_GATE(ck_ker_csi2, &ck_flexgen_29, 0, GATE_CSI);
 static STM32_GATE(ck_ker_csi2txesc, &ck_flexgen_30, 0, GATE_CSI);
 static STM32_GATE(ck_ker_csi2phy, &ck_flexgen_31, 0, GATE_CSI);
-static STM32_GATE(ck_ker_stgen, &ck_flexgen_33, 0, GATE_STGEN);
+static STM32_GATE(ck_ker_stgen, &ck_flexgen_33, CLK_SET_RATE_PARENT,
+		  GATE_STGEN);
 static STM32_GATE(ck_ker_usbtc, &ck_flexgen_35, 0, GATE_USBTC);
 static STM32_GATE(ck_ker_i3c4, &ck_flexgen_36, 0, GATE_I3C4);
 static STM32_GATE(ck_ker_spi8, &ck_flexgen_37, 0, GATE_SPI8);
@@ -2696,7 +2697,8 @@ static STM32_GATE(ck_ker_ethswref, &ck_flexgen_60, 0, GATE_ETHSWREF);
 static STM32_GATE(ck_ker_eth1stp, &ck_icn_ls_mcu, 0, GATE_ETH1STP);
 static STM32_GATE(ck_ker_eth2stp, &ck_icn_ls_mcu, 0, GATE_ETH2STP);
 
-static STM32_GATE(ck_ker_ltdc, &ck_flexgen_27, 0, GATE_LTDC);
+static STM32_GATE(ck_ker_ltdc, &ck_flexgen_27, CLK_SET_RATE_PARENT,
+		  GATE_LTDC);
 
 static STM32_COMPOSITE(ck_mco1, 2, PARENT(&ck_flexgen_61, &ck_obser0),
 		       0, GATE_MCO1, NO_DIV, MUX_MCO1);
