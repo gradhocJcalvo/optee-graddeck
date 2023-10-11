@@ -2354,7 +2354,7 @@ struct clk _name = {\
 		.flex_id	= (_flex_id),\
 	},\
 	.name		= #_name,\
-	.flags		= (_flags),\
+	.flags		= (_flags | CLK_SET_RATE_UNGATE),\
 	.num_parents	= 15,\
 	.parents	=  XBAR_PARENTS,\
 }
