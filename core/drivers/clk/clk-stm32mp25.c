@@ -1950,11 +1950,19 @@ static void clk_stm32_pll_disable(struct clk *clk)
 		EMSG("%s timeout\n", clk_get_name(clk));
 }
 
+static bool clk_stm32_pll_is_enabled(struct clk *clk)
+{
+	struct clk_stm32_pll_cfg *cfg = clk->priv;
+
+	return stm32_gate_is_enabled(cfg->gate_id);
+}
+
 static const struct clk_ops clk_stm32_pll_ops = {
 	.get_parent	= clk_stm32_pll_get_parent,
 	.get_rate	= clk_stm32_pll_get_rate,
 	.enable		= clk_stm32_pll_enable,
 	.disable	= clk_stm32_pll_disable,
+	.is_enabled	= clk_stm32_pll_is_enabled,
 };
 
 static TEE_Result clk_stm32_pll3_enable(struct clk *clk)
@@ -1986,6 +1994,7 @@ static const struct clk_ops clk_stm32_pll3_ops = {
 	.get_rate	= clk_stm32_pll_get_rate,
 	.enable		= clk_stm32_pll3_enable,
 	.disable	= clk_stm32_pll_disable,
+	.is_enabled	= clk_stm32_pll_is_enabled,
 };
 
 #define XBAR_PARENTS { &ck_pll4, &ck_pll5, &ck_pll6, &ck_pll7, &ck_pll8,\
@@ -2168,6 +2177,16 @@ static void clk_stm32_flexgen_disable(struct clk *clk)
 		     RCC_FINDIVxCFGR_FINDIVxEN);
 }
 
+static bool clk_stm32_flexgen_is_enabled(struct clk *clk)
+{
+	struct clk_stm32_flexgen_cfg *cfg = clk->priv;
+	uintptr_t rcc_base = clk_stm32_get_rcc_base();
+	uint8_t channel = cfg->flex_id;
+
+	return !!(io_read32(rcc_base + RCC_FINDIV0CFGR + (0x4 * channel)) &
+		RCC_FINDIVxCFGR_FINDIVxEN);
+}
+
 static const struct clk_ops clk_stm32_flexgen_ops = {
 	.get_rate	= clk_stm32_flexgen_get_rate,
 	.set_rate	= clk_stm32_flexgen_set_rate,
@@ -2175,6 +2194,7 @@ static const struct clk_ops clk_stm32_flexgen_ops = {
 	.set_parent	= clk_stm32_flexgen_set_parent,
 	.enable		= clk_stm32_flexgen_enable,
 	.disable	= clk_stm32_flexgen_disable,
+	.is_enabled	= clk_stm32_flexgen_is_enabled,
 };
 
 #define MUX_A35_OFFSET		A35_SS_CHGCLKREQ
@@ -2245,6 +2265,11 @@ static void clk_stm32_hsediv2_disable(struct clk *clk)
 	return clk_stm32_gate_ops.disable(clk);
 }
 
+static bool clk_stm32_hsediv2_is_enabled(struct clk *clk)
+{
+	return clk_stm32_gate_ops.is_enabled(clk);
+}
+
 static unsigned long clk_stm32_hsediv2_get_rate(__maybe_unused struct clk *clk,
 						unsigned long prate)
 {
@@ -2260,6 +2285,7 @@ static unsigned long clk_stm32_hsediv2_get_rate(__maybe_unused struct clk *clk,
 static const struct clk_ops clk_hsediv2_ops = {
 	.enable		= clk_stm32_hsediv2_enable,
 	.disable	= clk_stm32_hsediv2_disable,
+	.is_enabled	= clk_stm32_hsediv2_is_enabled,
 	.get_rate	= clk_stm32_hsediv2_get_rate,
 };
 
