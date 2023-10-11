@@ -110,12 +110,13 @@ static TEE_Result stm32_serc_parse_fdt(void)
 #define SERC_EXCEPT_MSB_BIT(x) (x * _PERIPH_IDS_PER_REG + _PERIPH_IDS_PER_REG - 1)
 #define SERC_EXCEPT_LSB_BIT(x) (x * _PERIPH_IDS_PER_REG)
 
-static enum itr_return stm32_serc_itr(struct itr_handler *h __unused)
+void stm32_serc_handle_ilac(void)
 {
 	struct serc_driver_data *ddata = serc_dev.ddata;
 	struct stm32_serc_platdata *pdata = &serc_dev.pdata;
 	uintptr_t base = pdata->base;
 	int nreg = DIV_ROUND_UP(ddata->num_ilac, _PERIPH_IDS_PER_REG);
+	bool do_panic = false;
 	uint32_t isr = 0;
 	uint32_t i = 0;
 
@@ -126,10 +127,13 @@ static enum itr_return stm32_serc_itr(struct itr_handler *h __unused)
 		isr = io_read32(base + _SERC_ISR0 + offset);
 		isr &= io_read32(base + _SERC_IER0 + offset);
 
-		if (isr)
+		if (isr) {
+			do_panic = true;
+
 			EMSG("SERC exceptions [%d:%d]: %#x",
 			     SERC_EXCEPT_MSB_BIT(i), SERC_EXCEPT_LSB_BIT(i),
 			     isr);
+		}
 
 		while (isr && tries < _PERIPH_IDS_PER_REG) {
 			EMSG("SERC exception ID: %d",
@@ -145,8 +149,16 @@ static enum itr_return stm32_serc_itr(struct itr_handler *h __unused)
 		}
 	}
 
-	if (IS_ENABLED(CFG_STM32_PANIC_ON_SERC_EVENT))
+	if (do_panic) {
 		stm32_rif_access_violation_action();
+		if (IS_ENABLED(CFG_STM32_PANIC_ON_SERC_EVENT))
+			panic();
+	}
+}
+
+static enum itr_return stm32_serc_itr(struct itr_handler *h __unused)
+{
+	stm32_serc_handle_ilac();
 
 	return ITRR_HANDLED;
 }
