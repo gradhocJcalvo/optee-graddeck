@@ -2187,6 +2187,16 @@ static bool clk_stm32_flexgen_is_enabled(struct clk *clk)
 		RCC_FINDIVxCFGR_FINDIVxEN);
 }
 
+static unsigned long clk_stm32_flexgen_round_rate(struct clk *clk __unused,
+						  unsigned long rate,
+						  unsigned long prate)
+{
+	unsigned int prediv = 0;
+	unsigned int findiv = 0;
+
+	return clk_stm32_flexgen_get_round_rate(rate, prate, &prediv, &findiv);
+}
+
 static const struct clk_ops clk_stm32_flexgen_ops = {
 	.get_rate	= clk_stm32_flexgen_get_rate,
 	.set_rate	= clk_stm32_flexgen_set_rate,
@@ -2195,6 +2205,7 @@ static const struct clk_ops clk_stm32_flexgen_ops = {
 	.enable		= clk_stm32_flexgen_enable,
 	.disable	= clk_stm32_flexgen_disable,
 	.is_enabled	= clk_stm32_flexgen_is_enabled,
+	.round_rate	= clk_stm32_flexgen_round_rate,
 };
 
 #define MUX_A35_OFFSET		A35_SS_CHGCLKREQ
