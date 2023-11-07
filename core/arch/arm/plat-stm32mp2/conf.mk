@@ -79,6 +79,12 @@ endif
 include core/arch/arm/cpu/cortex-armv8-0.mk
 supported-ta-targets ?= ta_arm64
 
+# Enable flag when Cortex-M33 is TDCID
+ifneq ($(filter $(CFG_EMBED_DTB_SOURCE_FILE),$(flavorlist-M33-TDCID)),)
+$(call force,CFG_STM32_CM33TDCID,y)
+endif
+CFG_STM32_CM33TDCID ?= n
+
 $(call force,CFG_ARM_GIC_PM,y)
 $(call force,CFG_ARM64_core,y)
 $(call force,CFG_CORE_ASYNC_NOTIF,y)
