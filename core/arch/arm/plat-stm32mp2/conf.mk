@@ -83,7 +83,20 @@ supported-ta-targets ?= ta_arm64
 ifneq ($(filter $(CFG_EMBED_DTB_SOURCE_FILE),$(flavorlist-M33-TDCID)),)
 $(call force,CFG_STM32_CM33TDCID,y)
 endif
+
 CFG_STM32_CM33TDCID ?= n
+ifeq ($(CFG_STM32_CM33TDCID),y)
+$(call force,CFG_SCMI_CORTEXM_AGENT,n)
+$(call force,CFG_SCMI_MSG_DRIVERS,n)
+$(call force,CFG_SCMI_PTA,n)
+$(call force,CFG_SCMI_SCPFW,n)
+$(call force,CFG_SCMI_SERVER_REGULATOR_CONSUMER,n)
+$(call force,CFG_STM32_BSEC_PTA,n)
+$(call force,CFG_STM32_BSEC3,n)
+$(call force,CFG_STM32_BSEC_WRITE,n)
+$(call force,CFG_STM32MP_PROVISIONING,n)
+$(call force,CFG_TA_STM32MP_NVMEM,n)
+endif
 
 $(call force,CFG_ARM_GIC_PM,y)
 $(call force,CFG_ARM64_core,y)
@@ -99,11 +112,7 @@ $(call force,CFG_DT,y)
 $(call force,CFG_GIC,y)
 $(call force,CFG_HALT_CORES_ON_PANIC_SGI,15)
 $(call force,CFG_INIT_CNTVOFF,y)
-$(call force,CFG_SCMI_MSG_DRIVERS,n)
-$(call force,CFG_SCMI_PTA,y)
-$(call force,CFG_SCMI_SCPFW,y)
 $(call force,CFG_SCMI_SCPFW_PRODUCT,optee-stm32mp2)
-$(call force,CFG_SCMI_SERVER_REGULATOR_CONSUMER,y)
 $(call force,CFG_SECURE_TIME_SOURCE_CNTPCT,y)
 $(call force,CFG_STM32_SHARED_IO,y)
 $(call force,CFG_STM32_HSE_MONITORING,y)
@@ -179,6 +188,11 @@ CFG_STM32_UART ?= y
 CFG_STM32_VREFBUF ?= y
 CFG_STPMIC2 ?= y
 CFG_WITH_TUI ?= y
+
+CFG_SCMI_MSG_DRIVERS ?= n
+CFG_SCMI_PTA ?= y
+CFG_SCMI_SCPFW ?= y
+CFG_SCMI_SERVER_REGULATOR_CONSUMER ?= y
 
 CFG_DRIVERS_I2C ?= $(CFG_STM32_I2C)
 CFG_REGULATOR_FIXED ?= y
