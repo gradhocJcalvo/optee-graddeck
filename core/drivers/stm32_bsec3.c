@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 /*
- * Copyright (c) 2022, STMicroelectronics
+ * Copyright (c) 2022-2024, STMicroelectronics
  */
 
 #include <assert.h>
@@ -84,10 +84,33 @@
 #define BSEC_DENR_SPIDENM		BIT(10)
 #define BSEC_DENR_SPNIDENM		BIT(11)
 #define BSEC_DENR_CFGSDIS		BIT(12)
+
+#if (defined(CFG_STM32MP25) || defined(CFG_STM32MP23))
 #define BSEC_DENR_CP15SDIS_MASK		GENMASK_32(14, 13)
 #define BSEC_DENR_CP15SDIS_SHIFT	13U
 #define BSEC_DENR_ALL_MASK		GENMASK_32(14, 1)
 #define BSEC_DENR_WRITE_CONF		U(0xDEB60000)
+#endif
+
+#if defined(CFG_STM32MP21)
+#define BSEC_DENR_ALL_MASK		GENMASK_32(17, 0)
+#define BSEC_DENR_WRITE_CONF		U(0xDEB00000)
+#endif
+
+// compute SECDED ECC as HAMMING(17,12) with parity
+#define PARITY_4BIT(x)		((((x) >> 3) ^ ((x) >> 2) ^ ((x) >> 1) ^ (x)) \
+				 & 1)
+#define PARITY_12BIT(x)		PARITY_4BIT(((x) >> 8) ^ ((x) >> 4) ^ (x))
+#define BSEC_DENR_ECC(x)	(((PARITY_12BIT((x) & 0x800)) << 17) | \
+				 ((PARITY_12BIT((x) & 0x7f0)) << 16) | \
+				 ((PARITY_12BIT((x) & 0x78e)) << 15) | \
+				 ((PARITY_12BIT((x) & 0x66d)) << 14) | \
+				 ((PARITY_12BIT((x) & 0xd5b)) << 13) | \
+				 ((PARITY_12BIT((x) ^ 0xcb7)) << 12))
+#define BSEC_DENR_v(x)		(BSEC_DENR_WRITE_CONF | BSEC_DENR_ECC(x) | \
+				 ((x) & 0xfff))
+#define BSEC_DENR_I		BSEC_DENR_v(0x0fff)
+#define BSEC_DENR_NI		BSEC_DENR_v(0x0fdf)
 
 /* BSEC_SR register fields */
 #define BSEC_SR_HVALID			BIT(1)
@@ -105,6 +128,7 @@
 #define BSEC_OTP_BANK_SHIFT		5U
 
 #define BSEC_IP_VERSION_1_0		U(0x10)
+#define BSEC_IP_VERSION_1_2		U(0x12)
 #define BSEC_IP_ID_3			U(0x100033)
 
 #define MAX_NB_TRIES			3U
@@ -512,11 +536,13 @@ TEE_Result stm32_bsec_write_debug_conf(uint32_t val)
 
 	exceptions = bsec_lock();
 
+	if (IS_ENABLED(CFG_STM32MP21))
+		val = BSEC_DENR_v(val);
+
 	io_clrsetbits32(bsec_base() + BSEC_DENR, BSEC_DENR_ALL_MASK,
 			val | BSEC_DENR_WRITE_CONF);
 
-
-	if (stm32_bsec_read_debug_conf() == val)
+	if (stm32_bsec_read_debug_conf() == (val & BSEC_DENR_ALL_MASK))
 		result = TEE_SUCCESS;
 
 	bsec_unlock(exceptions);
@@ -1153,8 +1179,11 @@ static TEE_Result initialize_bsec(void)
 
 	initialize_bsec_from_dt(fdt, node);
 
-	if ((bsec_get_version() != BSEC_IP_VERSION_1_0) ||
-	    (bsec_get_id() != BSEC_IP_ID_3))
+	if ((IS_ENABLED(CFG_STM32MP21) &&
+	     bsec_get_version() != BSEC_IP_VERSION_1_2) ||
+	    (IS_ENABLED(CFG_STM32MP25) &&
+	     bsec_get_version() != BSEC_IP_VERSION_1_0) ||
+	    bsec_get_id() != BSEC_IP_ID_3)
 		panic("BSEC probe wrong IP version/ID\n");
 
 	check_reset_error();
