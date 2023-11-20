@@ -1741,7 +1741,9 @@ static TEE_Result stm32_tamp_probe(const void *fdt, int node,
 		return res;
 
 	/* Init Tamp clock */
-	clk_enable(stm32_tamp.pdata.clock);
+	res = clk_enable(stm32_tamp.pdata.clock);
+	if (res)
+		return res;
 
 	base = io_pa_or_va(&stm32_tamp.pdata.base, 1);
 
