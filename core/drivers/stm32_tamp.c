@@ -264,6 +264,35 @@ struct stm32_tamp_instance {
 	uint32_t hwconf2;
 };
 
+#ifdef CFG_STM32MP13
+static const char * const itamper_name[] = {
+	[INT_TAMP1] = "Backup domain voltage threshold monitoring",
+	[INT_TAMP2] = "Temperature monitoring",
+	[INT_TAMP3] = "LSE monitoring",
+	[INT_TAMP4] = "HSE monitoring",
+	[INT_TAMP5] = "RTC Calendar overflow",
+	[INT_TAMP6] = "JTAG SWD access",
+	[INT_TAMP7] = "ADC2 analog watchdog monitoring 1",
+	[INT_TAMP8] = "Monotonic counter 1",
+	[INT_TAMP9] = "Cryptographic perpipheral fault",
+	[INT_TAMP10] = "Monotonic counter 2",
+	[INT_TAMP11] = "IWDG1 reset",
+	[INT_TAMP12] = "ADC2 analog watchdog monitoring 2",
+	[INT_TAMP13] = "ADC2 analog watchdog monitoring 3",
+};
+#endif
+
+#ifdef CFG_STM32MP15
+static const char * const itamper_name[] = {
+	[INT_TAMP1] = "RTC power domain",
+	[INT_TAMP2] = "Temperature monitoring",
+	[INT_TAMP3] = "LSE monitoring",
+	[INT_TAMP5] = "RTC Calendar overflow",
+	[INT_TAMP8] = "Monotonic counter",
+};
+DECLARE_KEEP_PAGER(itamper_name);
+#endif
+
 static struct stm32_tamp_conf int_tamp_mp13[] = {
 	{ .id = INT_TAMP1 }, { .id = INT_TAMP2 }, { .id = INT_TAMP3 },
 	{ .id = INT_TAMP4 }, { .id = INT_TAMP5 }, { .id = INT_TAMP6 },
@@ -634,8 +663,12 @@ static TEE_Result stm32_tamp_set_int_config(struct stm32_tamp_compat *tcompat,
 			*cr3 &= ~_TAMP_CR3_ITAMPNOER(id);
 	}
 
-	DMSG("INT_TAMP%d enabled as a %s tamper", id - INT_TAMP1 + 1,
-	     (tamp_int->mode & TAMP_NOERASE) ? "potential" : "full");
+#ifndef CFG_STM32MP25
+	DMSG("'%s' internal tamper enabled in %s mode",
+	     itamper_name[id - INT_TAMP1],
+	     (tamp_int->mode & TAMP_NOERASE) ? "potential" : "confirmed");
+#endif
+
 	return TEE_SUCCESS;
 }
 
@@ -733,10 +766,10 @@ static TEE_Result stm32_tamp_set_ext_config(struct stm32_tamp_compat *tcompat,
 		*ier |= _TAMP_IER_ETAMP(id);
 	}
 
-	DMSG("EXT_TAMP%d enabled as a %s %s tamper trig_%s%s",
+	DMSG("EXT_TAMP%d enabled as a %s tamper in %s mode, trig_%s %s",
 	     id - EXT_TAMP1 + 1,
 	     (tamp_ext->mode & TAMP_ACTIVE) ? "active" : "passive",
-	     (tamp_ext->mode & TAMP_NOERASE) ? "potential" : "full",
+	     (tamp_ext->mode & TAMP_NOERASE) ? "potential" : "confirmed",
 	     (tamp_ext->mode & TAMP_TRIG_ON) ? "on" : "off",
 	     (tamp_ext->mode & TAMP_EVT_MASK) ? " (masked)" : "");
 
@@ -945,7 +978,7 @@ static void stm32_tamp_set_atper(uint32_t pins_out_bits, uint32_t *atcr1)
 	*atcr1 |= (conf << _TAMP_ATCR1_ATPER_SHIFT) & _TAMP_ATCR1_ATPER_MASK;
 }
 
-TEE_Result stm32_tamp_set_config(void)
+static TEE_Result stm32_tamp_set_config(void)
 {
 	TEE_Result ret = TEE_SUCCESS;
 	size_t i = 0;
@@ -1034,7 +1067,7 @@ TEE_Result stm32_tamp_set_config(void)
  * ETAMP(id) is masked and internally cleared by hardware.
  * The secrets are not erased.
  */
-TEE_Result stm32_tamp_set_mask(enum stm32_tamp_id id)
+static TEE_Result __maybe_unused stm32_tamp_set_mask(enum stm32_tamp_id id)
 {
 	vaddr_t base = io_pa_or_va(&stm32_tamp.pdata.base, 1);
 
@@ -1060,7 +1093,7 @@ TEE_Result stm32_tamp_set_mask(enum stm32_tamp_id id)
  * ETAMP(id) must be cleared by software to allow
  * next tamper event detection.
  */
-TEE_Result stm32_tamp_unset_mask(enum stm32_tamp_id id)
+static TEE_Result __maybe_unused stm32_tamp_unset_mask(enum stm32_tamp_id id)
 {
 	vaddr_t base = io_pa_or_va(&stm32_tamp.pdata.base, 1);
 
@@ -1076,7 +1109,7 @@ TEE_Result stm32_tamp_unset_mask(enum stm32_tamp_id id)
 	return TEE_SUCCESS;
 }
 
-TEE_Result stm32_tamp_write_mcounter(int cnt_idx)
+static TEE_Result __maybe_unused stm32_tamp_write_mcounter(int cnt_idx)
 {
 	vaddr_t base = io_pa_or_va(&stm32_tamp.pdata.base, 1);
 
@@ -1089,7 +1122,7 @@ TEE_Result stm32_tamp_write_mcounter(int cnt_idx)
 	return TEE_SUCCESS;
 }
 
-uint32_t stm32_tamp_read_mcounter(int cnt_idx)
+static uint32_t __maybe_unused stm32_tamp_read_mcounter(int cnt_idx)
 {
 	vaddr_t base = io_pa_or_va(&stm32_tamp.pdata.base, 1);
 
@@ -1131,8 +1164,46 @@ static TEE_Result stm32_tamp_configure_ext(struct stm32_tamp_conf *tamp_ext,
 	return TEE_SUCCESS;
 }
 
-TEE_Result stm32_tamp_activate_tamp(enum stm32_tamp_id id, uint32_t mode,
-				    uint32_t (*cb)(int id))
+/*
+ * stm32_tamp_activate_tamp: Configure and activate one tamper (internal or
+ * external).
+ *
+ * @id: tamper ID
+ * @mode: bitmask from TAMPER modes define:
+ *       TAMP_ERASE/TAMP_NOERASE:
+ *            TAMP_ERASE: when this tamper event is triggered; secrets are
+ *            erased.
+ *            TAMP_NOERASE: when this event is triggered; cryptographic
+ *            and some secure peripherals are locked until the event is
+ *            acknowledged. If the callback confirms the TAMPER, it
+ *            can manually erase secrets with stm32_tamp_erase_secrets().
+ *       TAMP_NO_EVT_MASK/TAMP_EVT_MASK:
+ *            TAMP_NO_EVT_MASK: normal behavior.
+ *            TAMP_EVT_MASK: if the event is triggered, the event is masked and
+ *            internally cleared by hardware. Secrets are not erased. Only
+ *            applicable for some external tampers. This defines only the status
+ *            at boot. To change mask while runtime: stm32_tamp_set_mask() and
+ *            stm32_tamp_unset_mask() can be used.
+ * @callback: function to call when a tamper event is raised (cannot be NULL).
+ *            It is called in interrupt context and returns a bitmask defining
+ *            the action to take by the driver:
+ *            TAMP_CB_RESET: will reset the board.
+ *            TAMP_CB_ACK: this specific tamper is acknowledged (in case
+ *            of no-erase tamper, blocked secret are unblocked).
+ *
+ * return: TEE_ERROR_BAD_PARAMETERS:
+ *                   if @id is not a valid tamper ID,
+ *                   if @callback is NULL,
+ *                   if TAMP_EVT_MASK @mode is set for an unsupported @id.
+ *         TEE_ERROR BAD_STATE
+ *                   if driver was not previously initialized.
+ *         TEE_ERROR ITEM_NOT_FOUND
+ *                   if the activated external tamper was not previously
+ *                   defined in the device tree.
+ *         else TEE_SUCCESS.
+ */
+static TEE_Result stm32_tamp_activate_tamp(enum stm32_tamp_id id, uint32_t mode,
+					   uint32_t (*cb)(int id))
 {
 	size_t i = 0;
 	struct stm32_tamp_conf *tamp_conf = NULL;
@@ -1157,10 +1228,12 @@ TEE_Result stm32_tamp_activate_tamp(enum stm32_tamp_id id, uint32_t mode,
 			return stm32_tamp_configure_ext(tamp_conf, mode, cb);
 		}
 
+	EMSG("Did not find existing tamper for ID:%u", id);
+
 	return TEE_ERROR_BAD_PARAMETERS;
 }
 
-bool stm32_tamp_are_secrets_blocked(void)
+static bool __maybe_unused stm32_tamp_are_secrets_blocked(void)
 {
 	if (stm32_tamp.pdata.compat &&
 	    (stm32_tamp.pdata.compat->tags & TAMP_HAS_CR2_SECRET_STATUS)) {
@@ -1174,7 +1247,7 @@ bool stm32_tamp_are_secrets_blocked(void)
 	}
 }
 
-void stm32_tamp_block_secrets(void)
+static void __maybe_unused stm32_tamp_block_secrets(void)
 {
 	vaddr_t base = io_pa_or_va(&stm32_tamp.pdata.base, 1);
 
@@ -1183,7 +1256,7 @@ void stm32_tamp_block_secrets(void)
 		io_setbits32(base + _TAMP_CR2, _TAMP_CR2_BKBLOCK);
 }
 
-void stm32_tamp_unblock_secrets(void)
+static void __maybe_unused stm32_tamp_unblock_secrets(void)
 {
 	vaddr_t base = io_pa_or_va(&stm32_tamp.pdata.base, 1);
 
@@ -1192,7 +1265,7 @@ void stm32_tamp_unblock_secrets(void)
 		io_clrbits32(base + _TAMP_CR2, _TAMP_CR2_BKBLOCK);
 }
 
-void stm32_tamp_erase_secrets(void)
+static void __maybe_unused stm32_tamp_erase_secrets(void)
 {
 	vaddr_t base = io_pa_or_va(&stm32_tamp.pdata.base, 1);
 
@@ -1201,7 +1274,7 @@ void stm32_tamp_erase_secrets(void)
 		io_setbits32(base + _TAMP_CR2, _TAMP_CR2_BKERASE);
 }
 
-void stm32_tamp_lock_boot_hardware_key(void)
+static void __maybe_unused stm32_tamp_lock_boot_hardware_key(void)
 {
 	vaddr_t base = io_pa_or_va(&stm32_tamp.pdata.base, 1);
 
@@ -1345,9 +1418,6 @@ stm32_tamp_configure_pin_from_dt(const void *fdt, int node,
 	int lenp = 0;
 	int pinnode = -1;
 	bool active = false;
-
-	if (fdt_get_status(fdt, node) == DT_STATUS_DISABLED)
-		return 0;
 
 	/*
 	 * First pin in the "pinctrl-0" node is the EXT_TAMP.
@@ -1539,6 +1609,105 @@ stm32_tamp_parse_passive_conf(const void *fdt, int node,
 	return TEE_SUCCESS;
 }
 
+static uint32_t stm32_tamp_itamper_action(int __maybe_unused id)
+{
+	const char __maybe_unused *tamp_name = NULL;
+#ifndef CFG_STM32MP25
+	if (id >= 0 && ((size_t)id < ARRAY_SIZE(itamper_name)))
+		tamp_name = itamper_name[id];
+
+	MSG("Internal tamper %u (%s) occurs", id - INT_TAMP1 + 1, tamp_name);
+#endif
+
+	return TAMP_CB_ACK_AND_RESET;
+}
+DECLARE_KEEP_PAGER(stm32_tamp_itamper_action);
+
+static uint32_t stm32_tamp_etamper_action(int id __maybe_unused)
+{
+	MSG("External tamper %u occurs", id - EXT_TAMP1 + 1);
+
+	return TAMP_CB_ACK_AND_RESET;
+}
+DECLARE_KEEP_PAGER(stm32_tamp_etamper_action);
+
+static TEE_Result stm32_configure_tamp(const void *fdt, int node)
+{
+	const fdt32_t *internal_tampers = 0;
+	uint32_t i_tampers[EXT_TAMP1 * 2] = { };
+	int subnode = -FDT_ERR_NOTFOUND;
+	TEE_Result res = TEE_SUCCESS;
+	int retval = 0;
+	int len = 0;
+	int i = 0;
+
+	/* Internal tampers configuration */
+	internal_tampers = fdt_getprop(fdt, node, "st,tamp-internal-tampers",
+				       &len);
+	if (len == -FDT_ERR_NOTFOUND)
+		goto skip_int_tamp;
+	else if ((internal_tampers && len % (2 * sizeof(uint32_t))) ||
+		 !internal_tampers || len / sizeof(uint32_t) > EXT_TAMP1 * 2)
+		return TEE_ERROR_BAD_PARAMETERS;
+
+	retval = fdt_read_uint32_array(fdt, node, "st,tamp-internal-tampers",
+				       i_tampers, len / sizeof(uint32_t));
+	if (retval && retval != -FDT_ERR_NOTFOUND)
+		return TEE_ERROR_BAD_PARAMETERS;
+	len = len / sizeof(uint32_t);
+	for (i = 0; i < len; i += 2) {
+		uint32_t i_tamper_id = i_tampers[i] - 1;
+		uint32_t i_tamper_mode = i_tampers[i + 1];
+
+		res = stm32_tamp_activate_tamp(i_tamper_id, i_tamper_mode,
+					       stm32_tamp_itamper_action);
+		if (res)
+			return res;
+	}
+
+skip_int_tamp:
+	fdt_for_each_subnode(subnode, fdt, node) {
+		if (fdt_getprop(fdt, subnode, "pinctrl-0", NULL)) {
+			const fdt32_t *mode = 0;
+			paddr_t reg = 0;
+
+			if (fdt_get_status(fdt, subnode) == DT_STATUS_DISABLED)
+				continue;
+
+			mode = fdt_getprop(fdt, subnode, "st,tamp-mode",
+					   NULL);
+			if (!mode)
+				continue;
+
+			res =
+			stm32_tamp_configure_pin_from_dt(fdt, subnode,
+							 &stm32_tamp.pdata);
+			if (res)
+				return res;
+
+			reg = fdt_reg_base_address(fdt, subnode);
+			if (reg == DT_INFO_INVALID_REG)
+				return TEE_ERROR_BAD_PARAMETERS;
+
+			res =
+			stm32_tamp_activate_tamp(EXT_TAMP1 + (uint32_t)reg - 1,
+						 fdt32_to_cpu(*mode),
+						 stm32_tamp_etamper_action);
+			if (res)
+				return res;
+		}
+	}
+
+	if (stm32_tamp_set_config())
+		panic();
+
+	/* Enable timestamp for tamper */
+	if (stm32_rtc_set_tamper_timestamp())
+		panic();
+
+	return TEE_SUCCESS;
+}
+
 static TEE_Result
 stm32_tamp_parse_active_conf(const void *fdt, int node,
 			     struct stm32_tamp_platdata *pdata)
@@ -1620,8 +1789,6 @@ static TEE_Result stm32_tamp_parse_fdt(struct stm32_tamp_platdata *pdata,
 				       const void *compat)
 {
 	TEE_Result res = TEE_ERROR_GENERIC;
-	int pinnode = -FDT_ERR_NOTFOUND;
-	int subnode = -FDT_ERR_NOTFOUND;
 	struct dt_node_info dt_tamp = {};
 	bool is_tdcid = false;
 
@@ -1658,19 +1825,6 @@ static TEE_Result stm32_tamp_parse_fdt(struct stm32_tamp_platdata *pdata,
 	res = stm32_tamp_parse_active_conf(fdt, node, pdata);
 	if (res)
 		return res;
-
-	fdt_for_each_subnode(subnode, fdt, node) {
-		if (fdt_getprop(fdt, subnode, "pinctrl-0", NULL)) {
-			res = stm32_tamp_configure_pin_from_dt(fdt, subnode,
-							       pdata);
-			if (res)
-				return res;
-			pinnode = subnode;
-		}
-	}
-
-	if (pinnode < 0 && pinnode != -FDT_ERR_NOTFOUND)
-		return TEE_ERROR_BAD_PARAMETERS;
 
 	if (fdt_getprop(fdt, node, "wakeup-source", NULL))
 		pdata->is_wakeup_source = true;
@@ -1760,7 +1914,10 @@ static TEE_Result stm32_tamp_probe(const void *fdt, int node,
 		goto err;
 	}
 
-	stm32_tamp_set_pins(base, stm32_tamp.pdata.pins_conf);
+#ifdef CFG_STM32MP25
+	if (stm32_tamp.pdata.mask_pot_reset)
+		stm32mp_syscfg_write(SYSCFG_POTTAMPRSTCR, BIT(0), BIT(0));
+#endif /* CFG_STM32MP25 */
 
 	/*
 	 * Select extra IP to add in the deleted/blocked IP in case of
@@ -1823,6 +1980,12 @@ static TEE_Result stm32_tamp_probe(const void *fdt, int node,
 	}
 
 	interrupt_enable(interrupt_get_main_chip(), stm32_tamp.itr->it);
+
+	res = stm32_configure_tamp(fdt, node);
+	if (res)
+		goto err;
+
+	stm32_tamp_set_pins(base, stm32_tamp.pdata.pins_conf);
 
 	fdt_for_each_subnode(subnode, fdt, node) {
 		res = dt_driver_maybe_add_probe_node(fdt, subnode);

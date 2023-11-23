@@ -13,7 +13,6 @@
 #include <drivers/stm32_etzpc.h>
 #include <drivers/stm32_firewall.h>
 #include <drivers/stm32_gpio.h>
-#include <drivers/stm32_tamp.h>
 #include <drivers/stm32_uart.h>
 #include <drivers/stm32mp_dt_bindings.h>
 #include <io.h>
