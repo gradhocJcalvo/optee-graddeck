@@ -7,6 +7,7 @@
 /dts-v1/;
 
 #include <dt-bindings/soc/stm32mp-provisioning.h>
+#include <dt-bindings/tamper/st,stm32mp25-tamp.h>
 #include "stm32mp257.dtsi"
 #include "stm32mp25xf.dtsi"
 #include "stm32mp25-pinctrl.dtsi"
@@ -48,6 +49,20 @@
 
 &rtc {
 	status = "okay";
+};
+
+&tamp {
+	status = "okay";
+	st,tamp-passive-precharge = <2>;
+	st,tamp-passive-nb-sample = <4>;
+	st,tamp-passive-sample-clk-div = <16384>;
+
+	/* Tamper button */
+	tamp_button: tamp-passive@3 {
+		status = "disabled";
+		reg = <EXT_TAMPER_3 0>;
+		st,tamp-mode = <TAMPER_CONFIRMED_MODE>;
+	};
 };
 
 &usart2 {
