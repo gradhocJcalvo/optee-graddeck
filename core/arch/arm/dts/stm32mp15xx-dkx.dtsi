@@ -8,6 +8,7 @@
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/mfd/st,stpmic1.h>
 #include <dt-bindings/soc/stm32mp15-etzpc.h>
+#include <dt-bindings/tamper/st,stm32-tamp.h>
 
 / {
 	memory@c0000000 {
@@ -689,6 +690,12 @@
 	bus-width = <4>;
 	vmmc-supply = <&v3v3>;
 	status = "disabled";
+};
+
+&tamp {
+	status = "okay";
+	st,tamp-passive-nb-sample = <4>;
+	st,tamp-passive-sample-clk-div = <16384>;
 };
 
 &timers1 {
