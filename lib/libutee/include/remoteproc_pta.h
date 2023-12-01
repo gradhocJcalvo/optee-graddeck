@@ -168,4 +168,13 @@ static inline size_t rproc_pta_keyinfo_size(struct rproc_pta_key_info *keyinf)
  */
 #define PTA_REMOTEPROC_TLV_PARAM	9
 
+/*
+ * Remote processor resources clean-up.
+ *
+ * Clean the resources of the remote processor firmware.
+ *
+ * [in]  params[0].value.a:	Unique 32bit remote processor identifier
+ */
+#define PTA_REMOTEPROC_CLEAN		10
+
 #endif /* __REMOTEPROC_PTA_H */

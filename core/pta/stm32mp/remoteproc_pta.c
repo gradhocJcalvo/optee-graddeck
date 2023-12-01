@@ -338,6 +338,23 @@ static TEE_Result rproc_pta_tlv_param(uint32_t pt,
 	return TEE_ERROR_NOT_IMPLEMENTED;
 }
 
+static TEE_Result rproc_pta_clean(uint32_t pt, TEE_Param params[TEE_NUM_PARAMS])
+{
+	const uint32_t exp_pt = TEE_PARAM_TYPES(TEE_PARAM_TYPE_VALUE_INPUT,
+						TEE_PARAM_TYPE_NONE,
+						TEE_PARAM_TYPE_NONE,
+						TEE_PARAM_TYPE_NONE);
+
+	if (pt != exp_pt)
+		return TEE_ERROR_BAD_PARAMETERS;
+
+	if (rproc_ta_state != REMOTEPROC_OFF)
+		return TEE_ERROR_BAD_STATE;
+
+	/* Clean the resources */
+	return stm32_rproc_clean(params[0].value.a);
+}
+
 static TEE_Result rproc_pta_invoke_command(void *session __unused,
 					   uint32_t cmd_id,
 					   uint32_t param_types,
@@ -360,6 +377,8 @@ static TEE_Result rproc_pta_invoke_command(void *session __unused,
 		return rproc_pta_verify_digest(param_types, params);
 	case PTA_REMOTEPROC_TLV_PARAM:
 		return rproc_pta_tlv_param(param_types, params);
+	case PTA_REMOTEPROC_CLEAN:
+		return rproc_pta_clean(param_types, params);
 	default:
 		return TEE_ERROR_NOT_IMPLEMENTED;
 	}
