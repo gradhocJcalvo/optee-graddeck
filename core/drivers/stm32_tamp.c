@@ -22,6 +22,9 @@
 #include <mm/core_memprot.h>
 #include <sm/psci.h>
 #include <stdbool.h>
+#ifdef CFG_STM32MP25
+#include <stm32_sysconf.h>
+#endif /* CFG_STM32MP25 */
 #include <stm32_util.h>
 
 
@@ -1893,6 +1896,9 @@ static TEE_Result stm32_tamp_parse_fdt(struct stm32_tamp_platdata *pdata,
 
 	if (fdt_getprop(fdt, node, "wakeup-source", NULL))
 		pdata->is_wakeup_source = true;
+
+	if (fdt_getprop(fdt, node, "st,tamp-mask-pot-reset", NULL))
+		pdata->mask_pot_reset = true;
 
 	if (pdata->compat->tags & TAMP_HAS_RIF_SUPPORT) {
 		const fdt32_t *cuint = NULL;

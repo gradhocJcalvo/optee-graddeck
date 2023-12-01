@@ -125,6 +125,7 @@ struct stm32_tamp_platdata {
 	uint32_t pins_conf;
 	uint32_t out_pins;
 	bool is_wakeup_source;
+	bool mask_pot_reset;
 };
 
 #endif /* __DRIVERS_STM32_TAMP_H__ */
