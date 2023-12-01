@@ -552,6 +552,14 @@ TEE_Result stm32_rtc_is_timestamp_enable(bool *ret)
 	return TEE_SUCCESS;
 }
 
+TEE_Result stm32_rtc_driver_is_initialized(void)
+{
+	if (rtc_dev.pclk)
+		return TEE_SUCCESS;
+
+	return TEE_ERROR_DEFER_DRIVER_INIT;
+}
+
 static TEE_Result check_rif_config(void)
 {
 	uint32_t rxcidcfgr = io_read32(get_base() +

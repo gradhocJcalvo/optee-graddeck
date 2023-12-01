@@ -82,4 +82,6 @@ TEE_Result stm32_rtc_is_timestamp_enable(bool *ret);
  */
 TEE_Result stm32_rtc_get_timestamp(struct stm32_rtc_time *tamp_ts);
 
+TEE_Result stm32_rtc_driver_is_initialized(void);
+
 #endif /* __PLAT_RTC_H__ */
