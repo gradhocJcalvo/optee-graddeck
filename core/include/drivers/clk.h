@@ -57,6 +57,7 @@ struct clk {
  * @set_rate: Set the clock rate
  * @get_rate: Get the clock rate
  * @get_rates_array: Get the supported clock rates as array
+ * @get_rates_steps: Get support clock rates by min/max/step representation
  */
 struct clk_ops {
 	bool (*is_enabled)(struct clk *clk);
@@ -70,6 +71,8 @@ struct clk_ops {
 				  unsigned long parent_rate);
 	TEE_Result (*get_rates_array)(struct clk *clk, size_t start_index,
 				      unsigned long *rates, size_t *nb_elts);
+	TEE_Result (*get_rates_steps)(struct clk *clk, unsigned long *min,
+				      unsigned long *max, unsigned long *step);
 };
 
 /**
@@ -202,6 +205,18 @@ TEE_Result clk_set_parent(struct clk *clk, struct clk *parent);
  */
 TEE_Result clk_get_rates_array(struct clk *clk, size_t start_index,
 			       unsigned long *rates, size_t *nb_elts);
+
+/*
+ * clk_get_rates_steps - Get supported rates as min/max/step triplet
+ *
+ * @clk: Clock for which the rates are requested
+ * @min: Output min supported rate in Hz
+ * @max: Output max supported rate in Hz
+ * @step: Output rate step in Hz
+ * Returns a TEE_Result compliant value
+ */
+TEE_Result clk_get_rates_steps(struct clk *clk, unsigned long *min,
+			       unsigned long *max, unsigned long *step);
 
 /* Print current clock tree summary to output console with debug trace level */
 #ifdef CFG_DRIVERS_CLK

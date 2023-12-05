@@ -366,6 +366,15 @@ TEE_Result clk_get_rates_array(struct clk *clk, size_t start_index,
 	return clk->ops->get_rates_array(clk, start_index, rates, nb_elts);
 }
 
+TEE_Result clk_get_rates_steps(struct clk *clk, unsigned long *min,
+			       unsigned long *max, unsigned long *step)
+{
+	if (!clk->ops->get_rates_steps)
+		return TEE_ERROR_NOT_SUPPORTED;
+
+	return clk->ops->get_rates_steps(clk, min, max, step);
+}
+
 /* Return updated message buffer position of NULL on failure */
 static __printf(3, 4) char *add_msg(char *cur, char *end, const char *fmt, ...)
 {
