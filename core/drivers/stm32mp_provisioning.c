@@ -117,6 +117,7 @@ static TEE_Result provisioning_subnode(const void *fdt, int node)
 static TEE_Result provisioning_init(void)
 {
 	const void *fdt = get_embedded_dt();
+	const char __maybe_unused *name = NULL;
 	int node = -1;
 
 	if (!fdt)
@@ -125,6 +126,12 @@ static TEE_Result provisioning_init(void)
 	node = fdt_node_offset_by_compatible(fdt, 0, "st,provisioning");
 	if (node < 0)
 		return TEE_SUCCESS;
+
+	if (fdt_first_subnode(fdt, node) == -FDT_ERR_NOTFOUND) {
+		name = fdt_get_name(fdt, node, NULL);
+		DMSG("Warning : no subnode in %s\n", name);
+		return TEE_SUCCESS;
+	}
 
 	return provisioning_subnode(fdt, node);
 }
