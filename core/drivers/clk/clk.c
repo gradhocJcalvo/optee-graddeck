@@ -17,7 +17,7 @@
 /* Global clock tree lock */
 static unsigned int clk_lock = SPINLOCK_UNLOCK;
 
-#ifdef CFG_DRIVERS_CLK_PRINT_TREE
+#if defined(CFG_DRIVERS_CLK_PRINT_TREE)
 static SLIST_HEAD(, clk) clock_list = SLIST_HEAD_INITIALIZER(clock_list);
 #endif
 
@@ -108,7 +108,7 @@ TEE_Result clk_register(struct clk *clk)
 	clk_init_parent(clk);
 	clk_compute_rate_no_lock(clk);
 
-#ifdef CFG_DRIVERS_CLK_PRINT_TREE
+#if defined(CFG_DRIVERS_CLK_PRINT_TREE)
 	SLIST_INSERT_HEAD(&clock_list, clk, link);
 #endif
 
@@ -620,5 +620,33 @@ void clk_print_tree(void)
 	    TRACE_LEVEL >= TRACE_DEBUG) {
 		DMSG("Clock tree summary (informative):");
 		print_tree();
+	}
+}
+
+TEE_Result clk_save_context(void)
+{
+	struct clk *clk = NULL;
+	TEE_Result res = TEE_ERROR_GENERIC;
+
+	SLIST_FOREACH(clk, &clock_list, link) {
+		if (clk->ops && clk->ops->save_context) {
+			res = clk->ops->save_context(clk);
+			if (res) {
+				EMSG("Failed to save context of %s", clk->name);
+				return res;
+			}
+		}
+	}
+
+	return TEE_SUCCESS;
+}
+
+void clk_restore_context(void)
+{
+	struct clk *clk = NULL;
+
+	SLIST_FOREACH(clk, &clock_list, link) {
+		if (clk->ops && clk->ops->restore_context)
+			clk->ops->restore_context(clk);
 	}
 }

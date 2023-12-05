@@ -41,7 +41,7 @@ struct clk {
 	unsigned long rate;
 	unsigned int flags;
 	struct refcount enabled_count;
-#ifdef CFG_DRIVERS_CLK_PRINT_TREE
+#if defined(CFG_DRIVERS_CLK_PRINT_TREE)
 	SLIST_ENTRY(clk) link;
 #endif
 	size_t num_parents;
@@ -114,6 +114,8 @@ struct clk_ops {
 	unsigned long (*round_rate)(struct clk *clk,
 				    unsigned long rate,
 				    unsigned long parent_rate);
+	TEE_Result (*save_context)(struct clk *clk);
+	void (*restore_context)(struct clk *clk);
 };
 
 /**
@@ -275,6 +277,23 @@ TEE_Result clk_get_duty_cycle(struct clk *clk, struct clk_duty *duty);
  * Returns the closest rate actually supported by the clock.
  */
 unsigned long clk_round_rate(struct clk *clk, unsigned long rate);
+
+/**
+ * clk_save_context - save clock context for poweroff
+ *
+ * Saves the context of the clock register for powerstates in which the
+ * contents of the registers will be lost. Occurs deep within the suspend
+ * code.
+ */
+TEE_Result clk_save_context(void);
+
+/**
+ * clk_restore_context - restore clock context after poweroff
+ *
+ * Restore the saved clock context upon resume.
+ *
+ */
+void clk_restore_context(void);
 
 /* Print current clock tree summary to output console with debug trace level */
 #ifdef CFG_DRIVERS_CLK
