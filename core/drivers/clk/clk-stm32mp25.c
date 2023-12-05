@@ -1984,7 +1984,10 @@ static TEE_Result clk_stm32_pll3_enable(struct clk *clk)
 	/* Update parent */
 	pidx = clk_stm32_pll_get_parent(clk);
 	parent = clk_get_parent_by_index(clk, pidx);
-	clk->parent = parent;
+
+	res = clk_reparent(clk, parent);
+	if (res)
+		EMSG("fail to reparent PLL3");
 
 	return res;
 }
