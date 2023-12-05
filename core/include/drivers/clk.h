@@ -17,6 +17,7 @@
 #define CLK_OPS_PARENT_ENABLE	BIT(2) /* parent need enable during re-parent */
 #define CLK_SET_RATE_PARENT	BIT(3) /* propagate rate change up one level */
 #define CLK_SET_RATE_UNGATE	BIT(4) /* clock needs to run to set rate */
+#define CLK_DUTY_CYCLE_PARENT	BIT(5) /* forward duty cycle call to parent */
 
 /**
  * struct clk - Clock structure
@@ -65,6 +66,17 @@ struct clk_rate_request {
 };
 
 /**
+ * struct clk_duty - Struture encoding the duty cycle ratio of a clock
+ *
+ * @num:	Numerator of the duty cycle ratio
+ * @den:	Denominator of the duty cycle ratio
+ */
+struct clk_duty {
+	unsigned int num;
+	unsigned int den;
+};
+
+/**
  * struct clk_ops
  *
  * @is_enabled: Get effective state of the clock (on / off)
@@ -79,6 +91,7 @@ struct clk_rate_request {
  * @determine_rate: Given a target rate as input, returns the closest rate
  *		actually supported by the clock, and optionally the parent clock
  *		that should be used to provide the clock rate
+ * @get_duty_cycle: Get duty cytcle of the clock
  */
 struct clk_ops {
 	bool (*is_enabled)(struct clk *clk);
@@ -96,6 +109,8 @@ struct clk_ops {
 				      unsigned long *max, unsigned long *step);
 	TEE_Result (*determine_rate)(struct clk *clk,
 				     struct clk_rate_request *req);
+	TEE_Result (*get_duty_cycle)(struct clk *clk,
+				     struct clk_duty *duty);
 };
 
 /**
@@ -240,6 +255,15 @@ TEE_Result clk_get_rates_array(struct clk *clk, size_t start_index,
  */
 TEE_Result clk_get_rates_steps(struct clk *clk, unsigned long *min,
 			       unsigned long *max, unsigned long *step);
+
+/**
+ * clk_get_duty_cycle - Get clock duty cycle
+ *
+ * @clk: Clock for which the duty cycle is requested
+ * @duty: Output duty cycle info
+ * Return a TEE_Result compliant value
+ */
+TEE_Result clk_get_duty_cycle(struct clk *clk, struct clk_duty *duty);
 
 /* Print current clock tree summary to output console with debug trace level */
 #ifdef CFG_DRIVERS_CLK
