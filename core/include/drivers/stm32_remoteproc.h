@@ -11,7 +11,8 @@
 #include <types_ext.h>
 
 /* IDs of the supported remote processors*/
-#define STM32_M4_RPROC_ID 0
+#define STM32MP1_M4_RPROC_ID 0
+#define STM32MP2_M33_RPROC_ID 1
 
 /*
  * stm32_rproc_get() - get the rproc handle associated to a remote processor ID

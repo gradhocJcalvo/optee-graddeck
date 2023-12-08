@@ -370,13 +370,21 @@ err:
 }
 
 static const struct stm32_rproc_compat_data stm32_rproc_m4_compat = {
-	.rproc_id = STM32_M4_RPROC_ID,
+	.rproc_id = STM32MP1_M4_RPROC_ID,
+};
+
+static const struct stm32_rproc_compat_data stm32_rproc_m33_compat = {
+	.rproc_id = STM32MP2_M33_RPROC_ID,
 };
 
 static const struct dt_device_match stm32_rproc_match_table[] = {
 	{
 		.compatible = "st,stm32mp1-m4-tee",
 		.compat_data = &stm32_rproc_m4_compat,
+	},
+	{
+		.compatible = "st,stm32mp2-m33-tee",
+		.compat_data = &stm32_rproc_m33_compat,
 	},
 	{ }
 };
