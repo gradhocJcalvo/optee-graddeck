@@ -271,6 +271,7 @@
 				regulator-name = "v5v_vconn";
 				regulator-min-microvolt = <4000000>;
 				regulator-max-microvolt = <4000000>;
+				regulator-always-on;
 				st,regulator-bypass-microvolt = <4000000>;
 				st,pwrctrl_sel = <0>;
 				st,pwrctrl_reset;
