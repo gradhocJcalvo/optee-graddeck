@@ -47,6 +47,7 @@ $(call force,CFG_SECURE_TIME_SOURCE_CNTPCT,y)
 $(call force,CFG_STM32_SHARED_IO,y)
 $(call force,CFG_STM32MP_CLK_CORE,y)
 $(call force,CFG_STM32MP25_CLK,y)
+$(call force,CFG_STM32MP25_RSTCTRL,y)
 $(call force,CFG_WITH_ARM_TRUSTED_FW,y)
 $(call force,CFG_WITH_LPAE,y)
 
@@ -78,3 +79,9 @@ CFG_STM32_EARLY_CONSOLE_UART ?= 2
 
 # Default disable external DT support
 CFG_EXTERNAL_DT ?= n
+
+# Enable reset control
+ifeq ($(CFG_STM32MP25_RSTCTRL),y)
+$(call force,CFG_DRIVERS_RSTCTRL,y)
+$(call force,CFG_STM32_RSTCTRL,y)
+endif
