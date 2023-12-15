@@ -141,15 +141,20 @@ struct stm32_gpio_bank {
 	unsigned int ngpios;
 	unsigned int bank_id;
 	unsigned int lock;
+	uint32_t seccfgr;
+	bool sec_support;
 	STAILQ_ENTRY(stm32_gpio_bank) link;
 };
 
-/*
+/**
  * Compatibility information of supported banks
- * @gpioz True if bank is a GPIOZ bank
+ *
+ * @gpioz: True if bank is a GPIOZ bank
+ * @secure_control: Identify GPIO security bank capability.
  */
 struct bank_compat {
 	bool gpioz;
+	bool secure_control;
 };
 
 static unsigned int gpio_lock;
@@ -649,6 +654,19 @@ static TEE_Result dt_stm32_gpio_bank(const void *fdt, int node,
 	bank->bank_id = dt_get_bank_id(fdt, node);
 	bank->clock = clk;
 	bank->gpio_chip.ops = &stm32_gpio_ops;
+	bank->sec_support = compat->secure_control;
+	if (bank->sec_support) {
+		/* Secure configuration */
+		bank->base = io_pa_or_va_secure(&pa_va, blen);
+		cuint = fdt_getprop(fdt, node, "st,protreg", NULL);
+		if (cuint)
+			bank->seccfgr = fdt32_to_cpu(*cuint);
+		else
+			DMSG("GPIO bank %c assigned to non-secure",
+			     bank->bank_id + 'A');
+	} else {
+		bank->base = io_pa_or_va_nsec(&pa_va, blen);
+	}
 
 	/* Parse gpio-ranges with its 4 parameters */
 	cuint = fdt_getprop(fdt, node, "gpio-ranges", &len);
@@ -900,15 +918,43 @@ static TEE_Result stm32_pinctrl_dt_get(struct dt_pargs *pargs,
 }
 #endif /*CFG_DRIVERS_PINCTRL*/
 
+static void __unused stm32_gpio_get_conf_sec(struct stm32_gpio_bank *bank)
+{
+	if (bank->sec_support) {
+		clk_enable(bank->clock);
+		bank->seccfgr = io_read32(bank->base + GPIO_SECR_OFFSET);
+		clk_disable(bank->clock);
+	}
+}
+
+static void stm32_gpio_set_conf_sec(struct stm32_gpio_bank *bank)
+{
+	if (bank->sec_support) {
+		clk_enable(bank->clock);
+		io_write32(bank->base + GPIO_SECR_OFFSET, bank->seccfgr);
+		clk_disable(bank->clock);
+	}
+}
+
 static TEE_Result stm32_pinctrl_probe(const void *fdt, int node,
 				      const void *compat_data)
 {
 	TEE_Result res = TEE_ERROR_GENERIC;
+	struct stm32_gpio_bank *bank = NULL;
 
 	/* Register GPIO banks described in this pin control node */
 	res = dt_stm32_gpio_pinctrl(fdt, node, compat_data);
 	if (res)
 		return res;
+
+	if (STAILQ_EMPTY(&bank_list))
+		DMSG("no gpio bank for that driver");
+	else
+		STAILQ_FOREACH(bank, &bank_list, link) {
+			stm32_gpio_set_conf_sec(bank);
+			DMSG("Registered GPIO bank %c (%d pins) @%lx",
+			     bank->bank_id + 'A', bank->ngpios, bank->base);
+		}
 
 #ifdef CFG_DRIVERS_PINCTRL
 	res = pinctrl_register_provider(fdt, node, stm32_pinctrl_dt_get,
@@ -923,16 +969,22 @@ static TEE_Result stm32_pinctrl_probe(const void *fdt, int node,
 static const struct dt_device_match stm32_pinctrl_match_table[] = {
 	{
 		.compatible = "st,stm32mp135-pinctrl",
-		.compat_data = &(struct bank_compat){ },
-
+		.compat_data = &(struct bank_compat){
+			.secure_control = true,
+		},
 	},
 	{
 		.compatible = "st,stm32mp157-pinctrl",
-		.compat_data = &(struct bank_compat){ },
+		.compat_data = &(struct bank_compat){
+			.secure_control = false,
+		},
 	},
 	{
 		.compatible = "st,stm32mp157-z-pinctrl",
-		.compat_data = &(struct bank_compat){ .gpioz = true, },
+		.compat_data = &(struct bank_compat){
+			.gpioz = true,
+			.secure_control = true,
+		},
 	},
 	{ }
 };
