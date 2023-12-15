@@ -16,6 +16,7 @@
 #include <kernel/dt.h>
 #include <kernel/boot.h>
 #include <kernel/panic.h>
+#include <kernel/pm.h>
 #include <kernel/spinlock.h>
 #include <libfdt.h>
 #include <mm/core_memprot.h>
@@ -918,7 +919,7 @@ static TEE_Result stm32_pinctrl_dt_get(struct dt_pargs *pargs,
 }
 #endif /*CFG_DRIVERS_PINCTRL*/
 
-static void __unused stm32_gpio_get_conf_sec(struct stm32_gpio_bank *bank)
+static void stm32_gpio_get_conf_sec(struct stm32_gpio_bank *bank)
 {
 	if (bank->sec_support) {
 		clk_enable(bank->clock);
@@ -936,9 +937,49 @@ static void stm32_gpio_set_conf_sec(struct stm32_gpio_bank *bank)
 	}
 }
 
+static TEE_Result stm32_gpio_pm_resume(void)
+{
+	struct stm32_gpio_bank *bank = NULL;
+
+	STAILQ_FOREACH(bank, &bank_list, link)
+		stm32_gpio_set_conf_sec(bank);
+
+	return TEE_SUCCESS;
+}
+
+static TEE_Result stm32_gpio_pm_suspend(void)
+{
+	struct stm32_gpio_bank *bank = NULL;
+
+	STAILQ_FOREACH(bank, &bank_list, link)
+		stm32_gpio_get_conf_sec(bank);
+
+	return TEE_SUCCESS;
+}
+
+static TEE_Result
+stm32_gpio_pm(enum pm_op op, unsigned int pm_hint __unused,
+	      const struct pm_callback_handle *pm_handle __unused)
+{
+	TEE_Result ret = 0;
+
+	if (!IS_ENABLED(CFG_STM32MP13) && !IS_ENABLED(CFG_STM32MP15) &&
+	    !PM_HINT_IS_STATE(pm_hint, CONTEXT))
+		return TEE_SUCCESS;
+
+	if (op == PM_OP_RESUME)
+		ret = stm32_gpio_pm_resume();
+	else
+		ret = stm32_gpio_pm_suspend();
+
+	return ret;
+}
+DECLARE_KEEP_PAGER(stm32_gpio_pm);
+
 static TEE_Result stm32_pinctrl_probe(const void *fdt, int node,
 				      const void *compat_data)
 {
+	static bool pm_register;
 	TEE_Result res = TEE_ERROR_GENERIC;
 	struct stm32_gpio_bank *bank = NULL;
 
@@ -955,6 +996,14 @@ static TEE_Result stm32_pinctrl_probe(const void *fdt, int node,
 			DMSG("Registered GPIO bank %c (%d pins) @%lx",
 			     bank->bank_id + 'A', bank->ngpios, bank->base);
 		}
+
+	if (!pm_register) {
+		/* Register to PM once for all probed banks */
+		register_pm_core_service_cb(stm32_gpio_pm, NULL,
+					    "stm32-gpio-service");
+		pm_register = true;
+	}
+
 
 #ifdef CFG_DRIVERS_PINCTRL
 	res = pinctrl_register_provider(fdt, node, stm32_pinctrl_dt_get,
