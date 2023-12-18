@@ -27,6 +27,7 @@
 #include <dt-bindings/clock/stm32mp25-clks.h>
 #include <dt-bindings/clock/stm32mp25-clksrc.h>
 #include <dt-bindings/reset/stm32mp25-resets.h>
+#include <dt-bindings/soc/stm32mp25-rif.h>
 #endif
 
 #endif /* __DRIVERS_STM32MP_DT_BINDINGS_H */
