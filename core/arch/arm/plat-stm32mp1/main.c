@@ -244,6 +244,7 @@ driver_init_late(set_etzpc_secure_configuration);
 #endif /* CFG_STM32MP13 */
 
 #ifdef CFG_STM32MP15
+#ifdef CFG_WITH_PAGER
 /*
  * This concerns OP-TEE pager for STM32MP1 to use secure internal
  * RAMs to execute. TZSRAM refers the TZSRAM_BASE/TZSRAM_SIZE
@@ -315,7 +316,6 @@ driver_init_late(set_etzpc_secure_configuration);
 
 #define TZSRAM_IS_IN_DRAM	(CFG_TZSRAM_START >= CFG_DRAM_BASE)
 
-#ifdef CFG_WITH_PAGER
 /*
  * At build time, we enforce that, when pager is used,
  * either TZSRAM fully fits inside SYSRAM secure address range,
@@ -325,7 +325,6 @@ driver_init_late(set_etzpc_secure_configuration);
  */
 static_assert(TZSRAM_FITS_IN_SYSRAM_SEC || TZSRAM_FITS_IN_SYSRAM_AND_SRAMS ||
 	      TZSRAM_FITS_IN_SRAMS || TZSRAM_IS_IN_DRAM);
-#endif
 
 #if TZSRAM_FITS_IN_SYSRAM_AND_SRAMS || TZSRAM_FITS_IN_SRAMS || \
 	SCMI_SHM_IS_IN_SRAMX
@@ -377,7 +376,8 @@ static TEE_Result init_stm32mp15_secure_srams(void)
 
 service_init_late(init_stm32mp15_secure_srams);
 #endif /* TZSRAM_FITS_IN_SYSRAM_AND_SRAMS || TZSRAM_FITS_IN_SRAMS */
-#endif /* CFG_STM32MP15 && CFG_TZSRAM_START */
+#endif /* CFG_WITH_PAGER */
+#endif /* CFG_STM32MP15 */
 
 static TEE_Result init_stm32mp1_drivers(void)
 {
