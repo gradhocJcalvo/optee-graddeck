@@ -392,7 +392,8 @@ static void gic_it_set_cpu_mask(struct gic_data *gd, size_t it,
 {
 	size_t idx __maybe_unused = it / NUM_INTS_PER_REG;
 	uint32_t mask __maybe_unused = 1 << (it % NUM_INTS_PER_REG);
-	uint32_t target, target_shift;
+	uint32_t target = 0;
+	uint32_t target_shift = 0;
 	vaddr_t itargetsr = gd->gicd_base +
 			    GICD_ITARGETSR(it / NUM_TARGETS_PER_REG);
 
