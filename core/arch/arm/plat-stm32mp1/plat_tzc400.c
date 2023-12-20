@@ -41,6 +41,8 @@ struct stm32mp_tzc_platdata {
 	uint32_t mem_size;
 	struct firewall_compat *tzc_compat;
 	struct stm32mp_tzc_region *regions;
+	struct itr_chip *itr_chip;
+	size_t itr_num;
 };
 
 struct stm32mp_tzc_driver_data {
@@ -67,12 +69,7 @@ static enum itr_return tzc_it_handler(struct itr_handler *handler __unused)
 
 	return ITRR_HANDLED;
 }
-
-static struct itr_handler tzc_itr_handler = {
-	.it = STM32MP1_IRQ_TZC,
-	.handler = tzc_it_handler,
-};
-DECLARE_KEEP_PAGER(tzc_itr_handler);
+DECLARE_KEEP_PAGER(tzc_it_handler);
 
 static bool tzc_region_is_non_secure(unsigned int i, uint64_t pa, size_t size)
 {
@@ -203,6 +200,11 @@ static TEE_Result stm32mp_tzc_parse_fdt(struct tzc_device *tzc_dev,
 	tzc_dev->pdata.base = io_pa_or_va_secure(&base, dt_info.reg_size);
 	tzc_dev->pdata.irq = dt_info.interrupt;
 
+	res = interrupt_dt_get(fdt, node, &tzc_dev->pdata.itr_chip,
+			       &tzc_dev->pdata.itr_num);
+	if (res)
+		return res;
+
 	res = clk_dt_get_by_index(fdt, node, 0, tzc_dev->pdata.clk);
 	if (res)
 		return res;
@@ -262,12 +264,13 @@ static TEE_Result stm32mp1_tzc_probe(const void *fdt, int node,
 
 	stm32mp_tzc_check_boot_region();
 
-	res = interrupt_add_handler_with_chip(interrupt_get_main_chip(),
-					      &tzc_itr_handler);
+	res = interrupt_create_handler(tzc_dev->pdata.itr_chip,
+				       tzc_dev->pdata.itr_num, tzc_it_handler,
+				       NULL, 0, NULL);
 	if (res)
 		panic();
 
-	interrupt_enable(tzc_itr_handler.chip, tzc_itr_handler.it);
+	interrupt_enable(tzc_dev->pdata.itr_chip, tzc_dev->pdata.itr_num);
 	tzc_set_action(TZC_ACTION_INT);
 
 	return TEE_SUCCESS;

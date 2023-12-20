@@ -195,8 +195,6 @@
 #endif
 
 /* TZC resources */
-#define STM32MP1_IRQ_TZC		U(36)
-
 #define STM32MP1_TZC_A7_ID		U(0)
 #define STM32MP1_TZC_M4_ID		U(1)
 #define STM32MP1_TZC_LTDC_ID		U(3)
