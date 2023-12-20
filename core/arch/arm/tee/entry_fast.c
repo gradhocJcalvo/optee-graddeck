@@ -326,6 +326,10 @@ void __tee_entry_fast(struct thread_smc_args *args)
 		break;
 
 	/* Watchdog entry if handler ID is defined in TOS range */
+#if CFG_WDT_SM_HANDLER_ID != 0xb200005a
+	/* Consider OSTLv5 legacy WDT SMC funcID for compatibility purpose */
+	case 0xb200005a:
+#endif
 	case CFG_WDT_SM_HANDLER_ID:
 		tee_entry_watchdog(args);
 		break;
