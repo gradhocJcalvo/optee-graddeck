@@ -65,10 +65,13 @@ struct stm32_rproc_instance {
  *
  * @rproc_id:	Unique Id of the processor
  * @start:	remote processor start routine
+ * @ns_loading:	specify if the firmware is loaded by the OP-TEE or by the
+ *		non secure context
  */
 struct stm32_rproc_compat_data {
 	uint32_t rproc_id;
 	TEE_Result (*start)(struct stm32_rproc_instance *rproc);
+	bool ns_loading;
 };
 
 static SLIST_HEAD(, stm32_rproc_instance) rproc_list =
@@ -375,6 +378,13 @@ static TEE_Result stm32_rproc_parse_mems(struct stm32_rproc_instance *rproc,
 	int n_regions = 0;
 	int i = 0;
 
+	/*
+	 * In case of firmware loading by the non secure context no need to
+	 * register memory regions, so we ignore them.
+	 */
+	if (rproc->cdata->ns_loading)
+		return TEE_SUCCESS;
+
 	list = fdt_getprop(fdt, node, "memory-region", &len);
 	if (!list) {
 		EMSG("No memory regions found in DT");
@@ -450,6 +460,10 @@ static TEE_Result stm32_rproc_probe(const void *fdt, int node,
 {
 	struct stm32_rproc_instance *rproc = NULL;
 	TEE_Result res = TEE_ERROR_GENERIC;
+#ifdef CFG_STM32MP25
+	uint32_t m33_cr_right = A35SSC_M33_TZEN_CR_M33CFG_SEC |
+				A35SSC_M33_TZEN_CR_M33CFG_PRIV;
+#endif /* CFG_STM32MP25 */
 
 	rproc = calloc(1, sizeof(*rproc));
 	if (!rproc)
@@ -457,9 +471,11 @@ static TEE_Result stm32_rproc_probe(const void *fdt, int node,
 
 	rproc->cdata = comp_data;
 
-	res = stm32_rproc_parse_mems(rproc, fdt, node);
-	if (res)
-		goto err;
+	if (!rproc->cdata->ns_loading) {
+		res = stm32_rproc_parse_mems(rproc, fdt, node);
+		if (res)
+			goto err;
+	}
 
 	res = rstctrl_dt_get_by_name(fdt, node, "mcu_rst", &rproc->mcu_rst);
 	if (res)
@@ -470,11 +486,23 @@ static TEE_Result stm32_rproc_probe(const void *fdt, int node,
 		goto err;
 
 	/* Ensure that the remote processor is in expected stop state */
-	if (rproc->mcu_rst) {
-		res = rproc_stop(rproc);
-		if (res)
-			goto err;
+	res = rproc_stop(rproc);
+	if (res)
+		goto err;
+
+#ifdef CFG_STM32MP25
+	if (rproc->cdata->ns_loading) {
+		/*
+		 * The remote firmware will be loaded by the non secure
+		 * Provide access rights to A35SSC_M33 registers
+		 * to the non secure context
+		 */
+		m33_cr_right = A35SSC_M33_TZEN_CR_M33CFG_PRIV;
 	}
+	stm32mp_syscfg_write(A35SSC_M33CFG_ACCESS_CR, m33_cr_right,
+			     A35SSC_M33_TZEN_CR_M33CFG_SEC |
+			     A35SSC_M33_TZEN_CR_M33CFG_PRIV);
+#endif /* CFG_STM32MP25 */
 
 	/*
 	 * The memory management should be enhance with firewall
@@ -484,7 +512,8 @@ static TEE_Result stm32_rproc_probe(const void *fdt, int node,
 	 */
 	IMSG("Warning: the remoteproc memories are not protected by firewall");
 
-	SLIST_INSERT_HEAD(&rproc_list, rproc, link);
+	if (!rproc->cdata->ns_loading)
+		SLIST_INSERT_HEAD(&rproc_list, rproc, link);
 
 	return TEE_SUCCESS;
 
@@ -493,23 +522,35 @@ err:
 	return res;
 }
 
-static const struct stm32_rproc_compat_data stm32_rproc_m4_compat = {
+static const struct stm32_rproc_compat_data stm32_rproc_m4_tee_compat = {
 	.rproc_id = STM32MP1_M4_RPROC_ID,
+	.ns_loading = false,
 };
 
 static const struct stm32_rproc_compat_data stm32_rproc_m33_compat = {
 	.rproc_id = STM32MP2_M33_RPROC_ID,
 	.start = stm32mp2_rproc_start,
+	.ns_loading = true,
+};
+
+static const struct stm32_rproc_compat_data stm32_rproc_m33_tee_compat = {
+	.rproc_id = STM32MP2_M33_RPROC_ID,
+	.start = stm32mp2_rproc_start,
+	.ns_loading = false,
 };
 
 static const struct dt_device_match stm32_rproc_match_table[] = {
 	{
 		.compatible = "st,stm32mp1-m4-tee",
-		.compat_data = &stm32_rproc_m4_compat,
+		.compat_data = &stm32_rproc_m4_tee_compat,
+	},
+	{
+		.compatible = "st,stm32mp2-m33",
+		.compat_data = &stm32_rproc_m33_compat,
 	},
 	{
 		.compatible = "st,stm32mp2-m33-tee",
-		.compat_data = &stm32_rproc_m33_compat,
+		.compat_data = &stm32_rproc_m33_tee_compat,
 	},
 	{ }
 };
