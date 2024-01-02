@@ -1,6 +1,8 @@
+flavor_dts_file-257F_DK = stm32mp257f-dk.dts
 flavor_dts_file-257F_EV1 = stm32mp257f-ev1.dts
 
-flavorlist-MP25 = $(flavor_dts_file-257F_EV1)
+flavorlist-MP25 = $(flavor_dts_file-257F_DK) \
+		  $(flavor_dts_file-257F_EV1)
 
 # Check if device-tree exist in OP-TEE source code, else search it in external
 # device tree repository
