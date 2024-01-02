@@ -8,6 +8,7 @@
 
 #include <drivers/stm32mp_dt_bindings.h>
 #include <io.h>
+#include <kernel/panic.h>
 #include <mm/core_memprot.h>
 #include <util.h>
 
@@ -177,5 +178,17 @@ static inline TEE_Result
 	return TEE_SUCCESS;
 }
 #endif
+
+/*
+ * The action to take upon an access violation depends on the platform.
+ * Therefore, it should be defined at platform level
+ */
+#ifdef CFG_STM32_RIF
+void stm32_rif_access_violation_action(void);
+#else /* CFG_STM32_RIF */
+static inline void stm32_rif_access_violation_action(void)
+{
+}
+#endif /* CFG_STM32_RIF */
 
 #endif /* __DRIVERS_STM32_RIF_H */

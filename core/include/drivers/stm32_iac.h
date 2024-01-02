@@ -20,11 +20,5 @@ struct stm32_iac_platdata {
 	int irq;
 };
 
-/*
- * Platform can define an access violation action to trap cpu/reset core or system
- * after an eventual debug trace.
- */
-void access_violation_action(void);
-
 int stm32_iac_get_platdata(struct stm32_iac_platdata *pdata);
 #endif /* __DRIVERS_STM32_IAC_H__ */

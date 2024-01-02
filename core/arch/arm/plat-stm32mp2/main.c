@@ -6,6 +6,9 @@
 #include <config.h>
 #include <console.h>
 #include <drivers/gic.h>
+#include <drivers/stm32_rif.h>
+#include <drivers/stm32_risab.h>
+#include <drivers/stm32_risaf.h>
 #include <drivers/stm32_uart.h>
 #include <initcall.h>
 #include <kernel/boot.h>
@@ -149,3 +152,15 @@ void boot_secondary_init_intc(void)
 {
 	gic_cpu_init();
 }
+
+#ifdef CFG_STM32_RIF
+void stm32_rif_access_violation_action(void)
+{
+#ifdef CFG_STM32_RISAF
+	stm32_risaf_dump_erroneous_data();
+#endif
+#ifdef CFG_STM32_RISAB
+	stm32_risab_dump_erroneous_data();
+#endif
+}
+#endif /* CFG_STM32_RIF */

@@ -3,6 +3,7 @@
  * Copyright (c) 2022-2024, STMicroelectronics
  */
 #include <drivers/stm32_iac.h>
+#include <drivers/stm32_rif.h>
 #include <dt-bindings/soc/stm32mp25-rifsc.h>
 #include <io.h>
 #include <kernel/boot.h>
@@ -123,12 +124,6 @@ static TEE_Result stm32_iac_parse_fdt(void)
 #define IAC_ILAC_ID(reg_val, offset)	(IAC_FIRST_ILAC_IN_REG(reg_val) + \
 					 IAC_EXCEPT_LSB_BIT(offset))
 
-__weak __noreturn void access_violation_action(void)
-{
-	DMSG("Ooops...");
-	panic();
-}
-
 static const uint32_t iac_fbd_periph[] = {
 	STM32MP25_RIFSC_PWR_ID, STM32MP25_RIFSC_GPIOA_ID,
 	STM32MP25_RIFSC_GPIOB_ID, STM32MP25_RIFSC_GPIOC_ID,
@@ -200,7 +195,7 @@ static enum itr_return stm32_iac_itr(struct itr_handler *h __unused)
 	}
 
 	if (do_panic)
-		access_violation_action();
+		stm32_rif_access_violation_action();
 
 	return ITRR_HANDLED;
 }
