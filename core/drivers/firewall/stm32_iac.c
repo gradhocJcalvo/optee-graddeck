@@ -174,7 +174,7 @@ static enum itr_return stm32_iac_itr(struct itr_handler *h __unused)
 			isr &= io_read32(base + _IAC_IER0 + offset);
 		}
 
-		/* A legit IAC occurred, platform will panic */
+		/* A legit IAC occurred, platform may panic */
 		if (isr) {
 			do_panic = true;
 			EMSG("IAC exceptions [%d:%d]: %#x",
@@ -194,8 +194,11 @@ static enum itr_return stm32_iac_itr(struct itr_handler *h __unused)
 		}
 	}
 
-	if (do_panic)
+	if (do_panic) {
 		stm32_rif_access_violation_action();
+		if (IS_ENABLED(CFG_STM32_PANIC_ON_IAC_EVENT))
+			panic();
+	}
 
 	return ITRR_HANDLED;
 }
