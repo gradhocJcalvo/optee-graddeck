@@ -315,4 +315,7 @@ static inline void stm32mp_register_gpioz_pin_count(size_t count __unused)
 {
 }
 #endif /* CFG_STM32MP1_SHARED_RESOURCES */
+
+void __noreturn do_reset(const char *str);
+
 #endif /*__STM32_UTIL_H__*/

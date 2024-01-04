@@ -17,6 +17,7 @@
 #include <drivers/stm32mp_dt_bindings.h>
 #include <io.h>
 #include <kernel/boot.h>
+#include <kernel/delay.h>
 #include <kernel/dt.h>
 #include <kernel/misc.h>
 #include <kernel/panic.h>
@@ -617,4 +618,38 @@ bool stm32mp_supports_second_core(void)
 	default:
 		return true;
 	}
+}
+
+#define ARM_CNTXCTL_IMASK	BIT(1)
+
+static void stm32mp_mask_timer(void)
+{
+	/* Mask timer interrupts */
+	write_cntp_ctl(read_cntp_ctl() | ARM_CNTXCTL_IMASK);
+	write_cntv_ctl(read_cntv_ctl() | ARM_CNTXCTL_IMASK);
+}
+
+void __noreturn do_reset(const char *str __maybe_unused)
+{
+	stm32mp_mask_timer();
+
+	if (stm32mp_supports_second_core()) {
+		uint32_t target_mask = 0;
+
+		if (get_core_pos() == 0)
+			target_mask = TARGET_CPU1_GIC_MASK;
+		else
+			target_mask = TARGET_CPU0_GIC_MASK;
+
+		interrupt_raise_sgi(interrupt_get_main_chip(),
+				    CFG_HALT_CORES_ON_PANIC_SGI,
+				    target_mask);
+		/* wait than other core is halted */
+		mdelay(1);
+	}
+	IMSG("Forced system reset %s", str);
+	console_flush();
+	stm32_reset_system();
+	udelay(100);
+	panic();
 }
