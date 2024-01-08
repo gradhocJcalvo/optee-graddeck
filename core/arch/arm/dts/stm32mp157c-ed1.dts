@@ -484,7 +484,7 @@
 };
 
 &rtc {
-	status = "disabled";
+	status = "okay";
 };
 
 &sdmmc1 {
