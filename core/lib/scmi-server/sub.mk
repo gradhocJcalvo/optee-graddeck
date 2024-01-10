@@ -27,7 +27,7 @@ scpfw-integ-version = $(scpfw-integ-version-maj).$(scpfw-integ-version-min).$(sc
 
 srcs-y += scmi_server.c
 srcs-$(CFG_SCMI_SERVER_REGULATOR_CONSUMER) += scmi_regulator_consumer.c
-incdirs-y += include
+global-incdirs-y += include
 
 # SCP-firmware cmake configuration generates header fwk_module_idx.h and
 # source files fwk_module_list.c needed for scp-firmware compilation.
@@ -216,6 +216,7 @@ $(eval $(call scpfw-embed-optee-module,console))
 $(eval $(call scpfw-embed-optee-module,mbx))
 $(eval $(call scpfw-embed-optee-module,reset))
 $(eval $(call scpfw-embed-optee-module,smt))
+$(eval $(call scpfw-embed-optee-module,voltd_regulator))
 
 srcs-$(CFG_SCPFW_MOD_CLOCK) += $(scpfw-path)/module/clock/src/clock_tree_management.c
 srcs-$(CFG_SCPFW_MOD_POWER_DOMAIN) += $(scpfw-path)/module/power_domain/src/power_domain_utils.c
