@@ -115,6 +115,11 @@ endif
 # Platform specific configuration
 CFG_STM32MP_PANIC_ON_TZC_PERM_VIOLATION ?= y
 
+# Watchdog SMC service to non-secure world
+CFG_WDT ?= $(CFG_STM32_IWDG)
+CFG_WDT_SM_HANDLER ?= $(CFG_WDT)
+CFG_WDT_SM_HANDLER_ID ?= 0xbc000000
+
 # Enable reset control
 ifeq ($(CFG_STM32MP25_RSTCTRL),y)
 $(call force,CFG_DRIVERS_RSTCTRL,y)
