@@ -13,7 +13,7 @@
 
 struct scmi_server_regu {
 	uint32_t domain_id;
-	struct rdev *rdev;
+	struct regulator *regulator;
 	bool enabled;
 };
 

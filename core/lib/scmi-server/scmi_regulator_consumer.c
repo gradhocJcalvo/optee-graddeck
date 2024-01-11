@@ -12,7 +12,6 @@
 #include <kernel/panic.h>
 #include <libfdt.h>
 #include <malloc.h>
-#include <mod_stm32_regu_consumer.h>
 #include <scmi_agent_configuration.h>
 #include <scmi_regulator_consumer.h>
 #include <trace.h>
@@ -34,7 +33,7 @@ static TEE_Result init_channel(void *fdt, int node)
 
 	/* Compute the number of domains to allocate */
 	fdt_for_each_subnode(subnode, fdt, node) {
-		paddr_t reg = _fdt_reg_base_address(fdt, subnode);
+		paddr_t reg = fdt_reg_base_address(fdt, subnode);
 
 		assert(reg != DT_INFO_INVALID_REG);
 		if ((size_t)reg > voltd_domain_count)
@@ -50,26 +49,27 @@ static TEE_Result init_channel(void *fdt, int node)
 
 	fdt_for_each_subnode(subnode, fdt, node) {
 		struct scmi_server_regu *regu = NULL;
-		struct rdev *rdev = NULL;
+		struct regulator *regulator = NULL;
 		uint32_t domain_id = 0;
 
-		rdev = regulator_get_by_supply_name(fdt, subnode, "voltd");
-		if (!rdev) {
-			DMSG("Regulator not found for voltd %s, skipped",
-			     fdt_get_name(fdt, subnode, NULL));
+		res = regulator_dt_get_supply(fdt, subnode, "voltd",
+					      &regulator);
+		if (res) {
+			DMSG("Can't get regulator for voltd %s (%#"PRIx32"), skipped",
+			     fdt_get_name(fdt, subnode, NULL), res);
 			continue;
 		}
 
-		domain_id = (uint32_t)_fdt_reg_base_address(fdt, subnode);
+		domain_id = (uint32_t)fdt_reg_base_address(fdt, subnode);
 		regu = voltd_channel.regu + domain_id;
 		regu->domain_id = domain_id;
 
 		/* Check that the domain_id is not already used */
-		if (regu->rdev) {
+		if (regu->regulator) {
 			EMSG("Domain ID %"PRIu32" already used", domain_id);
 			panic();
 		}
-		regu->rdev = rdev;
+		regu->regulator = regulator;
 
 		/*
 		 * Synchronize SCMI regulator current configuration
@@ -77,16 +77,19 @@ static TEE_Result init_channel(void *fdt, int node)
 		 * Always-on can not be updated but status will be synchronized
 		 * in non secure.
 		 */
-		if (rdev->flags & REGUL_BOOT_ON ||
-		    rdev->flags & REGUL_ALWAYS_ON) {
-			if (regulator_enable(rdev))
-				IMSG("Failed to enable SCMI regul");
+		if (regulator->flags & REGULATOR_ALWAYS_ON)
+			regu->enabled = true;
+
+		if (regulator->flags & REGULATOR_BOOT_ON) {
+			if (regulator_enable(regulator))
+				IMSG("Can't enable SCMI voltage regulator %s",
+				     regulator_name(regulator));
 			else
 				regu->enabled = true;
 		}
 
-		DMSG("scmi voltd shares %s (node %s) on domain ID %"PRIu32,
-		     rdev->reg_name, rdev->desc->node_name, domain_id);
+		DMSG("scmi voltd shares %s on domain ID %"PRIu32,
+		     regulator_name(regulator), domain_id);
 	}
 
 	/*
@@ -94,7 +97,7 @@ static TEE_Result init_channel(void *fdt, int node)
 	 * require the resource is defined even if not accessible.
 	 */
 	for (n = 0; n < voltd_channel.regu_count; n++) {
-		if (voltd_channel.regu[n].rdev)
+		if (voltd_channel.regu[n].regulator)
 			assert(voltd_channel.regu[n].domain_id == n);
 		else
 			voltd_channel.regu[n].domain_id = n;
