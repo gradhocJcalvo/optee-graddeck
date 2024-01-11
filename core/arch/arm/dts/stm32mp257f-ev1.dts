@@ -7,6 +7,7 @@
 /dts-v1/;
 
 #include <dt-bindings/clock/stm32mp25-clksrc.h>
+#include <dt-bindings/regulator/st,stm32mp25-regulator.h>
 #include <dt-bindings/soc/stm32mp-provisioning.h>
 #include <dt-bindings/soc/stm32mp25-rif.h>
 #include <dt-bindings/soc/stm32mp25-risab.h>
@@ -428,6 +429,21 @@
 
 &rtc {
 	status = "okay";
+};
+
+&scmi_regu {
+	scmi_v3v3: voltd-v3v3 {
+		reg = <VOLTD_SCMI_STPMIC2_BUCK7>;
+		voltd-supply = <&v3v3>;
+	};
+	scmi_vdd_emmc: voltd-vdd-emmc {
+		reg = <VOLTD_SCMI_STPMIC2_LDO2>;
+		voltd-supply = <&vdd_emmc>;
+	};
+	scmi_vdd_sdcard: voltd-vdd_sdcard {
+		reg = <VOLTD_SCMI_STPMIC2_LDO7>;
+		voltd-supply = <&vdd_sdcard>;
+	};
 };
 
 &tamp {

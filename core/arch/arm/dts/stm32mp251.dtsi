@@ -6,6 +6,7 @@
 
 #include <dt-bindings/interrupt-controller/arm-gic.h>
 #include <dt-bindings/clock/stm32mp25-clks.h>
+#include <dt-bindings/regulator/st,stm32mp25-regulator.h>
 #include <dt-bindings/reset/stm32mp25-resets.h>
 
 / {
@@ -81,6 +82,43 @@
 			#clock-cells = <0>;
 			compatible = "fixed-clock";
 			clock-frequency = <64000000>;
+		};
+	};
+
+	scmi_regu: scmi-regu {
+		compatible = "st,scmi-regulator-consumer";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		scmi-channel-id = <0>;
+
+		voltd-vddio1 {
+			reg = <VOLTD_SCMI_VDDIO1>;
+			voltd-supply = <&vddio1>;
+		};
+		voltd-vddio2 {
+			reg = <VOLTD_SCMI_VDDIO2>;
+			voltd-supply = <&vddio2>;
+		};
+		voltd-vddio3 {
+			reg = <VOLTD_SCMI_VDDIO3>;
+			voltd-supply = <&vddio3>;
+		};
+		voltd-vddio4 {
+			reg = <VOLTD_SCMI_VDDIO4>;
+			voltd-supply = <&vddio4>;
+		};
+		voltd-vdd33ucpd {
+			reg = <VOLTD_SCMI_UCPD>;
+			voltd-supply = <&vdd33ucpd>;
+		};
+		voltd-vdda18adc {
+			reg = <VOLTD_SCMI_ADC>;
+			voltd-supply = <&vdda18adc>;
+		};
+		voltd-vddgpu {
+			reg = <VOLTD_SCMI_GPU>;
+			voltd-supply = <&vddgpu>;
 		};
 	};
 
