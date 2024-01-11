@@ -41,6 +41,7 @@ $(call force,CFG_DRIVERS_CLK,y)
 $(call force,CFG_DRIVERS_CLK_DT,y)
 $(call force,CFG_DRIVERS_GPIO,y)
 $(call force,CFG_DRIVERS_PINCTRL,y)
+$(call force,CFG_DRIVERS_REGULATOR,y)
 $(call force,CFG_DT,y)
 $(call force,CFG_GIC,y)
 $(call force,CFG_HALT_CORES_ON_PANIC_SGI,15)
@@ -91,7 +92,11 @@ CFG_STM32_STGEN ?= y
 CFG_STM32_TAMP ?= y
 CFG_STM32_UART ?= y
 
+CFG_REGULATOR_FIXED ?= y
+CFG_REGULATOR_GPIO ?= y
+
 # Default enable some test facitilites
+CFG_DRIVERS_REGULATOR_PRINT_TREE ?= y
 CFG_ENABLE_EMBEDDED_TESTS ?= y
 CFG_WITH_STATS ?= y
 CFG_WERROR ?= y
