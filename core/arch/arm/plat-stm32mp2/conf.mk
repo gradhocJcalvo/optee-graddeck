@@ -112,6 +112,9 @@ $(call force,CFG_WITH_SOFTWARE_PRNG,n,Mandated by CFG_HWRNG_PTA)
 CFG_HWRNG_QUALITY ?= 1024
 endif
 
+# Platform specific configuration
+CFG_STM32MP_PANIC_ON_TZC_PERM_VIOLATION ?= y
+
 # Enable reset control
 ifeq ($(CFG_STM32MP25_RSTCTRL),y)
 $(call force,CFG_DRIVERS_RSTCTRL,y)
