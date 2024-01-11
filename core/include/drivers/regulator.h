@@ -26,9 +26,17 @@
  * DT property: regulator-boot-on
  */
 #define REGULATOR_BOOT_ON	BIT(2)
+/*
+ * Enables over current protection.
+ * DT property: regulator-over-current-protection
+ */
+#define REGULATOR_OVER_CURRENT	BIT(3)
+/* Enable active discharge. DT property: regulator-active-discharge */
+#define REGULATOR_ACTIVE_DISCHARGE	BIT(4)
 
 #define REGULATOR_FLAGS_MASK	(REGULATOR_ALWAYS_ON | REGULATOR_PULL_DOWN | \
-				 REGULATOR_BOOT_ON)
+				 REGULATOR_BOOT_ON | REGULATOR_OVER_CURRENT | \
+				 REGULATOR_ACTIVE_DISCHARGE)
 
 struct regulator_ops;
 

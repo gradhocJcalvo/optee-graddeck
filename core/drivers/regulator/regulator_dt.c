@@ -40,6 +40,14 @@ static struct regulator_property flag_prop[] = {
 		.name = "regulator-boot-on",
 		.flag = REGULATOR_BOOT_ON,
 	},
+	{
+		.name = "regulator-over-current-protection",
+		.flag = REGULATOR_OVER_CURRENT,
+	},
+	{
+		.name = "regulator-active-discharge",
+		.flag = REGULATOR_ACTIVE_DISCHARGE,
+	},
 };
 
 /*
