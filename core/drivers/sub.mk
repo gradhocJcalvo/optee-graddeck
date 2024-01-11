@@ -52,6 +52,7 @@ srcs-$(CFG_STM32_TAMP) += stm32_tamp.c
 srcs-$(CFG_STM32_UART) += stm32_uart.c
 srcs-$(CFG_STM32MP_PROVISIONING) += stm32mp_provisioning.c
 srcs-$(CFG_STPMIC1) += stpmic1.c
+srcs-$(CFG_STPMIC2) += stpmic2.c
 srcs-$(CFG_BCM_HWRNG) += bcm_hwrng.c
 srcs-$(CFG_BCM_SOTP) += bcm_sotp.c
 srcs-$(CFG_BCM_GPIO) += bcm_gpio.c
