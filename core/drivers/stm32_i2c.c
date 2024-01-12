@@ -1654,6 +1654,9 @@ static TEE_Result stm32_i2c_probe(const void *fdt, int node,
 	init_data.analog_filter = true;
 	init_data.digital_filter_coef = 0;
 
+	if (pinctrl_apply_state(i2c_handle_p->pinctrl))
+		panic();
+
 	res = stm32_i2c_init(i2c_handle_p, &init_data);
 	if (res)
 		panic("Couldn't initialise I2C");
