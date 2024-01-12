@@ -94,6 +94,7 @@ struct regulator_voltages_desc {
  * @min_uv: Min possible voltage level in microvolt (uV)
  * @max_uv: Max possible voltage level in microvolt (uV)
  * @ramp_delay_uv_per_us: Voltage level change delay in uV/s
+ * @enable_ramp_delay_us: Delay after enable, in microseconds (us)
  * @cur_uv: Current voltage level in microvolt (uV)
  * @flags: REGULATOR_* property flags
  * @refcount: Regulator enable request reference counter
@@ -110,6 +111,7 @@ struct regulator {
 	int min_uv;
 	int max_uv;
 	unsigned int ramp_delay_uv_per_us;
+	unsigned int enable_ramp_delay_us;
 	/* Fields internal to regulator framework */
 	int cur_uv;
 	unsigned int flags;
