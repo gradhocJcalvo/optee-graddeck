@@ -81,6 +81,7 @@
 		regulators {
 			compatible = "st,stpmic2-regulators";
 
+			ldo1-supply = <&vddio_pmic>;
 			vddcpu: buck1 {
 				regulator-name = "vddcpu";
 				regulator-min-microvolt = <800000>;
@@ -235,6 +236,7 @@
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <1800000>;
 				regulator-always-on;
+				st,alternate-input-source;
 				st,mask-reset;
 			};
 			vdd_emmc: ldo2 {
