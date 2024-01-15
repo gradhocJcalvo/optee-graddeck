@@ -44,6 +44,28 @@ properties:
       compatible:
         const: st,stpmic2-regulators
 
+      ldo1:
+        type: object
+
+        properties:
+          st,alternate-input-source:
+            description: select VOUT4 as input source for this regulator.
+            $ref: /schemas/types.yaml#/definitions/flag
+
+          st,mask-reset:
+            description: mask reset for this regulator, the regulator configuration
+              is maintained during pmic reset.
+            $ref: /schemas/types.yaml#/definitions/flag
+
+          regulator-name: true
+          regulator-boot-on: true
+          regulator-always-on: true
+          regulator-min-microvolt: true
+          regulator-max-microvolt: true
+          regulator-over-current-protection: true
+
+        additionalProperties: false
+
       ldo3:
         type: object
 
@@ -100,7 +122,7 @@ properties:
       "^(buck[1-7]|ldo[1-8]|refddr)$":
         $ref: ../regulator/regulator.yaml
 
-      "^ldo[1-2,5-8]$":
+      "^ldo[2,5-8]$":
         type: object
 
         properties:

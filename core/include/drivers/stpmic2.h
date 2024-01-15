@@ -267,6 +267,7 @@ enum stpmic2_prop_id {
 	STPMIC2_PWRCTRL_SEL,	/* takes arg = pwrctrl line number */
 	STPMIC2_MAIN_PREG_MODE,	/* takes arg = preg mode HP=1, CCM=2 */
 	STPMIC2_ALT_PREG_MODE,	/* takes arg = preg mode HP=1, CCM=2 */
+	STPMIC2_ALTERNATE_INPUT_SOURCE,
 };
 
 #define PROP_BYPASS_RESET	U(0)

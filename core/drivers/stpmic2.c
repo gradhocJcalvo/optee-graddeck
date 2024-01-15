@@ -513,6 +513,12 @@ TEE_Result stpmic2_regulator_set_prop(struct stpmic2 *pmic, uint8_t id,
 		return stpmic2_register_update(pmic, regul->alt_en_cr,
 					       arg << PREG_MODE_SHIFT,
 					       PREG_MODE_MASK);
+	case STPMIC2_ALTERNATE_INPUT_SOURCE:
+		if (id != STPMIC2_LDO1)
+			return TEE_ERROR_BAD_PARAMETERS;
+
+		return stpmic2_update_en_crs(pmic, id,
+					     LDO1_INPUT_SRC, LDO1_INPUT_SRC);
 	default:
 		EMSG("Invalid prop %d", prop);
 		panic();

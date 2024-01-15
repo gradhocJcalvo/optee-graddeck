@@ -112,6 +112,10 @@ static const struct regu_dt_property prop_table[] = {
 		.name = "st,pwrctrl_sel",
 		.prop = STPMIC2_PWRCTRL_SEL,
 	},
+	{
+		.name = "st,alternate-input-source",
+		.prop = STPMIC2_ALTERNATE_INPUT_SOURCE,
+	},
 };
 
 /*
