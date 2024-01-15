@@ -6,6 +6,7 @@
 #include <config.h>
 #include <console.h>
 #include <drivers/gic.h>
+#include <drivers/rstctrl.h>
 #include <drivers/stm32_bsec.h>
 #include <drivers/stm32_rif.h>
 #include <drivers/stm32_risab.h>
@@ -16,6 +17,7 @@
 #include <initcall.h>
 #include <kernel/abort.h>
 #include <kernel/boot.h>
+#include <kernel/delay.h>
 #include <kernel/dt.h>
 #include <kernel/interrupt.h>
 #include <kernel/misc.h>
@@ -216,3 +218,41 @@ static TEE_Result init_debug(void)
 }
 early_init_late(init_debug);
 #endif /* CFG_STM32_BSEC3 */
+
+static bool stm32mp_supports_second_core(void)
+{
+	if (CFG_TEE_CORE_NB_CORE == 1)
+		return false;
+
+	return true;
+}
+
+void __noreturn do_reset(const char *str __maybe_unused)
+{
+	struct rstctrl *rstctrl = NULL;
+
+	if (stm32mp_supports_second_core()) {
+		uint32_t target_mask = 0;
+
+		if (get_core_pos() == 0)
+			target_mask = TARGET_CPU1_GIC_MASK;
+		else
+			target_mask = TARGET_CPU0_GIC_MASK;
+
+		interrupt_raise_sgi(interrupt_get_main_chip(),
+				    GIC_SEC_SGI_1, target_mask);
+		/* Wait that other core is halted */
+		mdelay(1);
+	}
+
+	IMSG("Forced system reset %s", str);
+	console_flush();
+
+	/* Request system reset to RCC driver */
+	rstctrl = stm32mp_rcc_reset_id_to_rstctrl(SYS_R);
+	rstctrl_assert(rstctrl);
+	udelay(100);
+
+	/* Can't occur */
+	panic();
+}
