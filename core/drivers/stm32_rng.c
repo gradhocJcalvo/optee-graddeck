@@ -552,7 +552,9 @@ static TEE_Result stm32_rng_pm_suspend(void)
 		if ((io_read32(rng_base + RNG_CR) & RNG_CR_CONDRST))
 			panic();
 	} else {
+#ifndef CFG_STM32MP1_OPTEE_IN_SYSRAM
 		io_clrbits32(rng_base + RNG_CR, RNG_CR_RNGEN);
+#endif
 	}
 
 	return TEE_SUCCESS;
