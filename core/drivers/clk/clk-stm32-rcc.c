@@ -21,12 +21,17 @@ struct stm32mp_rcc_clock {
 
 static SLIST_HEAD(, stm32mp_rcc_clock) stm32mp_rcc_list =
 	SLIST_HEAD_INITIALIZER(stm32mp_rcc_list);
+static struct pinctrl_state *rcc_pinctrl;
 
 static TEE_Result
 stm32mp_rcc_pm(enum pm_op op, unsigned int pm_hint __unused,
 	       const struct pm_callback_handle *pm_handle __unused)
 {
 	struct stm32mp_rcc_clock *rcc_clock = NULL;
+
+	if (op == PM_OP_RESUME && rcc_pinctrl &&
+	    pinctrl_apply_state(rcc_pinctrl))
+		panic();
 
 	SLIST_FOREACH(rcc_clock, &stm32mp_rcc_list, link) {
 		if (op == PM_OP_RESUME) {
@@ -46,21 +51,24 @@ stm32mp_rcc_pm(enum pm_op op, unsigned int pm_hint __unused,
 static TEE_Result stm32mp_rcc_probe(const void *fdt, int node,
 				    const void *compat_data __unused)
 {
-	struct pinctrl_state *pinctrl_cfg = NULL;
 	TEE_Result res = TEE_SUCCESS;
 	struct clk *clk = NULL;
 	int idx = 0;
 
 	/* Apply pinctrl configuration if present */
-	res = pinctrl_get_state_by_idx(fdt, node, 0, &pinctrl_cfg);
+	res = pinctrl_get_state_by_idx(fdt, node, 0, &rcc_pinctrl);
 	if (res && res != TEE_ERROR_ITEM_NOT_FOUND) {
 		if (res == TEE_ERROR_DEFER_DRIVER_INIT)
 			return res;
 		panic("Failed to get RCC pinctrl");
 	}
 
-	if (pinctrl_cfg)
-		stm32_pinctrl_set_secure_cfg(pinctrl_cfg, true);
+	if (rcc_pinctrl) {
+		stm32_pinctrl_set_secure_cfg(rcc_pinctrl, true);
+		res = pinctrl_apply_state(rcc_pinctrl);
+		if (res)
+			return res;
+	}
 
 	/* Enable clock(s) if present */
 	while (!clk_dt_get_by_index(fdt, node, idx++, &clk)) {
