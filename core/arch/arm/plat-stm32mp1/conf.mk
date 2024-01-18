@@ -341,13 +341,15 @@ endif
 
 ifeq ($(CFG_SCMI_MSG_DRIVERS),y)
 $(call force,CFG_SCMI_MSG_CLOCK,y)
-$(call force,CFG_SCMI_MSG_REGULATOR_CONSUMER,y)
 $(call force,CFG_SCMI_MSG_RESET_DOMAIN,y)
+ifeq ($(CFG_STM32MP13),y)
+$(call force,CFG_SCMI_MSG_REGULATOR_CONSUMER,y)
+$(call force,CFG_SCMI_MSG_VOLTAGE_DOMAIN,y)
+endif
 CFG_SCMI_MSG_SHM_MSG ?= y
 CFG_SCMI_MSG_SMT ?= y
 CFG_SCMI_MSG_SMT_THREAD_ENTRY ?= y
 CFG_SCMI_MSG_THREAD_ENTRY ?= y
-$(call force,CFG_SCMI_MSG_VOLTAGE_DOMAIN,y)
 endif
 
 # Enable Early TA NVMEM for provisioning management
