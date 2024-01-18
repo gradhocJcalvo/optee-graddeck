@@ -458,6 +458,7 @@
 			dmas = <&dmamux1 43 0x400 0x15>,
 			       <&dmamux1 44 0x400 0x11>;
 			dma-names = "rx", "tx";
+			resets = <&rcc USART2_R>;
 			status = "disabled";
 		};
 
@@ -470,6 +471,7 @@
 			dmas = <&dmamux1 45 0x400 0x15>,
 			       <&dmamux1 46 0x400 0x11>;
 			dma-names = "rx", "tx";
+			resets = <&rcc USART3_R>;
 			status = "disabled";
 		};
 
@@ -482,6 +484,7 @@
 			dmas = <&dmamux1 63 0x400 0x15>,
 			       <&dmamux1 64 0x400 0x11>;
 			dma-names = "rx", "tx";
+			resets = <&rcc UART4_R>;
 			status = "disabled";
 		};
 
@@ -494,6 +497,7 @@
 			dmas = <&dmamux1 65 0x400 0x15>,
 			       <&dmamux1 66 0x400 0x11>;
 			dma-names = "rx", "tx";
+			resets = <&rcc UART5_R>;
 			status = "disabled";
 		};
 
@@ -603,6 +607,7 @@
 			dmas = <&dmamux1 79 0x400 0x15>,
 			       <&dmamux1 80 0x400 0x11>;
 			dma-names = "rx", "tx";
+			resets = <&rcc UART7_R>;
 			status = "disabled";
 		};
 
@@ -615,6 +620,7 @@
 			dmas = <&dmamux1 81 0x400 0x15>,
 			       <&dmamux1 82 0x400 0x11>;
 			dma-names = "rx", "tx";
+			resets = <&rcc UART8_R>;
 			status = "disabled";
 		};
 
@@ -699,6 +705,7 @@
 			dmas = <&dmamux1 71 0x400 0x15>,
 			       <&dmamux1 72 0x400 0x11>;
 			dma-names = "rx", "tx";
+			resets = <&rcc USART6_R>;
 			status = "disabled";
 		};
 
@@ -754,6 +761,11 @@
 			       <&dmamux1 108 0x400 0x1>;
 			dma-names = "ch1", "up", "trig", "com";
 			status = "disabled";
+
+			counter {
+				compatible = "st,stm32-timer-counter";
+				status = "disabled";
+			};
 
 			pwm {
 				compatible = "st,stm32-pwm";
@@ -1529,6 +1541,7 @@
 		bsec: efuse@5c005000 {
 			compatible = "st,stm32mp15-bsec";
 			reg = <0x5c005000 0x400>;
+			clocks = <&rcc BSEC>;
 			#address-cells = <1>;
 			#size-cells = <1>;
 
@@ -1820,7 +1833,7 @@
 				reg = <0x5c009000 0x400>;
 				interrupt-names = "event", "error";
 				interrupts = <GIC_SPI 135 IRQ_TYPE_LEVEL_HIGH>,
-						<GIC_SPI 136 IRQ_TYPE_LEVEL_HIGH>;
+					     <GIC_SPI 136 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc I2C6_K>;
 				resets = <&rcc I2C6_R>;
 				#address-cells = <1>;
@@ -1852,8 +1865,8 @@
 			reg = <0x10000000 0x40000>,
 			      <0x30000000 0x40000>,
 			      <0x38000000 0x10000>;
-			resets = <&rcc MCU_R>;
-			st,syscfg-holdboot = <&rcc 0x10C 0x1>;
+			resets = <&rcc MCU_R>, <&rcc MCU_HOLD_BOOT_R>;
+			reset-names = "mcu_rst", "hold_boot";
 			st,syscfg-tz = <&rcc 0x000 0x1>;
 			st,syscfg-pdds = <&pwr_mcu 0x0 0x1>;
 			st,syscfg-rsc-tbl = <&tamp 0x144 0xFFFFFFFF>;

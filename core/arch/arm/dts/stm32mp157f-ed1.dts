@@ -214,6 +214,11 @@
 	};
 };
 
+&pwr_regulators {
+	vdd-supply = <&vdd>;
+	vdd_3v3_usbfs-supply = <&vdd_usb>;
+};
+
 &rcc {
 	compatible = "st,stm32mp1-rcc-secure";
 

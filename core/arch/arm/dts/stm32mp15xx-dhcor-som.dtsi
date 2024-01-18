@@ -175,8 +175,8 @@
 				regulator-name = "v1v8";
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <1800000>;
-				interrupts = <IT_CURLIM_LDO6 0>;
 				regulator-enable-ramp-delay = <300000>;
+				interrupts = <IT_CURLIM_LDO6 0>;
 			};
 
 			vref_ddr: vref_ddr {
