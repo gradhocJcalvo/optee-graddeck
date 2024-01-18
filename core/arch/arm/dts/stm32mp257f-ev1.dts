@@ -173,6 +173,7 @@
 				regulator-min-microvolt = <1200000>;
 				regulator-max-microvolt = <1200000>;
 				regulator-always-on;
+				regulator-pull-down;
 				st,pwrctrl_sel = <1>;
 				st,pwrctrl_enable;
 
