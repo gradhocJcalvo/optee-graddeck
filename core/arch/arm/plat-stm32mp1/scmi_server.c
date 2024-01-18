@@ -221,7 +221,7 @@ static struct stm32_scmi_rd stm32_scmi_reset_domain[] = {
 };
 #endif
 
-#ifndef CFG_SCMI_MSG_REGULATOR_CONSUMER
+#if defined(CFG_SCMI_MSG_VOLTAGE_DOMAIN) && !defined(CFG_SCMI_MSG_REGULATOR_CONSUMER)
 #ifdef CFG_STM32MP13
 struct stm32_scmi_voltd scmi_voltage_domain[] = {
 	VOLTD_CELL_PWR(VOLTD_SCMI_REG11, PWR_REG11, "reg11"),
@@ -268,7 +268,7 @@ struct stm32_scmi_voltd scmi_voltage_domain[] = {
 	VOLTD_CELL_PMIC(VOLTD_SCMI_STPMIC1_PWR_SW2, "pwr_sw2", "vbus_sw"),
 };
 #endif
-#endif /*!CFG_SCMI_MSG_REGULATOR_CONSUMER*/
+#endif /*CFG_SCMI_MSG_VOLTAGE_DOMAIN && !CFG_SCMI_MSG_REGULATOR_CONSUMER*/
 
 struct channel_resources {
 	struct scmi_msg_channel *channel;
@@ -292,7 +292,7 @@ static const struct channel_resources scmi_channel[] = {
 		.clock_count = ARRAY_SIZE(stm32_scmi_clock),
 		.rd = stm32_scmi_reset_domain,
 		.rd_count = ARRAY_SIZE(stm32_scmi_reset_domain),
-#ifndef CFG_SCMI_MSG_REGULATOR_CONSUMER
+#if defined(CFG_SCMI_MSG_VOLTAGE_DOMAIN) && !defined(CFG_SCMI_MSG_REGULATOR_CONSUMER)
 		.voltd = scmi_voltage_domain,
 		.voltd_count = ARRAY_SIZE(scmi_voltage_domain),
 #endif
@@ -366,7 +366,9 @@ const char *plat_scmi_sub_vendor_name(void)
 static const uint8_t plat_protocol_list[] = {
 	SCMI_PROTOCOL_ID_CLOCK,
 	SCMI_PROTOCOL_ID_RESET_DOMAIN,
+#ifdef CFG_SCMI_MSG_VOLTAGE_DOMAIN
 	SCMI_PROTOCOL_ID_VOLTAGE_DOMAIN,
+#endif
 	0 /* Null termination */
 };
 
