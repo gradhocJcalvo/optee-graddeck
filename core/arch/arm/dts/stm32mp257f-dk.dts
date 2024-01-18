@@ -6,11 +6,19 @@
 
 /dts-v1/;
 
+#include <dt-bindings/clock/stm32mp25-clksrc.h>
 #include <dt-bindings/regulator/st,stm32mp25-regulator.h>
 #include <dt-bindings/soc/stm32mp-provisioning.h>
 #include <dt-bindings/tamper/st,stm32mp25-tamp.h>
+#include <dt-bindings/soc/stm32mp25-rif.h>
+#include <dt-bindings/soc/stm32mp25-risab.h>
+#include <dt-bindings/soc/stm32mp25-risaf.h>
+#include <dt-bindings/soc/stm32mp25-rifsc.h>
 #include "stm32mp257.dtsi"
 #include "stm32mp25xf.dtsi"
+#include "stm32mp257f-dk-ca35tdcid-rcc.dtsi"
+#include "stm32mp257f-dk-ca35tdcid-resmem.dtsi"
+#include "stm32mp257f-dk-ca35tdcid-rif.dtsi"
 #include "stm32mp25-pinctrl.dtsi"
 #include "stm32mp25xxal-pinctrl.dtsi"
 
@@ -64,8 +72,6 @@
 				regulator-name = "vddcpu";
 				regulator-min-microvolt = <800000>;
 				regulator-max-microvolt = <910000>;
-				regulator-ramp-delay = <2200>;
-				regulator-enable-ramp-delay = <1000>;
 				regulator-always-on;
 				st,pwrctrl_sel = <2>;
 				st,pwrctrl_enable;
@@ -87,8 +93,6 @@
 				regulator-name = "vddcore";
 				regulator-min-microvolt = <820000>;
 				regulator-max-microvolt = <820000>;
-				regulator-ramp-delay = <2200>;
-				regulator-enable-ramp-delay = <1000>;
 				regulator-always-on;
 				st,pwrctrl_sel = <1>;
 				st,pwrctrl_enable;
@@ -112,16 +116,12 @@
 				regulator-name = "vddgpu_pmic";
 				regulator-min-microvolt = <800000>;
 				regulator-max-microvolt = <900000>;
-				regulator-ramp-delay = <2200>;
-				regulator-enable-ramp-delay = <1000>;
 				regulator-always-on;
 			};
 			vddio_pmic: buck4 {
 				regulator-name = "vddio_pmic";
 				regulator-min-microvolt = <3300000>;
 				regulator-max-microvolt = <3300000>;
-				regulator-ramp-delay = <2200>;
-				regulator-enable-ramp-delay = <1000>;
 				regulator-always-on;
 				st,mask-reset;
 				st,pwrctrl_sel = <1>;
@@ -149,8 +149,6 @@
 				regulator-name = "v1v8";
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <1800000>;
-				regulator-ramp-delay = <2200>;
-				regulator-enable-ramp-delay = <1000>;
 				regulator-always-on;
 				st,pwrctrl_sel = <1>;
 				st,pwrctrl_enable;
@@ -174,8 +172,6 @@
 				regulator-name = "vdd2_ddr";
 				regulator-min-microvolt = <1100000>;
 				regulator-max-microvolt = <1100000>;
-				regulator-ramp-delay = <2200>;
-				regulator-enable-ramp-delay = <1000>;
 				regulator-always-on;
 				st,pwrctrl_sel = <1>;
 				st,pwrctrl_enable;
@@ -200,8 +196,6 @@
 				regulator-name = "v3v3";
 				regulator-min-microvolt = <3300000>;
 				regulator-max-microvolt = <3300000>;
-				regulator-ramp-delay = <2200>;
-				regulator-enable-ramp-delay = <1000>;
 				regulator-always-on;
 				st,pwrctrl_sel = <1>;
 				st,pwrctrl_enable;
@@ -225,8 +219,6 @@
 				regulator-name = "vdda1v8_aon";
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <1800000>;
-				regulator-ramp-delay = <2200>;
-				regulator-enable-ramp-delay = <1000>;
 				regulator-always-on;
 				st,mask-reset;
 			};
@@ -234,8 +226,6 @@
 				regulator-name = "vdd_emmc";
 				regulator-min-microvolt = <3300000>;
 				regulator-max-microvolt = <3300000>;
-				regulator-ramp-delay = <2200>;
-				regulator-enable-ramp-delay = <1000>;
 				st,pwrctrl_sel = <3>;
 				st,pwrctrl_reset;
 			};
@@ -243,8 +233,6 @@
 				regulator-name = "vdd1_ddr";
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <1800000>;
-				regulator-ramp-delay = <2200>;
-				regulator-enable-ramp-delay = <1000>;
 				regulator-always-on;
 				st,pwrctrl_sel = <1>;
 				st,pwrctrl_enable;
@@ -269,16 +257,12 @@
 				regulator-name = "vdd3v3_usb";
 				regulator-min-microvolt = <3300000>;
 				regulator-max-microvolt = <3300000>;
-				regulator-ramp-delay = <2200>;
-				regulator-enable-ramp-delay = <1000>;
 				regulator-always-on;
 			};
 			v5v_hdmi: ldo5 {
 				regulator-name = "v5v_hdmi";
 				regulator-min-microvolt = <5000000>;
 				regulator-max-microvolt = <5000000>;
-				regulator-ramp-delay = <2200>;
-				regulator-enable-ramp-delay = <1000>;
 				st,regulator-bypass-microvolt = <5000000>;
 				st,pwrctrl_sel = <0>;
 				st,pwrctrl_enable;
@@ -287,8 +271,6 @@
 				regulator-name = "v5v_vconn";
 				regulator-min-microvolt = <4000000>;
 				regulator-max-microvolt = <4000000>;
-				regulator-ramp-delay = <2200>;
-				regulator-enable-ramp-delay = <1000>;
 				st,regulator-bypass-microvolt = <4000000>;
 				st,pwrctrl_sel = <0>;
 				st,pwrctrl_reset;
@@ -297,8 +279,6 @@
 				regulator-name = "vdd_sdcard";
 				regulator-min-microvolt = <3300000>;
 				regulator-max-microvolt = <3300000>;
-				regulator-ramp-delay = <2200>;
-				regulator-enable-ramp-delay = <1000>;
 				regulator-always-on;
 				st,regulator-bypass-microvolt = <3300000>;
 				st,pwrctrl_sel = <3>;
@@ -308,8 +288,6 @@
 				regulator-name = "vddio_sdcard";
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <3300000>;
-				regulator-ramp-delay = <2200>;
-				regulator-enable-ramp-delay = <1000>;
 				st,regulator-bypass-microvolt = <3300000>;
 				st,pwrctrl_sel = <3>;
 				st,pwrctrl_reset;
