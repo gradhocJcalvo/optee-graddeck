@@ -27,36 +27,11 @@
 
 #define MAX_OPP		CFG_STM32MP_OPP_COUNT
 
-/* A35 Sub-System which manages its own PLL (PLL1) */
-#define A35_SS_CHGCLKREQ	0x0000
-#define A35_SS_PLL_FREQ1	0x0080
-#define A35_SS_PLL_FREQ2	0x0090
-#define A35_SS_PLL_ENABLE	0x00a0
 #define RCC_SECCFGR(x)		(U(0x0) + U(0x4) * (x))
 #define RCC_PRIVCFGR(x)		(U(0x10) + U(0x4) * (x))
 #define RCC_RCFGLOCKR(x)	(U(0x20) + U(0x4) * (x))
 #define RCC_CIDCFGR(x)		(U(0x030) + U(0x08) * (x))
 #define RCC_SEMCR(x)		(U(0x034) + U(0x08) * (x))
-
-#define A35_SS_CHGCLKREQ_ARM_CHGCLKREQ		BIT(0)
-#define A35_SS_CHGCLKREQ_ARM_CHGCLKACK		BIT(1)
-
-#define A35_SS_PLL_FREQ1_FBDIV_MASK		GENMASK_32(11, 0)
-#define A35_SS_PLL_FREQ1_FBDIV_SHIFT		U(0)
-#define A35_SS_PLL_FREQ1_REFDIV_MASK		GENMASK_32(21, 16)
-#define A35_SS_PLL_FREQ1_REFDIV_SHIFT		U(16)
-
-#define A35_SS_PLL_FREQ2_POSTDIV1_MASK		GENMASK_32(2, 0)
-#define A35_SS_PLL_FREQ2_POSTDIV1_SHIFT		U(0)
-#define A35_SS_PLL_FREQ2_POSTDIV2_MASK		GENMASK_32(5, 3)
-#define A35_SS_PLL_FREQ2_POSTDIV2_SHIFT		U(3)
-
-#define A35_SS_PLL_FREQ1_MASK	(GENMASK_32(21, 16) | GENMASK_32(11, 0))
-#define A35_SS_PLL_FREQ2_MASK	GENMASK_32(5, 0)
-
-#define A35_SS_PLL_ENABLE_PD			BIT(0)
-#define A35_SS_PLL_ENABLE_LOCKP			BIT(1)
-#define A35_SS_PLL_ENABLE_NRESET_SWPLL_FF	BIT(2)
 
 #define TIMEOUT_US_100MS			U(100000)
 #define TIMEOUT_US_200MS			U(200000)
@@ -248,15 +223,6 @@ struct stm32_clk_platdata {
 	struct rif_conf_data conf_data;
 	unsigned int nb_res;
 };
-
-#define A35SSC_BASE	0x48800000
-
-static vaddr_t stm32_a35_base(void)
-{
-	static struct io_pa_va base = { .pa = A35SSC_BASE };
-
-	return io_pa_or_va_secure(&base, 1);
-}
 
 /*
  * GATE CONFIG
@@ -749,7 +715,6 @@ static const struct mux_cfg parent_mp25[MUX_NB] = {
 	MUX_CFG(MUX_DSIPHY,		RCC_DSICFGR,		15,	1),
 	MUX_CFG(MUX_LVDSPHY,		RCC_LVDSCFGR,		15,	1),
 	MUX_CFG(MUX_DTS,		RCC_DTSCFGR,		12,	2),
-	MUX_CFG(MUX_CPU1,		A35_SS_CHGCLKREQ,	1,	1)
 };
 
 /*
@@ -1181,7 +1146,7 @@ struct stm32_clk_pll {
 	}
 
 static const struct stm32_clk_pll stm32mp25_clk_pll[PLL_NB] = {
-	CLK_PLL_CFG(PLL1_ID, GATE_PLL1, MUX_MUXSEL5, A35_SS_CHGCLKREQ),
+	CLK_PLL_CFG(PLL1_ID, GATE_PLL1, MUX_MUXSEL5, 0),
 	CLK_PLL_CFG(PLL2_ID, GATE_PLL2, MUX_MUXSEL6, RCC_PLL2CFGR1),
 	CLK_PLL_CFG(PLL3_ID, GATE_PLL3, MUX_MUXSEL7, RCC_PLL3CFGR1),
 	CLK_PLL_CFG(PLL4_ID, GATE_PLL4, MUX_MUXSEL0, RCC_PLL4CFGR1),
@@ -1690,29 +1655,33 @@ static void clk_stm32_debug_display_pdata(void)
 
 static void stm32mp2_a35_ss_on_hsi(void)
 {
-	uintptr_t a35_ss_address = stm32_a35_base();
-	uintptr_t chgclkreq_reg = a35_ss_address + A35_SS_CHGCLKREQ;
-	uintptr_t pll_enable_reg = a35_ss_address + A35_SS_PLL_ENABLE;
-	uint64_t timeout;
+	uint64_t timeout = 0;
 
-	if ((io_read32(chgclkreq_reg) & A35_SS_CHGCLKREQ_ARM_CHGCLKACK) ==
-	    A35_SS_CHGCLKREQ_ARM_CHGCLKACK) {
+	if ((stm32mp_syscfg_read(A35SS_SSC_CHGCLKREQ) &
+	     A35SS_SSC_CHGCLKREQ_ARM_CHGCLKACK_MASK) ==
+	    A35SS_SSC_CHGCLKREQ_ARM_CHGCLKACK_MASK) {
 		/* Nothing to do, clock source is already set on bypass clock */
 		return;
 	}
 
-	io_setbits32(chgclkreq_reg, A35_SS_CHGCLKREQ_ARM_CHGCLKREQ);
-
 	timeout = timeout_init_us(CLKSRC_TIMEOUT);
-	while ((io_read32(chgclkreq_reg) & A35_SS_CHGCLKREQ_ARM_CHGCLKACK) !=
-	       A35_SS_CHGCLKREQ_ARM_CHGCLKACK) {
+
+	stm32mp_syscfg_write(A35SS_SSC_CHGCLKREQ,
+			     A35SS_SSC_CHGCLKREQ_ARM_CHGCLKREQ_EN,
+			     A35SS_SSC_CHGCLKREQ_ARM_CHGCLKREQ_MASK);
+
+	while ((stm32mp_syscfg_read(A35SS_SSC_CHGCLKREQ) &
+		A35SS_SSC_CHGCLKREQ_ARM_CHGCLKACK_MASK) !=
+			A35SS_SSC_CHGCLKREQ_ARM_CHGCLKACK_MASK) {
 		if (timeout_elapsed(timeout)) {
 			EMSG("Cannot switch A35 to bypass clock\n");
 			panic();
 		}
 	}
 
-	io_clrbits32(pll_enable_reg, A35_SS_PLL_ENABLE_NRESET_SWPLL_FF);
+	stm32mp_syscfg_write(A35SS_SSC_PLL_EN,
+			     0,
+			     A35SS_SSC_PLL_ENABLE_NRESET_SWPLL_FF_MASK);
 }
 
 static void stm32mp2_clk_xbar_on_hsi(struct clk_stm32_priv *priv)
@@ -1725,38 +1694,41 @@ static void stm32mp2_clk_xbar_on_hsi(struct clk_stm32_priv *priv)
 				RCC_XBAR0CFGR_XBAR0SEL_MASK, XBAR_SRC_HSI);
 }
 
-/* TODO: MOVE THIS FUNCTION A35 ONLY */
 static int stm32mp2_a35_pll1_start(void)
 {
-	uintptr_t a35_ss_address = stm32_a35_base();
-	uintptr_t pll_enable_reg = a35_ss_address + A35_SS_PLL_ENABLE;
-	uintptr_t chgclkreq_reg = a35_ss_address + A35_SS_CHGCLKREQ;
-	uint64_t timeout = timeout_init_us(PLLRDY_TIMEOUT);
+	uint64_t timeout = 0;
 
-	io_setbits32(pll_enable_reg, A35_SS_PLL_ENABLE_PD);
+	stm32mp_syscfg_write(A35SS_SSC_PLL_EN,
+			     A35SS_SSC_PLL_ENABLE_PD_EN,
+			     A35SS_SSC_PLL_ENABLE_PD_EN);
+
+	timeout = timeout_init_us(PLLRDY_TIMEOUT);
 
 	/* Wait PLL lock */
-	while ((io_read32(pll_enable_reg) & A35_SS_PLL_ENABLE_LOCKP) == 0U) {
+	while ((stm32mp_syscfg_read(A35SS_SSC_PLL_EN) &
+		A35SS_SSC_PLL_ENABLE_LOCKP_MASK) == 0U) {
 		if (timeout_elapsed(timeout)) {
-			EMSG("PLL1 start failed @ 0x%lx: 0x%x\n",
-			      pll_enable_reg, io_read32(pll_enable_reg));
+			EMSG("PLL1 not locked !");
 			return -1;
 		}
 	}
 
 	/* De-assert reset on PLL output clock path */
-	io_setbits32(pll_enable_reg, A35_SS_PLL_ENABLE_NRESET_SWPLL_FF);
+	stm32mp_syscfg_write(A35SS_SSC_PLL_EN,
+			     A35SS_SSC_PLL_ENABLE_NRESET_SWPLL_FF_EN,
+			     A35SS_SSC_PLL_ENABLE_NRESET_SWPLL_FF_MASK);
 
 	/* Switch CPU clock to PLL clock */
-	io_clrbits32(chgclkreq_reg, A35_SS_CHGCLKREQ_ARM_CHGCLKREQ);
+	stm32mp_syscfg_write(A35SS_SSC_CHGCLKREQ,
+			     0,
+			     A35SS_SSC_CHGCLKREQ_ARM_CHGCLKREQ_MASK);
 
 	/* Wait for clock change acknowledge */
 	timeout = timeout_init_us(CLKSRC_TIMEOUT);
-	while ((io_read32(chgclkreq_reg) & A35_SS_CHGCLKREQ_ARM_CHGCLKACK) !=
-	       0U) {
+	while ((stm32mp_syscfg_read(A35SS_SSC_CHGCLKREQ) &
+		A35SS_SSC_CHGCLKREQ_ARM_CHGCLKACK_MASK) != 0U) {
 		if (timeout_elapsed(timeout)) {
-			EMSG("CA35SS switch to PLL1 failed @ 0x%lx: 0x%x\n",
-			      chgclkreq_reg, io_read32(chgclkreq_reg));
+			EMSG("A35 switch to PLL1 failed !\n");
 			return -1;
 		}
 	}
@@ -1767,19 +1739,15 @@ static int stm32mp2_a35_pll1_start(void)
 static void stm32mp2_a35_pll1_config(uint32_t fbdiv, uint32_t refdiv,
 				     uint32_t postdiv1, uint32_t postdiv2)
 {
-	uintptr_t a35_ss_address = stm32_a35_base();
-	uintptr_t pll_freq1_reg = a35_ss_address + A35_SS_PLL_FREQ1;
-	uintptr_t pll_freq2_reg = a35_ss_address + A35_SS_PLL_FREQ2;
+	stm32mp_syscfg_write(A35SS_SSC_PLL_FREQ1,
+			     ((refdiv << A35SS_SSC_PLL_FREQ1_REFDIV_SHIFT) |
+			      (fbdiv << A35SS_SSC_PLL_FREQ1_FBDIV_SHIFT)),
+			     A35SS_SSC_PLL_FREQ1_MASK);
 
-	io_clrsetbits32(pll_freq1_reg, A35_SS_PLL_FREQ1_MASK,
-			((refdiv << A35_SS_PLL_FREQ1_REFDIV_SHIFT) |
-			(fbdiv << A35_SS_PLL_FREQ1_FBDIV_SHIFT)) &
-			A35_SS_PLL_FREQ1_MASK);
-
-	io_clrsetbits32(pll_freq2_reg, A35_SS_PLL_FREQ2_MASK,
-			((postdiv1 << A35_SS_PLL_FREQ2_POSTDIV1_SHIFT) |
-			(postdiv2 << A35_SS_PLL_FREQ2_POSTDIV2_SHIFT)) &
-			A35_SS_PLL_FREQ2_MASK);
+	stm32mp_syscfg_write(A35SS_SSC_PLL_FREQ2,
+			     ((postdiv1 << A35SS_SSC_PLL_FREQ2_POSTDIV1_SHIFT) |
+			      (postdiv2 << A35SS_SSC_PLL_FREQ2_POSTDIV2_SHIFT)),
+			     A35SS_SSC_PLL_FREQ2_MASK);
 }
 
 static int clk_stm32_pll_config_output(struct clk_stm32_priv *priv,
@@ -2559,16 +2527,15 @@ struct clk_stm32_pll_cfg {
 
 static unsigned long clk_get_pll1_fvco_rate(unsigned long refclk)
 {
-	uintptr_t pll_freq1_reg = stm32_a35_base() + A35_SS_PLL_FREQ1;
-	uint32_t reg, fbdiv, refdiv;
+	uint32_t reg = stm32mp_syscfg_read(A35SS_SSC_PLL_FREQ1);
+	uint32_t fbdiv = 0U;
+	uint32_t refdiv = 0U;
 
-	reg = io_read32(pll_freq1_reg);
+	fbdiv = (reg & A35SS_SSC_PLL_FREQ1_FBDIV_MASK) >>
+		 A35SS_SSC_PLL_FREQ1_FBDIV_SHIFT;
 
-	fbdiv = (reg & A35_SS_PLL_FREQ1_FBDIV_MASK) >>
-		 A35_SS_PLL_FREQ1_FBDIV_SHIFT;
-
-	refdiv = (reg & A35_SS_PLL_FREQ1_REFDIV_MASK) >>
-		  A35_SS_PLL_FREQ1_REFDIV_SHIFT;
+	refdiv = (reg & A35SS_SSC_PLL_FREQ1_REFDIV_MASK) >>
+		  A35SS_SSC_PLL_FREQ1_REFDIV_SHIFT;
 
 	return (unsigned long)(refclk * fbdiv / refdiv);
 }
@@ -2576,15 +2543,16 @@ static unsigned long clk_get_pll1_fvco_rate(unsigned long refclk)
 static unsigned long clk_stm32_pll1_get_rate(__maybe_unused struct clk *clk,
 					     unsigned long prate)
 {
-	uintptr_t pll_freq2_reg = stm32_a35_base() + A35_SS_PLL_FREQ2;
-	uint32_t postdiv1, postdiv2;
-	unsigned long dfout;
+	uint32_t reg = stm32mp_syscfg_read(A35SS_SSC_PLL_FREQ2);
+	unsigned long dfout = 0UL;
+	uint32_t postdiv1 = 0U;
+	uint32_t postdiv2 = 0U;
 
-	postdiv1 = (io_read32(pll_freq2_reg) & A35_SS_PLL_FREQ2_POSTDIV1_MASK) >>
-		    A35_SS_PLL_FREQ2_POSTDIV1_SHIFT;
+	postdiv1 = (reg & A35SS_SSC_PLL_FREQ2_POSTDIV1_MASK) >>
+		    A35SS_SSC_PLL_FREQ2_POSTDIV1_SHIFT;
 
-	postdiv2 = (io_read32(pll_freq2_reg) & A35_SS_PLL_FREQ2_POSTDIV2_MASK) >>
-		    A35_SS_PLL_FREQ2_POSTDIV2_SHIFT;
+	postdiv2 = (reg & A35SS_SSC_PLL_FREQ2_POSTDIV2_MASK) >>
+		    A35SS_SSC_PLL_FREQ2_POSTDIV2_SHIFT;
 
 	if (postdiv1 == 0U || postdiv2 == 0U)
 		dfout = prate;
@@ -3027,17 +2995,12 @@ static const struct clk_ops clk_stm32_flexgen_ops = {
 	.restore_context = clk_stm32_flexgen_pm_restore,
 };
 
-#define MUX_A35_OFFSET		A35_SS_CHGCLKREQ
-#define MUX_A35_SHIFT		1
-#define MUX_A35_WIDTH		1
-
 static size_t clk_cpu1_get_parent(__maybe_unused struct clk *clk)
 {
-	uint32_t mask = MASK_WIDTH_SHIFT(MUX_A35_WIDTH, MUX_A35_SHIFT);
-	uintptr_t a35_ss_address = stm32_a35_base();
+	uint32_t reg = stm32mp_syscfg_read(A35SS_SSC_CHGCLKREQ);
 
-	return (io_read32(a35_ss_address + MUX_A35_OFFSET) & mask)
-		>> MUX_A35_SHIFT;
+	return (reg & A35SS_SSC_CHGCLKREQ_ARM_CHGCLKACK_MASK) >>
+		A35SS_SSC_CHGCLKREQ_ARM_CHGCLKACK_SHIFT;
 }
 
 static TEE_Result clk_cpu1_determine_rate(struct clk *clk,

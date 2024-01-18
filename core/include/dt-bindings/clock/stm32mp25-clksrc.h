@@ -109,9 +109,8 @@
 #define MUX_DSIPHY	18
 #define MUX_LVDSPHY	19
 #define MUX_DTS		20
-#define MUX_CPU1	21
-#define MUX_D3PER	22
-#define MUX_NB		23
+#define MUX_D3PER	21
+#define MUX_NB		22
 
 #define MUXSEL_HSI		0
 #define MUXSEL_HSE		1
