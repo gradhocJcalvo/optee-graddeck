@@ -4,6 +4,9 @@ flavor_dts_file-257F_EV1 = stm32mp257f-ev1.dts
 flavorlist-MP25 = $(flavor_dts_file-257F_DK) \
 		  $(flavor_dts_file-257F_EV1)
 
+# List of all DTS for this PLATFORM
+ALL_DTS = $(flavorlist-MP25)
+
 # Check if device-tree exist in OP-TEE source code, else search it in external
 # device tree repository
 ifeq ($(wildcard $(arch-dir)/dts/$(CFG_EMBED_DTB_SOURCE_FILE)),)
