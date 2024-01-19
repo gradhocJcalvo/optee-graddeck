@@ -82,6 +82,7 @@ $(call force,CFG_SCMI_SERVER_REGULATOR_CONSUMER,y)
 $(call force,CFG_SECURE_TIME_SOURCE_CNTPCT,y)
 $(call force,CFG_STM32_SHARED_IO,y)
 $(call force,CFG_STM32_FIREWALL,y)
+$(call force,CFG_STM32_HSE_MONITORING,y)
 $(call force,CFG_STM32_PWR,y)
 $(call force,CFG_STM32_PWR_REGUL,y)
 $(call force,CFG_STM32MP_CLK_CORE,y)
@@ -166,6 +167,10 @@ CFG_STM32_EARLY_CONSOLE_UART ?= 2
 
 # Default disable external DT support
 CFG_EXTERNAL_DT ?= n
+
+ifeq ($(CFG_STM32_HSE_MONITORING),y)
+$(call force,CFG_STM32_LPTIMER,y)
+endif
 
 CFG_STM32MP_REMOTEPROC ?= n
 CFG_DRIVERS_REMOTEPROC ?= $(CFG_STM32MP_REMOTEPROC)
