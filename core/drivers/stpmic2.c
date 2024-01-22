@@ -470,8 +470,7 @@ TEE_Result stpmic2_regulator_set_prop(struct stpmic2 *pmic, uint8_t id,
 	case STPMIC2_OCP:
 		/* enable mask reset */
 		return stpmic2_register_update(pmic, regul->ocp_reg,
-					       regul->ocp_mask,
-					       regul->ocp_mask);
+					       U(0), regul->ocp_mask);
 	case STPMIC2_PWRCTRL_EN:
 		if (!regul->pwrctrl_cr)
 			return TEE_ERROR_BAD_PARAMETERS;
@@ -630,13 +629,11 @@ static void stpmic2_handle_ocp(struct stpmic2 *pmic, uint8_t reg_index,
 		if (val & BIT(i)) {
 			uint8_t id = (reg_index - 2) * 8 + i;
 
-			EMSG("******************************************");
 			EMSG("Overcurrent detected on %s, disable regulator",
 			     regul_table[id].name);
-			EMSG("******************************************");
 
-			if (stpmic2_regulator_set_state(pmic, id, false))
-				panic();
+			stpmic2_regulator_set_state(pmic, id, false);
+			panic();
 		}
 	}
 }
