@@ -287,7 +287,6 @@
 				regulator-name = "vdd_sdcard";
 				regulator-min-microvolt = <3300000>;
 				regulator-max-microvolt = <3300000>;
-				regulator-always-on;
 				regulator-over-current-protection;
 				st,regulator-bypass-microvolt = <3300000>;
 				st,pwrctrl_sel = <3>;
