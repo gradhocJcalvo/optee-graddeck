@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: BSD-2-Clause
 /*
- * Copyright (c) 2022, STMicroelectronics
+ * Copyright (c) 2022-2024, STMicroelectronics
  */
 #include <assert.h>
 #include <compiler.h>
@@ -114,6 +114,158 @@ struct channel_resources {
 	size_t perfd_count;
 };
 
+#ifdef CFG_STM32MP21
+static struct stm32_scmi_clk stm32_scmi_clock[] = {
+	/*
+	 * Some SCMI clocks are allowed to manipulate their rate:
+	 * FLXEGEN_10: SPI2
+	 * FLXEGEN_11: SPI3
+	 * FLEXGEN_16: SPI1
+	 * FLEXGEN_22: SAI1
+	 * FLEXGEN_23: SAI2
+	 * FLEXGEN_24: SAI3
+	 * FLEXGEN_25: SAI4
+	 * FLEXGEN_27: LTDC
+	 */
+	CLOCK_CELL(CK_SCMI_ICN_HS_MCU, CK_ICN_HS_MCU, "ck_icn_hs_mcu", true),
+
+	CLOCK_CELL(CK_SCMI_ICN_SDMMC, CK_ICN_SDMMC, "ck_icn_sdmmc", true),
+
+	CLOCK_CELL(CK_SCMI_ICN_DDR, CK_ICN_DDR, "ck_icn_ddr", true),
+	CLOCK_CELL(CK_SCMI_ICN_DISPLAY, CK_ICN_DISPLAY, "ck_icn_display", true),
+	CLOCK_CELL(CK_SCMI_ICN_HSL, CK_ICN_HSL, "ck_icn_hsl", true),
+	CLOCK_CELL(CK_SCMI_ICN_NIC, CK_ICN_NIC, "ck_icn_nic", true),
+
+	CLOCK_CELL(CK_SCMI_FLEXGEN_07, CK_FLEXGEN_07, "ck_flexgen_07", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_08, CK_FLEXGEN_08, "ck_flexgen_08", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_09, CK_FLEXGEN_09, "ck_flexgen_09", true),
+
+	CLOCK_CELL_RATES(CK_SCMI_FLEXGEN_10, CK_FLEXGEN_10, "ck_flexgen_10",
+			 true),
+	CLOCK_CELL_RATES(CK_SCMI_FLEXGEN_11, CK_FLEXGEN_11, "ck_flexgen_11",
+			 true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_12, CK_FLEXGEN_12, "ck_flexgen_12", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_13, CK_FLEXGEN_13, "ck_flexgen_13", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_14, CK_FLEXGEN_14, "ck_flexgen_14", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_15, CK_FLEXGEN_15, "ck_flexgen_15", true),
+	CLOCK_CELL_RATES(CK_SCMI_FLEXGEN_16, CK_FLEXGEN_16, "ck_flexgen_16",
+			 true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_17, CK_FLEXGEN_17, "ck_flexgen_17", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_18, CK_FLEXGEN_18, "ck_flexgen_18", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_19, CK_FLEXGEN_19, "ck_flexgen_19", true),
+
+	CLOCK_CELL(CK_SCMI_FLEXGEN_20, CK_FLEXGEN_20, "ck_flexgen_20", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_21, CK_FLEXGEN_21, "ck_flexgen_21", true),
+	CLOCK_CELL_RATES(CK_SCMI_FLEXGEN_22, CK_FLEXGEN_22, "ck_flexgen_22",
+			 true),
+	CLOCK_CELL_RATES(CK_SCMI_FLEXGEN_23, CK_FLEXGEN_23, "ck_flexgen_23",
+			 true),
+	CLOCK_CELL_RATES(CK_SCMI_FLEXGEN_24, CK_FLEXGEN_24, "ck_flexgen_24",
+			 true),
+	CLOCK_CELL_RATES(CK_SCMI_FLEXGEN_25, CK_FLEXGEN_25, "ck_flexgen_25",
+			 true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_26, CK_FLEXGEN_26, "ck_flexgen_26", true),
+	CLOCK_CELL_RATES(CK_SCMI_FLEXGEN_27, CK_FLEXGEN_27, "ck_flexgen_27",
+			 true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_28, CK_FLEXGEN_28, "ck_flexgen_28", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_29, CK_FLEXGEN_29, "ck_flexgen_29", true),
+
+	CLOCK_CELL(CK_SCMI_FLEXGEN_30, CK_FLEXGEN_30, "ck_flexgen_30", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_31, CK_FLEXGEN_31, "ck_flexgen_31", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_32, CK_FLEXGEN_32, "ck_flexgen_32", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_33, CK_FLEXGEN_33, "ck_flexgen_33", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_34, CK_FLEXGEN_34, "ck_flexgen_34", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_35, CK_FLEXGEN_35, "ck_flexgen_35", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_36, CK_FLEXGEN_36, "ck_flexgen_36", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_37, CK_FLEXGEN_37, "ck_flexgen_37", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_38, CK_FLEXGEN_38, "ck_flexgen_38", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_39, CK_FLEXGEN_39, "ck_flexgen_39", true),
+
+	CLOCK_CELL(CK_SCMI_FLEXGEN_40, CK_FLEXGEN_40, "ck_flexgen_40", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_41, CK_FLEXGEN_41, "ck_flexgen_41", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_42, CK_FLEXGEN_42, "ck_flexgen_42", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_43, CK_FLEXGEN_43, "ck_flexgen_43", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_44, CK_FLEXGEN_44, "ck_flexgen_44", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_45, CK_FLEXGEN_45, "ck_flexgen_45", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_46, CK_FLEXGEN_46, "ck_flexgen_46", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_47, CK_FLEXGEN_47, "ck_flexgen_47", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_48, CK_FLEXGEN_48, "ck_flexgen_48", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_49, CK_FLEXGEN_49, "ck_flexgen_49", true),
+
+	CLOCK_CELL(CK_SCMI_FLEXGEN_50, CK_FLEXGEN_50, "ck_flexgen_50", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_51, CK_FLEXGEN_51, "ck_flexgen_51", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_52, CK_FLEXGEN_52, "ck_flexgen_52", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_53, CK_FLEXGEN_53, "ck_flexgen_53", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_54, CK_FLEXGEN_54, "ck_flexgen_54", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_55, CK_FLEXGEN_55, "ck_flexgen_55", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_56, CK_FLEXGEN_56, "ck_flexgen_56", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_57, CK_FLEXGEN_57, "ck_flexgen_57", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_58, CK_FLEXGEN_58, "ck_flexgen_58", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_59, CK_FLEXGEN_59, "ck_flexgen_59", true),
+
+	CLOCK_CELL(CK_SCMI_FLEXGEN_60, CK_FLEXGEN_60, "ck_flexgen_60", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_61, CK_FLEXGEN_61, "ck_flexgen_61", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_62, CK_FLEXGEN_62, "ck_flexgen_62", true),
+	CLOCK_CELL(CK_SCMI_FLEXGEN_63, CK_FLEXGEN_63, "ck_flexgen_63", true),
+
+	CLOCK_CELL(CK_SCMI_ICN_LS_MCU, CK_ICN_LS_MCU, "ck_icn_ls_mcu", true),
+	CLOCK_CELL(CK_SCMI_HSE, HSE_CK, "hse_ck", true),
+	CLOCK_CELL(CK_SCMI_LSE, LSE_CK, "lse_ck", true),
+	CLOCK_CELL(CK_SCMI_HSI, HSI_CK, "hsi_ck", true),
+	CLOCK_CELL(CK_SCMI_LSI, LSI_CK, "lsi_ck", true),
+	CLOCK_CELL(CK_SCMI_MSI, MSI_CK, "msi_ck", true),
+
+	CLOCK_CELL(CK_SCMI_RTCCK, RTC_CK, "rtc_ck", true),
+
+	CLOCK_CELL(CK_SCMI_ICN_APB1, CK_ICN_APB1, "ck_icn_apb1", true),
+	CLOCK_CELL(CK_SCMI_ICN_APB2, CK_ICN_APB2, "ck_icn_apb2", true),
+	CLOCK_CELL(CK_SCMI_ICN_APB3, CK_ICN_APB3, "ck_icn_apb3", true),
+	CLOCK_CELL(CK_SCMI_ICN_APB4, CK_ICN_APB4, "ck_icn_apb4", true),
+	CLOCK_CELL(CK_SCMI_ICN_APB5, CK_ICN_APB5, "ck_icn_apb5", true),
+
+	CLOCK_CELL(CK_SCMI_ICN_APBDBG, CK_ICN_APBDBG, "ck_icn_apbdbg", true),
+
+	CLOCK_CELL(CK_SCMI_TIMG1, TIMG1_CK, "timg1_ck", true),
+	CLOCK_CELL(CK_SCMI_TIMG2, TIMG2_CK, "timg2_ck", true),
+
+	CLOCK_CELL(CK_SCMI_BKPSRAM, CK_BUS_BKPSRAM, "ck_bus_bkpsram", true),
+	CLOCK_CELL(CK_SCMI_BSEC, CK_BUS_BSEC, "ck_bus_bsec", true),
+	CLOCK_CELL(CK_SCMI_BUS_ETR, CK_BUS_ETR, "ck_icn_p_etr", true),
+	CLOCK_CELL(CK_SCMI_FMC, CK_KER_FMC, "ck_ker_fmc", true),
+	CLOCK_CELL(CK_SCMI_GPIOA, CK_BUS_GPIOA, "ck_bus_gpioa", true),
+	CLOCK_CELL(CK_SCMI_GPIOB, CK_BUS_GPIOB, "ck_bus_gpiob", true),
+	CLOCK_CELL(CK_SCMI_GPIOC, CK_BUS_GPIOC, "ck_bus_gpioc", true),
+	CLOCK_CELL(CK_SCMI_GPIOD, CK_BUS_GPIOD, "ck_bus_gpiod", true),
+	CLOCK_CELL(CK_SCMI_GPIOE, CK_BUS_GPIOE, "ck_bus_gpioe", true),
+	CLOCK_CELL(CK_SCMI_GPIOF, CK_BUS_GPIOF, "ck_bus_gpiof", true),
+	CLOCK_CELL(CK_SCMI_GPIOG, CK_BUS_GPIOG, "ck_bus_gpiog", true),
+	CLOCK_CELL(CK_SCMI_GPIOH, CK_BUS_GPIOH, "ck_bus_gpioh", true),
+	CLOCK_CELL(CK_SCMI_GPIOI, CK_BUS_GPIOI, "ck_bus_gpioi", true),
+	CLOCK_CELL(CK_SCMI_GPIOZ, CK_BUS_GPIOZ, "ck_bus_gpioz", true),
+	CLOCK_CELL(CK_SCMI_HPDMA1, CK_BUS_HPDMA1, "ck_bus_hpdma1", true),
+	CLOCK_CELL(CK_SCMI_HPDMA2, CK_BUS_HPDMA2, "ck_bus_hpdma2", true),
+	CLOCK_CELL(CK_SCMI_HPDMA3, CK_BUS_HPDMA3, "ck_bus_hpdma3", true),
+	CLOCK_CELL(CK_SCMI_IPCC1, CK_BUS_IPCC1, "ck_bus_ipcc1", true),
+	CLOCK_CELL(CK_SCMI_RETRAM, CK_BUS_RETRAM, "ck_bus_retram", true),
+	CLOCK_CELL(CK_SCMI_RTC, CK_BUS_RTC, "ck_bus_rtc", true),
+	CLOCK_CELL(CK_SCMI_SRAM1, CK_BUS_SRAM1, "ck_bus_sram1", true),
+	CLOCK_CELL(CK_SCMI_SYSCPU1, CK_BUS_SYSCPU1, "ck_bus_syscpu1", true),
+	CLOCK_CELL(CK_SCMI_CPU1, CK_CPU1, "ck_cpu1", true),
+	CLOCK_CELL(CK_SCMI_HSE_DIV2, HSE_DIV2_CK, "hse_div2_ck", false),
+	CLOCK_CELL(CK_SCMI_PLL2, PLL2_CK, "ck_pll2", true),
+	CLOCK_CELL(CK_SCMI_SYSRAM, CK_BUS_SYSRAM, "ck_icn_s_sysram", true),
+	CLOCK_CELL(CK_SCMI_OSPI1, CK_KER_OSPI1, "ck_ker_ospi1", true),
+	CLOCK_CELL(CK_SCMI_TPIU, CK_KER_TPIU, "ck_ker_tpiu", true),
+	CLOCK_CELL(CK_SCMI_SYSDBG, CK_SYSDBG, "ck_sys_dbg", true),
+	CLOCK_CELL(CK_SCMI_SYSATB, CK_BUS_SYSATB, "ck_sys_atb", true),
+	CLOCK_CELL(CK_SCMI_TSDBG, CK_KER_TSDBG, "ck_ker_tsdbg", true),
+	CLOCK_CELL(CK_SCMI_KER_ETR, CK_KER_ETR, "ck_icn_m_etr", true),
+	CLOCK_CELL(CK_SCMI_BUS_STM, CK_BUS_STM, "ck_icn_p_stm", true),
+	CLOCK_CELL(CK_SCMI_KER_STM, CK_BUS_STM, "ck_icn_s_stm", true),
+};
+
+#else /* CFG_STM32MP21 */
+
 static struct stm32_scmi_clk stm32_scmi_clock[] = {
 	/*
 	 * Some SCMI clocks are allowed to manipulate their rate:
@@ -216,6 +368,7 @@ static struct stm32_scmi_clk stm32_scmi_clock[] = {
 	CLOCK_CELL(CK_SCMI_ICN_APB2, CK_ICN_APB2, "ck_icn_apb2", true),
 	CLOCK_CELL(CK_SCMI_ICN_APB3, CK_ICN_APB3, "ck_icn_apb3", true),
 	CLOCK_CELL(CK_SCMI_ICN_APB4, CK_ICN_APB4, "ck_icn_apb4", true),
+
 	CLOCK_CELL(CK_SCMI_ICN_APBDBG, CK_ICN_APBDBG, "ck_icn_apbdbg", true),
 
 	CLOCK_CELL(CK_SCMI_TIMG1, TIMG1_CK, "timg1_ck", true),
@@ -266,6 +419,7 @@ static struct stm32_scmi_clk stm32_scmi_clock[] = {
 	CLOCK_CELL(CK_SCMI_TSDBG, CK_KER_TSDBG, "ck_ker_tsdbg", true),
 	CLOCK_CELL(CK_SCMI_STM500, CK_BUS_STM500, "ck_icn_s_stm500", true),
 };
+#endif
 
 static struct stm32_scmi_rd stm32_scmi_reset[] = {
 	RESET_CELL(RST_SCMI_C1_R, C1_R, 0, "c1"),
@@ -275,7 +429,9 @@ static struct stm32_scmi_rd stm32_scmi_reset[] = {
 	/* SCMI FMC reset allowed: RCC driver stubs request if necessary */
 	RESET_CELL(RST_SCMI_FMC, FMC_R, 0, "fmc"),
 	RESET_CELL(RST_SCMI_OSPI1, OSPI1_R, OSPI1_BASE, "ospi1"),
+#if (defined(CFG_STM32MP25) || defined(CFG_STM32MP23))
 	RESET_CELL(RST_SCMI_OSPI2, OSPI2_R, OSPI2_BASE, "ospi2"),
+#endif
 	RESET_CELL(RST_SCMI_OSPI1DLL, OSPI1DLL_R, OSPI1_BASE, "ospi1_ddl"),
 	RESET_CELL(RST_SCMI_OSPI2DLL, OSPI2DLL_R, OSPI2_BASE, "ospi2_ddl"),
 };
