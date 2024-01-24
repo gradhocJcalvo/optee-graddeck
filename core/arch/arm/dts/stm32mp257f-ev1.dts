@@ -429,6 +429,10 @@
 		reg = <VOLTD_SCMI_STPMIC2_LDO2>;
 		voltd-supply = <&vdd_emmc>;
 	};
+	voltd-vdd3v3-usb {
+		reg = <VOLTD_SCMI_STPMIC2_LDO4>;
+		voltd-supply = <&vdd3v3_usb>;
+	};
 	voltd-vdd-sdcard {
 		reg = <VOLTD_SCMI_STPMIC2_LDO7>;
 		voltd-supply = <&vdd_sdcard>;
