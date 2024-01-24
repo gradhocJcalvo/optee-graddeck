@@ -138,10 +138,8 @@ struct bsec_dev {
 	unsigned int max_id;
 	unsigned int lock;
 	struct bsec_shadow *shadow;
-#ifdef CFG_DT
 	struct nvmem_cell *cells;
 	size_t cell_count;
-#endif
 };
 
 /* Magic use to indicated valid SHADOW = 'B' 'S' 'E' 'C' */
@@ -1010,7 +1008,7 @@ TEE_Result stm32_bsec_find_otp_by_phandle(const uint32_t phandle,
 	return TEE_ERROR_ITEM_NOT_FOUND;
 }
 
-static void save_dt_nvmem_layout(void *fdt, int bsec_node)
+static void initialize_nvmem_layout_from_dt(void *fdt, int bsec_node)
 {
 	int cell_max = 0;
 	int cell_cnt = 0;
@@ -1101,24 +1099,15 @@ static void save_dt_nvmem_layout(void *fdt, int bsec_node)
 	bsec_dev.cell_count = cell_cnt;
 }
 
-static void initialize_bsec_from_dt(void)
+static void initialize_bsec_from_dt(void *fdt, int node)
 {
-	void *fdt = NULL;
-	int node = 0;
 	struct dt_node_info bsec_info = { };
-
-	fdt = get_embedded_dt();
-	node = fdt_node_offset_by_compatible(fdt, 0, "st,stm32mp25-bsec");
-	if (node < 0)
-		panic();
 
 	fdt_fill_device_info(fdt, &bsec_info, node);
 
 	if (bsec_info.reg != bsec_dev.base.pa ||
 	    !(bsec_info.status & DT_STATUS_OK_SEC))
 		panic();
-
-	save_dt_nvmem_layout(fdt, node);
 }
 
 static TEE_Result
@@ -1142,7 +1131,9 @@ stm32_bsec_pm(enum pm_op op, unsigned int pm_hint,
 static TEE_Result initialize_bsec(void)
 {
 	struct stm32_bsec_static_cfg cfg = { };
+	void *fdt = NULL;
 	vaddr_t va = 0;
+	int node = 0;
 
 	plat_bsec_get_static_cfg(&cfg);
 
@@ -1155,7 +1146,12 @@ static TEE_Result initialize_bsec(void)
 	bsec_dev.upper_base = cfg.upper_start;
 	bsec_dev.max_id = cfg.max_id;
 
-	initialize_bsec_from_dt();
+	fdt = get_embedded_dt();
+	node = fdt_node_offset_by_compatible(fdt, 0, "st,stm32mp25-bsec");
+	if (node < 0)
+		panic();
+
+	initialize_bsec_from_dt(fdt, node);
 
 	if ((bsec_get_version() != BSEC_IP_VERSION_1_0) ||
 	    (bsec_get_id() != BSEC_IP_ID_3))
@@ -1165,6 +1161,8 @@ static TEE_Result initialize_bsec(void)
 
 	/* initialize the shadow */
 	stm32_bsec_shadow_init(true);
+
+	initialize_nvmem_layout_from_dt(fdt, node);
 
 	register_pm_core_service_cb(stm32_bsec_pm, NULL, "stm32-bsec");
 
