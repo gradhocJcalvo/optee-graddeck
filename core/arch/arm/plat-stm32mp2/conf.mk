@@ -86,13 +86,14 @@ $(call force,CFG_STM32_PWR,y)
 $(call force,CFG_STM32_PWR_REGUL,y)
 $(call force,CFG_STM32MP_CLK_CORE,y)
 $(call force,CFG_STM32MP_REMOTEPROC,y)
-$(call force,CFG_STM32MP25_RSTCTRL,y)
 $(call force,CFG_WITH_ARM_TRUSTED_FW,y)
 $(call force,CFG_WITH_LPAE,y)
 
 ifeq ($(CFG_STM32MP21),y)
+$(call force,CFG_STM32MP21_RSTCTRL,y)
 $(call force,CFG_STM32MP21_CLK,y)
 else
+$(call force,CFG_STM32MP25_RSTCTRL,y)
 $(call force,CFG_STM32MP25_CLK,y)
 endif
 
@@ -188,6 +189,10 @@ CFG_WDT_SM_HANDLER ?= $(CFG_WDT)
 CFG_WDT_SM_HANDLER_ID ?= 0xbc000000
 
 # Enable reset control
+ifeq ($(CFG_STM32MP21_RSTCTRL),y)
+$(call force,CFG_DRIVERS_RSTCTRL,y)
+$(call force,CFG_STM32_RSTCTRL,y)
+endif
 ifeq ($(CFG_STM32MP25_RSTCTRL),y)
 $(call force,CFG_DRIVERS_RSTCTRL,y)
 $(call force,CFG_STM32_RSTCTRL,y)
