@@ -82,4 +82,11 @@ TEE_Result stm32_rproc_set_boot_address(uint32_t rproc_id, paddr_t address);
  * Return TEE_SUCCESS or appropriate error.
  */
 TEE_Result stm32_rproc_enable_sec_boot(uint32_t rproc_id);
+
+/*
+ * stm32_rproc_clean() - clean resources
+ * @rproc_id	unique identifier of the remote processor
+ * Return TEE_SUCCESS or appropriate error.
+ */
+TEE_Result stm32_rproc_clean(uint32_t rproc_id);
 #endif /* __DRIVERS_STM32_REMOTEPROC_H */

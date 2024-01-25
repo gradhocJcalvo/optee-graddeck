@@ -231,6 +231,24 @@ TEE_Result stm32_rproc_da_to_pa(uint32_t rproc_id, paddr_t da, size_t size,
 	return TEE_ERROR_ACCESS_DENIED;
 }
 
+static TEE_Result stm32_rproc_map_mem(paddr_t pa, size_t size, void **va,
+				      enum teecore_memtypes type)
+{
+	/*
+	 * TODO: get memory RIF access right to determine the type.
+	 */
+	if (!core_mmu_add_mapping(type, pa, size)) {
+		EMSG("Can't map region %#"PRIxPA" size %zu",
+		     pa, size);
+		return TEE_ERROR_GENERIC;
+	}
+	*va = (void *)core_mmu_get_va(pa, type, size);
+	if (!*va)
+		return TEE_ERROR_ACCESS_DENIED;
+
+	return TEE_SUCCESS;
+}
+
 TEE_Result stm32_rproc_map(uint32_t rproc_id, paddr_t pa, size_t size,
 			   void **va)
 {
@@ -248,18 +266,32 @@ TEE_Result stm32_rproc_map(uint32_t rproc_id, paddr_t pa, size_t size,
 					   mems[i].size))
 			continue;
 		/*
-		 * TODO: get memory access right from Firewall to determine the
-		 * type. For now, The type is forced to MEM_AREA_RAM_NSEC
+		 * Only secure part is tested, the non-secure is not tested
+		 * as it is not possible to distinguish the FW memory from
+		 * the shared memory. The shared memory could be used by
+		 * the secure firmware.
 		 */
-		*va = core_mmu_add_mapping(mems[i].type, pa, size);
-		if (!*va) {
-			EMSG("Can't map region %#"PRIxPA" size %zu", pa, size);
-			return TEE_ERROR_GENERIC;
-		}
-		return TEE_SUCCESS;
+		if (mems[i].type == MEM_AREA_RAM_SEC && !rproc->tzen)
+			return	TEE_ERROR_CORRUPT_OBJECT;
+
+		return stm32_rproc_map_mem(pa, size, va, mems[i].type);
 	}
 
 	return TEE_ERROR_ACCESS_DENIED;
+}
+
+static TEE_Result stm32_rproc_unmap_mem(void *va, size_t size,
+					enum teecore_memtypes type)
+{
+	/* Flush the cache before unmapping the memory */
+	dcache_clean_range(va, size);
+
+	if (core_mmu_remove_mapping(type, va, size)) {
+		EMSG("Can't unmap region %p size %zu", va, size);
+		return TEE_ERROR_GENERIC;
+	}
+
+	return TEE_SUCCESS;
 }
 
 TEE_Result stm32_rproc_unmap(uint32_t rproc_id, void *va, size_t size)
@@ -279,15 +311,7 @@ TEE_Result stm32_rproc_unmap(uint32_t rproc_id, void *va, size_t size)
 					   mems[i].size))
 			continue;
 
-		/* Flush the cache before unmapping the memory */
-		dcache_clean_range(va, size);
-
-		if (core_mmu_remove_mapping(mems[i].type, va, size)) {
-			EMSG("Can't map region %#"PRIxPA" size %zu", pa, size);
-			return TEE_ERROR_GENERIC;
-		}
-
-		return TEE_SUCCESS;
+		return stm32_rproc_unmap_mem(va, size, mems[i].type);
 	}
 
 	return TEE_ERROR_ACCESS_DENIED;
@@ -336,6 +360,33 @@ static TEE_Result stm32_rproc_get_dma_range(struct stm32_rproc_mem *region,
 	}
 
 	return TEE_ERROR_BAD_PARAMETERS;
+}
+
+TEE_Result stm32_rproc_clean(uint32_t rproc_id)
+{
+	struct stm32_rproc_instance *rproc = stm32_rproc_get(rproc_id);
+	struct stm32_rproc_mem *mems = NULL;
+	unsigned int i = 0;
+	paddr_t pa = 0;
+	void *va = NULL;
+	size_t size = 0;
+	TEE_Result res = TEE_ERROR_GENERIC;
+
+	if (!rproc)
+		return TEE_ERROR_BAD_PARAMETERS;
+	mems = rproc->regions;
+	for (i = 0; i < rproc->n_regions; i++) {
+		pa = mems[i].addr;
+		size = mems[i].size;
+		res = stm32_rproc_map_mem(pa, size, &va, mems[i].type);
+		if (res)
+			return res;
+		memset(va, 0, size);
+		res = stm32_rproc_unmap_mem(va, size, mems[i].type);
+		if (res)
+			return res;
+	}
+	return TEE_SUCCESS;
 }
 
 TEE_Result stm32_rproc_set_boot_address(uint32_t rproc_id, paddr_t address)
