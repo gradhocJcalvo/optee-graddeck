@@ -116,6 +116,7 @@
 				regulator-name = "vddgpu_pmic";
 				regulator-min-microvolt = <800000>;
 				regulator-max-microvolt = <900000>;
+				regulator-over-current-protection;
 			};
 			vddio_pmic: buck4 {
 				regulator-name = "vddio_pmic";
@@ -196,6 +197,7 @@
 				regulator-min-microvolt = <3300000>;
 				regulator-max-microvolt = <3300000>;
 				regulator-always-on;
+				regulator-over-current-protection;
 				st,pwrctrl_sel = <1>;
 				st,pwrctrl_enable;
 
@@ -225,6 +227,7 @@
 				regulator-name = "vdd_emmc";
 				regulator-min-microvolt = <3300000>;
 				regulator-max-microvolt = <3300000>;
+				regulator-over-current-protection;
 				st,pwrctrl_sel = <3>;
 				st,pwrctrl_reset;
 			};
@@ -257,6 +260,7 @@
 				regulator-min-microvolt = <3300000>;
 				regulator-max-microvolt = <3300000>;
 				regulator-always-on;
+				regulator-over-current-protection;
 			};
 			v5v_hdmi: ldo5 {
 				regulator-name = "v5v_hdmi";
@@ -279,6 +283,7 @@
 				regulator-name = "vdd_sdcard";
 				regulator-min-microvolt = <3300000>;
 				regulator-max-microvolt = <3300000>;
+				regulator-over-current-protection;
 				st,regulator-bypass-microvolt = <3300000>;
 				st,pwrctrl_sel = <3>;
 				st,pwrctrl_reset;
@@ -287,6 +292,7 @@
 				regulator-name = "vddio_sdcard";
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <3300000>;
+				regulator-over-current-protection;
 				st,regulator-bypass-microvolt = <3300000>;
 				st,pwrctrl_sel = <3>;
 				st,pwrctrl_reset;
