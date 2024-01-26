@@ -352,6 +352,10 @@
 	status = "okay";
 };
 
+&tamp {
+	st,backup-zones = <10 5 17>;
+};
+
 &timers15 {
 	status = "okay";
 
