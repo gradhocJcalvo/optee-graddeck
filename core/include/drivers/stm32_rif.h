@@ -98,6 +98,25 @@ static inline TEE_Result stm32_rifsc_check_tdcid(bool *tdcid_state)
 #endif
 
 /*
+ * Reconfigures a specific RISUP
+ *
+ * @risup_id:	ID of the RISUP to reconfigure.
+ * @cid:	CID to set.
+ * @sec:	Peripheral is set to secure/non-secure
+ * @priv:	Peripheral is set to privileged/non-privileged
+ * @cfen:	Activate cid filetring
+ *
+ * Returns TEE_SUCCESS in case of success.
+ * Returns TEE_ERROR_BAD_PARAMETERS if either the RISUP ID or the master cid is
+ * incorrect.
+ * Returns TEE_ERROR_ACCESS_DENIED if the RISUP can't be reconfigured.
+ * Returns any TEE_Result compliant code in case of error.
+ */
+TEE_Result stm32_rifsc_reconfigure_risup(unsigned int risup_id,
+					 unsigned int cid,
+					 bool sec, bool priv, bool cfen);
+
+/*
  * Reconfigures a specific RIMU
  *
  * @id:		ID of the RIMU to reconfigure.

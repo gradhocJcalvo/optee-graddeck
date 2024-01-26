@@ -515,6 +515,45 @@ static TEE_Result stm32_rimu_setup(struct rifsc_platdata *pdata)
 	return 0;
 }
 
+TEE_Result stm32_rifsc_reconfigure_risup(unsigned int risup_id,
+					 unsigned int cid,
+					 bool sec, bool priv, bool cfen)
+{
+	unsigned int offset = sizeof(uint32_t) *
+			      (risup_id / _PERIPH_IDS_PER_REG);
+	TEE_Result res = TEE_ERROR_GENERIC;
+	struct risup_cfg *risup = NULL;
+
+	if (risup_id > rifsc_pdata.drv_data->nb_risup ||
+	    cid > MAX_CID_SUPPORTED)
+		return TEE_ERROR_BAD_PARAMETERS;
+
+	risup = &rifsc_pdata.risup[risup_id];
+
+	if (io_read32(rifsc_pdata.base + _RIFSC_RISC_RCFGLOCKR0 + offset) &
+	    BIT(risup_id % _PERIPH_IDS_PER_REG)) {
+		DMSG("RIMU configuration is locked");
+		return TEE_ERROR_ACCESS_DENIED;
+	}
+
+	risup->cid_attr = cid << RIFSC_RISC_SCID_SHIFT;
+	if (cfen)
+		risup->cid_attr |= RIFSC_RISC_CFEN_MASK;
+	else
+		risup->cid_attr &= ~RIFSC_RISC_CFEN_MASK;
+
+	risup->sec = sec;
+	risup->priv = priv;
+
+	res = stm32_risup_cfg(&rifsc_pdata, risup);
+	if (res) {
+		EMSG("RISUP %u reconfiguration error", risup_id);
+		return res;
+	}
+
+	return TEE_SUCCESS;
+}
+
 TEE_Result stm32_rifsc_reconfigure_rimu(unsigned int id,
 					unsigned int master_cid,
 					bool cid_sel, bool sec, bool priv)
