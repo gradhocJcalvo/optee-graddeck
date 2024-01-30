@@ -218,38 +218,38 @@ static void stm32_rtc_read_calendar(struct stm32_rtc_calendar *calendar)
 
 /* Fill the RTC timestamp structure from a given RTC time-in-day value */
 static void stm32_rtc_get_time(struct stm32_rtc_calendar *cal,
-			       struct stm32_rtc_time *tm)
+			       struct optee_rtc_time *tm)
 {
-	tm->hour = (((cal->tr & RTC_TR_HT_MASK) >> RTC_TR_HT_SHIFT) * 10) +
+	tm->tm_hour = (((cal->tr & RTC_TR_HT_MASK) >> RTC_TR_HT_SHIFT) * 10) +
 		   ((cal->tr & RTC_TR_HU_MASK) >> RTC_TR_HU_SHIFT);
 
 	if (cal->tr & RTC_TR_PM)
-		tm->hour += 12;
+		tm->tm_hour += 12;
 
-	tm->min = (((cal->tr & RTC_TR_MNT_MASK) >> RTC_TR_MNT_SHIFT) * 10) +
+	tm->tm_min = (((cal->tr & RTC_TR_MNT_MASK) >> RTC_TR_MNT_SHIFT) * 10) +
 		  ((cal->tr & RTC_TR_MNU_MASK) >> RTC_TR_MNU_SHIFT);
-	tm->sec = (((cal->tr & RTC_TR_ST_MASK) >> RTC_TR_ST_SHIFT) * 10) +
+	tm->tm_sec = (((cal->tr & RTC_TR_ST_MASK) >> RTC_TR_ST_SHIFT) * 10) +
 		  (cal->tr & RTC_TR_SU_MASK);
 }
 
 /* Fill the RTC timestamp structure from a given RTC date value */
 static void stm32_rtc_get_date(struct stm32_rtc_calendar *cal,
-			       struct stm32_rtc_time *tm)
+			       struct optee_rtc_time *tm)
 {
-	tm->wday = (((cal->dr & RTC_DR_WDU_MASK) >> RTC_DR_WDU_SHIFT));
+	tm->tm_wday = (((cal->dr & RTC_DR_WDU_MASK) >> RTC_DR_WDU_SHIFT));
 
-	tm->day = (((cal->dr & RTC_DR_DT_MASK) >> RTC_DR_DT_SHIFT) * 10) +
+	tm->tm_mday = (((cal->dr & RTC_DR_DT_MASK) >> RTC_DR_DT_SHIFT) * 10) +
 		  (cal->dr & RTC_DR_DU_MASK);
 
-	tm->month = (((cal->dr & RTC_DR_MT) >> RTC_DR_MT_SHIFT) * 10) +
+	tm->tm_mon = (((cal->dr & RTC_DR_MT) >> RTC_DR_MT_SHIFT) * 10) +
 		    ((cal->dr & RTC_DR_MU_MASK) >> RTC_DR_MU_SHIFT);
 
-	tm->year = (((cal->dr & RTC_DR_YT_MASK) >> RTC_DR_YT_SHIFT) * 10) +
+	tm->tm_year = (((cal->dr & RTC_DR_YT_MASK) >> RTC_DR_YT_SHIFT) * 10) +
 		   ((cal->dr & RTC_DR_YU_MASK) >> RTC_DR_YU_SHIFT) + 2000;
 }
 
 /* Update time value with RTC timestamp */
-static void stm32_rtc_read_timestamp(struct stm32_rtc_time *time)
+static void stm32_rtc_read_timestamp(struct optee_rtc_time *time)
 {
 	struct stm32_rtc_calendar cal_tamp = { };
 	vaddr_t rtc_base = get_base();
@@ -334,19 +334,19 @@ static signed long long stm32_rtc_diff_subs_ms(struct stm32_rtc_calendar *cur,
 }
 
 /* Return absolute difference in milliseconds on seconds-in-day fraction */
-static signed long long stm32_rtc_diff_time_ms(struct stm32_rtc_time *current,
-					       struct stm32_rtc_time *ref)
+static signed long long stm32_rtc_diff_time_ms(struct optee_rtc_time *current,
+					       struct optee_rtc_time *ref)
 {
 	signed long long curr_s = 0;
 	signed long long ref_s = 0;
 
-	curr_s = (signed long long)current->sec +
-		 (((signed long long)current->min +
-		  (((signed long long)current->hour * 60))) * 60);
+	curr_s = (signed long long)current->tm_sec +
+		 (((signed long long)current->tm_min +
+		  (((signed long long)current->tm_hour * 60))) * 60);
 
-	ref_s = (signed long long)ref->sec +
-		(((signed long long)ref->min +
-		 (((signed long long)ref->hour * 60))) * 60);
+	ref_s = (signed long long)ref->tm_sec +
+		(((signed long long)ref->tm_min +
+		 (((signed long long)ref->tm_hour * 60))) * 60);
 
 	return (curr_s - ref_s) * 1000U;
 }
@@ -358,62 +358,62 @@ static bool stm32_is_a_leap_year(uint32_t year)
 }
 
 /* Return absolute difference in milliseconds on day-in-year fraction */
-static signed long long stm32_rtc_diff_date_ms(struct stm32_rtc_time *current,
-					       struct stm32_rtc_time *ref)
+static signed long long stm32_rtc_diff_date_ms(struct optee_rtc_time *current,
+					       struct optee_rtc_time *ref)
 {
 	uint32_t diff_in_days = 0;
 	uint32_t m = 0;
-	const uint8_t month_len[NB_MONTHS] = {
+	const uint8_t month_len[] = {
 		31, 28, 31, 30, 31, 30,
 		31, 31, 30, 31, 30, 31
 	};
 
 	/* Get the number of non-entire month days */
-	if (current->day >= ref->day)
-		diff_in_days += current->day - ref->day;
+	if (current->tm_mday >= ref->tm_mday)
+		diff_in_days += current->tm_mday - ref->tm_mday;
 	else
-		diff_in_days += month_len[ref->month - 1] -
-				ref->day + current->day;
+		diff_in_days += month_len[ref->tm_mon - 1] -
+				ref->tm_mday + current->tm_mday;
 
 	/* Get the number of entire months, and compute the related days */
-	if (current->month > (ref->month + 1))
-		for (m = ref->month + 1; m < current->month && m < 12; m++)
+	if (current->tm_mon > (ref->tm_mon + 1))
+		for (m = ref->tm_mon + 1; m < current->tm_mon && m < 12; m++)
 			diff_in_days += month_len[m - 1];
 
-	if (current->month < (ref->month - 1)) {
-		for (m = 1; m < current->month && m < 12; m++)
+	if (current->tm_mon < (ref->tm_mon - 1)) {
+		for (m = 1; m < current->tm_mon && m < 12; m++)
 			diff_in_days += month_len[m - 1];
 
-		for (m = ref->month + 1; m < 12; m++)
+		for (m = ref->tm_mon + 1; m < 12; m++)
 			diff_in_days += month_len[m - 1];
 	}
 
 	/* Get complete years */
-	if (current->year > (ref->year + 1))
-		diff_in_days += (current->year - ref->year - 1) * 365;
+	if (current->tm_year > (ref->tm_year + 1))
+		diff_in_days += (current->tm_year - ref->tm_year - 1) * 365;
 
 	/* Particular cases: leap years (one day more) */
 	if (diff_in_days > 0) {
-		if (current->year == ref->year) {
-			if (stm32_is_a_leap_year(current->year) &&
-			    ref->month <= 2 &&
-			    current->month >= 3 && current->day <= 28)
+		if (current->tm_year == ref->tm_year) {
+			if (stm32_is_a_leap_year(current->tm_year) &&
+			    ref->tm_mon <= 2 &&
+			    current->tm_mon >= 3 && current->tm_mday <= 28)
 				diff_in_days++;
 		} else {
 			uint32_t y = 0;
 
 			/* Ref year is leap */
-			if (stm32_is_a_leap_year(ref->year) &&
-			    ref->month <= 2 && ref->day <= 28)
+			if (stm32_is_a_leap_year(ref->tm_year) &&
+			    ref->tm_mon <= 2 && ref->tm_mday <= 28)
 				diff_in_days++;
 
 			/* Current year is leap */
-			if (stm32_is_a_leap_year(current->year) &&
-			    current->month >= 3)
+			if (stm32_is_a_leap_year(current->tm_year) &&
+			    current->tm_mon >= 3)
 				diff_in_days++;
 
 			/* Interleaved years are leap */
-			for (y = ref->year + 1; y < current->year; y++)
+			for (y = ref->tm_year + 1; y < current->tm_year; y++)
 				if (stm32_is_a_leap_year(y))
 					diff_in_days++;
 		}
@@ -430,8 +430,8 @@ unsigned long long stm32_rtc_diff_calendar_ms(struct stm32_rtc_calendar *cur,
 					      struct stm32_rtc_calendar *ref)
 {
 	signed long long diff_in_ms = 0;
-	struct stm32_rtc_time curr_t = { };
-	struct stm32_rtc_time ref_t = { };
+	struct optee_rtc_time curr_t = { };
+	struct optee_rtc_time ref_t = { };
 
 	stm32_rtc_get_date(cur, &curr_t);
 	stm32_rtc_get_date(ref, &ref_t);
@@ -457,8 +457,8 @@ unsigned long long stm32_rtc_diff_calendar_tick(struct stm32_rtc_calendar *cur,
 						unsigned long tick_rate)
 {
 	signed long long diff_in_tick = 0;
-	struct stm32_rtc_time curr_t = { };
-	struct stm32_rtc_time ref_t = { };
+	struct optee_rtc_time curr_t = { };
+	struct optee_rtc_time ref_t = { };
 
 	stm32_rtc_get_date(cur, &curr_t);
 	stm32_rtc_get_date(ref, &ref_t);
@@ -477,7 +477,7 @@ unsigned long long stm32_rtc_diff_calendar_tick(struct stm32_rtc_calendar *cur,
 	return (unsigned long long)diff_in_tick;
 }
 
-TEE_Result stm32_rtc_get_timestamp(struct stm32_rtc_time *tamp_ts)
+TEE_Result stm32_rtc_get_timestamp(struct optee_rtc_time *tamp_ts)
 {
 	TEE_Result res = TEE_ERROR_GENERIC;
 	vaddr_t rtc_base = get_base();

@@ -1458,7 +1458,7 @@ static enum itr_return stm32_tamp_it_handler(struct itr_handler *h __unused)
 	uint32_t int_it = it & _TAMP_SR_ITAMPXF_MASK;
 	uint32_t ext_it = it & _TAMP_SR_ETAMPXF_MASK;
 	size_t i = 0;
-	struct stm32_rtc_time tamp_ts = { };
+	struct optee_rtc_time tamp_ts = { };
 	bool ts_enabled = false;
 
 	if (stm32_rtc_is_timestamp_enable(&ts_enabled))
@@ -1468,8 +1468,8 @@ static enum itr_return stm32_tamp_it_handler(struct itr_handler *h __unused)
 		stm32_rtc_get_timestamp(&tamp_ts);
 		FMSG("Tamper Event Occurred");
 		FMSG("Date: %u/%u\n \t Time: %u:%u:%u",
-		     tamp_ts.day, tamp_ts.month, tamp_ts.hour,
-		     tamp_ts.min, tamp_ts.sec);
+		     tamp_ts.tm_mday, tamp_ts.tm_mon, tamp_ts.tm_hour,
+		     tamp_ts.tm_min, tamp_ts.tm_sec);
 	}
 
 	while (int_it && i < stm32_tamp.pdata.compat->int_tamp_size) {

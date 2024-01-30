@@ -7,6 +7,7 @@
 #ifndef __PLAT_RTC_H__
 #define __PLAT_RTC_H__
 
+#include <drivers/rtc.h>
 #include <stdbool.h>
 #include <tee_api_types.h>
 
@@ -14,32 +15,6 @@ struct stm32_rtc_calendar {
 	uint32_t ssr;
 	uint32_t tr;
 	uint32_t dr;
-};
-
-enum months {
-	JANUARY = 1,
-	FEBRUARY,
-	MARCH,
-	APRIL,
-	MAY,
-	JUNE,
-	JULY,
-	AUGUST,
-	SEPTEMBER,
-	OCTOBER,
-	NOVEMBER,
-	DECEMBER,
-	NB_MONTHS = 12
-};
-
-struct stm32_rtc_time {
-	uint32_t hour;
-	uint32_t min;
-	uint32_t sec;
-	uint32_t wday;
-	uint32_t day;
-	enum months month;
-	uint32_t year;
 };
 
 /*
@@ -80,7 +55,7 @@ TEE_Result stm32_rtc_is_timestamp_enable(bool *ret);
  * Get RTC timestamp for current time
  * Returns TEE_Success on success, TEE_ERROR_* otherwise.
  */
-TEE_Result stm32_rtc_get_timestamp(struct stm32_rtc_time *tamp_ts);
+TEE_Result stm32_rtc_get_timestamp(struct optee_rtc_time *tamp_ts);
 
 TEE_Result stm32_rtc_driver_is_initialized(void);
 
