@@ -95,7 +95,6 @@ struct regulator_voltages_desc {
  * @max_uv: Max possible voltage level in microvolt (uV)
  * @ramp_delay_uv_per_us: Voltage level change delay in uV/s
  * @enable_ramp_delay_us: Delay after enable, in microseconds (us)
- * @cur_uv: Current voltage level in microvolt (uV)
  * @flags: REGULATOR_* property flags
  * @refcount: Regulator enable request reference counter
  * @lock: Mutex for concurrent access protection
@@ -113,7 +112,6 @@ struct regulator {
 	unsigned int ramp_delay_uv_per_us;
 	unsigned int enable_ramp_delay_us;
 	/* Fields internal to regulator framework */
-	int cur_uv;
 	unsigned int flags;
 	unsigned int refcount;
 	struct mutex lock;	/* Concurrent access protection */
@@ -298,10 +296,7 @@ static inline TEE_Result regulator_set_min_voltage(struct regulator *regulator)
  * regulator_get_voltage() - Get regulator current level in microvolt
  * @regulator: Regulator reference
  */
-static inline int regulator_get_voltage(struct regulator *regulator)
-{
-	return regulator->cur_uv;
-}
+int regulator_get_voltage(struct regulator *regulator);
 
 /*
  * regulator_get_range() - Get regulator min and/or max support levels
