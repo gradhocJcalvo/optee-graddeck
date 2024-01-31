@@ -66,7 +66,7 @@
 #define RTC_DR_DT_SHIFT			U(4)
 #define RTC_DR_MU_MASK			GENMASK_32(11, 8)
 #define RTC_DR_MU_SHIFT			U(8)
-#define RTC_DR_MT			BIT(12)
+#define RTC_DR_MT_MASK			BIT(12)
 #define RTC_DR_MT_SHIFT			U(12)
 #define RTC_DR_WDU_MASK			GENMASK_32(15, 13)
 #define RTC_DR_WDU_SHIFT		U(13)
@@ -78,6 +78,8 @@
 #define RTC_SSR_SS_MASK			GENMASK_32(15, 0)
 
 #define RTC_ICSR_RSF			BIT(5)
+#define RTC_ICSR_INITF			BIT(6)
+#define RTC_ICSR_INIT			BIT(7)
 
 #define RTC_PRER_PREDIV_S_MASK		GENMASK_32(14, 0)
 
@@ -144,6 +146,7 @@
 
 #define TIMEOUT_US_RTC_SHADOW		U(10000)
 #define MS_PER_SEC			U(1000)
+#define TIMEOUT_US_RTC_GENERIC		U(100000)
 
 struct rtc_compat {
 	bool has_seccfgr;
@@ -158,6 +161,7 @@ struct rtc_device {
 	struct rif_conf_data *conf_data;
 	unsigned int nb_res;
 	uint8_t flags;
+	bool is_secured;
 };
 
 /* Expect a single RTC instance */
@@ -217,8 +221,8 @@ static void stm32_rtc_read_calendar(struct stm32_rtc_calendar *calendar)
 }
 
 /* Fill the RTC timestamp structure from a given RTC time-in-day value */
-static void stm32_rtc_get_time(struct stm32_rtc_calendar *cal,
-			       struct optee_rtc_time *tm)
+static void stm32_rtc_fill_time(struct stm32_rtc_calendar *cal,
+				struct optee_rtc_time *tm)
 {
 	tm->tm_hour = (((cal->tr & RTC_TR_HT_MASK) >> RTC_TR_HT_SHIFT) * 10) +
 		   ((cal->tr & RTC_TR_HU_MASK) >> RTC_TR_HU_SHIFT);
@@ -233,15 +237,15 @@ static void stm32_rtc_get_time(struct stm32_rtc_calendar *cal,
 }
 
 /* Fill the RTC timestamp structure from a given RTC date value */
-static void stm32_rtc_get_date(struct stm32_rtc_calendar *cal,
-			       struct optee_rtc_time *tm)
+static void stm32_rtc_fill_date(struct stm32_rtc_calendar *cal,
+				struct optee_rtc_time *tm)
 {
 	tm->tm_wday = (((cal->dr & RTC_DR_WDU_MASK) >> RTC_DR_WDU_SHIFT));
 
 	tm->tm_mday = (((cal->dr & RTC_DR_DT_MASK) >> RTC_DR_DT_SHIFT) * 10) +
 		  (cal->dr & RTC_DR_DU_MASK);
 
-	tm->tm_mon = (((cal->dr & RTC_DR_MT) >> RTC_DR_MT_SHIFT) * 10) +
+	tm->tm_mon = (((cal->dr & RTC_DR_MT_MASK) >> RTC_DR_MT_SHIFT) * 10) +
 		    ((cal->dr & RTC_DR_MU_MASK) >> RTC_DR_MU_SHIFT);
 
 	tm->tm_year = (((cal->dr & RTC_DR_YT_MASK) >> RTC_DR_YT_SHIFT) * 10) +
@@ -256,8 +260,8 @@ static void stm32_rtc_read_timestamp(struct optee_rtc_time *time)
 
 	cal_tamp.tr = io_read32(rtc_base + RTC_TSTR);
 	cal_tamp.dr = io_read32(rtc_base + RTC_TSDR);
-	stm32_rtc_get_time(&cal_tamp, time);
-	stm32_rtc_get_date(&cal_tamp, time);
+	stm32_rtc_fill_time(&cal_tamp, time);
+	stm32_rtc_fill_date(&cal_tamp, time);
 }
 
 TEE_Result stm32_rtc_get_calendar(struct stm32_rtc_calendar *calendar)
@@ -433,10 +437,10 @@ unsigned long long stm32_rtc_diff_calendar_ms(struct stm32_rtc_calendar *cur,
 	struct optee_rtc_time curr_t = { };
 	struct optee_rtc_time ref_t = { };
 
-	stm32_rtc_get_date(cur, &curr_t);
-	stm32_rtc_get_date(ref, &ref_t);
-	stm32_rtc_get_time(cur, &curr_t);
-	stm32_rtc_get_time(ref, &ref_t);
+	stm32_rtc_fill_date(cur, &curr_t);
+	stm32_rtc_fill_date(ref, &ref_t);
+	stm32_rtc_fill_time(cur, &curr_t);
+	stm32_rtc_fill_time(ref, &ref_t);
 
 	diff_in_ms += stm32_rtc_diff_subs_ms(cur, ref);
 	diff_in_ms += stm32_rtc_diff_time_ms(&curr_t, &ref_t);
@@ -460,10 +464,10 @@ unsigned long long stm32_rtc_diff_calendar_tick(struct stm32_rtc_calendar *cur,
 	struct optee_rtc_time curr_t = { };
 	struct optee_rtc_time ref_t = { };
 
-	stm32_rtc_get_date(cur, &curr_t);
-	stm32_rtc_get_date(ref, &ref_t);
-	stm32_rtc_get_time(cur, &curr_t);
-	stm32_rtc_get_time(ref, &ref_t);
+	stm32_rtc_fill_date(cur, &curr_t);
+	stm32_rtc_fill_date(ref, &ref_t);
+	stm32_rtc_fill_time(cur, &curr_t);
+	stm32_rtc_fill_time(ref, &ref_t);
 
 	diff_in_tick += stm32_rtc_diff_subs_tick(cur, ref, tick_rate);
 	diff_in_tick += stm32_rtc_diff_time_ms(&curr_t, &ref_t) *
@@ -618,6 +622,7 @@ static void apply_rif_config(bool is_tdcid)
 	/* Check if all resources must be secured */
 	if (seccfgr == RTC_RIF_FULL_SECURED) {
 		io_setbits32(base + RTC_SECCFGR, RTC_SECCFGR_FULL_SEC);
+		rtc_dev.is_secured = true;
 
 		if (!(io_read32(base + RTC_SECCFGR) & RTC_SECCFGR_FULL_SEC))
 			panic("Bad RTC seccfgr configuration");
@@ -729,6 +734,135 @@ static TEE_Result parse_dt(const void *fdt, int node)
 	return TEE_SUCCESS;
 }
 
+static TEE_Result stm32_rtc_enter_init_mode(void)
+{
+	vaddr_t base = get_base();
+	uint32_t icsr = io_read32(base + RTC_ICSR);
+	uint32_t value = 0;
+
+	if (!(icsr & RTC_ICSR_INITF)) {
+		icsr |= RTC_ICSR_INIT;
+		io_write32(base + RTC_ICSR, icsr);
+
+		if (IO_READ32_POLL_TIMEOUT(base + RTC_ICSR, value,
+					   value & RTC_ICSR_INITF,
+					   10, TIMEOUT_US_RTC_GENERIC))
+			return TEE_ERROR_BUSY;
+	}
+
+	return TEE_SUCCESS;
+}
+
+static void stm32_rtc_exit_init_mode(void)
+{
+	io_clrbits32(get_base() + RTC_ICSR, RTC_ICSR_INIT);
+}
+
+static TEE_Result stm32_rtc_wait_sync(void)
+{
+	vaddr_t base = get_base();
+	uint32_t value = 0;
+
+	io_clrbits32(base + RTC_ICSR, RTC_ICSR_RSF);
+
+	if (IO_READ32_POLL_TIMEOUT(base + RTC_ICSR, value,
+				   value & RTC_ICSR_RSF, 10,
+				   TIMEOUT_US_RTC_GENERIC))
+		return TEE_ERROR_BUSY;
+
+	return TEE_SUCCESS;
+}
+
+static TEE_Result stm32_rtc_get_time(struct rtc *rtc __unused,
+				     struct optee_rtc_time *tm)
+{
+	struct stm32_rtc_calendar cal = { };
+	TEE_Result res = TEE_ERROR_GENERIC;
+
+	res = stm32_rtc_get_calendar(&cal);
+	if (res)
+		return res;
+
+	stm32_rtc_fill_time(&cal, tm);
+	stm32_rtc_fill_date(&cal, tm);
+
+	/*
+	 * In our RTC we start :
+	 * - year at 0
+	 * - month at 1
+	 * - day at 1
+	 * - weekday at Monday = 1
+	 */
+	tm->tm_mon -= 1;
+	tm->tm_wday %= 7;
+
+	return TEE_SUCCESS;
+}
+
+static TEE_Result stm32_rtc_set_time(struct rtc *rtc, struct optee_rtc_time *tm)
+{
+	vaddr_t rtc_base = get_base();
+	uint32_t tr = 0;
+	uint32_t dr = 0;
+	TEE_Result res = TEE_ERROR_GENERIC;
+
+	/*
+	 * In our RTC we start :
+	 * - year at 0
+	 * - month at 1
+	 * - day at 1
+	 * - weekday at Monday = 1
+	 */
+	tm->tm_year -= rtc->range_min.tm_year;
+	tm->tm_mon += 1;
+	tm->tm_wday = (!tm->tm_wday) ? 7 : tm->tm_wday;
+
+	tr = ((tm->tm_sec % 10) & RTC_TR_SU_MASK) |
+	     (((tm->tm_sec / 10) << RTC_TR_ST_SHIFT) & RTC_TR_ST_MASK) |
+	     (((tm->tm_min % 10) << RTC_TR_MNU_SHIFT) & RTC_TR_MNU_MASK) |
+	     (((tm->tm_min / 10) << RTC_TR_MNT_SHIFT) & RTC_TR_MNT_MASK) |
+	     (((tm->tm_hour % 10) << RTC_TR_HU_SHIFT) & RTC_TR_HU_MASK) |
+	     (((tm->tm_hour / 10) << RTC_TR_HT_SHIFT) & RTC_TR_HT_MASK);
+
+	dr = ((tm->tm_mday % 10) & RTC_DR_DU_MASK) |
+	     (((tm->tm_mday / 10) << RTC_DR_DT_SHIFT) & RTC_DR_DT_MASK) |
+	     (((tm->tm_mon % 10) << RTC_DR_MU_SHIFT) & RTC_DR_MU_MASK) |
+	     (((tm->tm_mon / 10) << RTC_DR_MT_SHIFT) & RTC_DR_MT_MASK) |
+	     ((tm->tm_wday << RTC_DR_WDU_SHIFT) & RTC_DR_WDU_MASK) |
+	     (((tm->tm_year % 10) << RTC_DR_YU_SHIFT) & RTC_DR_YU_MASK) |
+	     (((tm->tm_year / 10) << RTC_DR_YT_SHIFT) & RTC_DR_YT_MASK);
+
+	stm32_rtc_write_unprotect();
+
+	res = stm32_rtc_enter_init_mode();
+	if (res)
+		return res;
+
+	io_write32(rtc_base + RTC_TR, tr);
+	io_write32(rtc_base + RTC_DR, dr);
+
+	stm32_rtc_exit_init_mode();
+
+	res = stm32_rtc_wait_sync();
+	if (res)
+		return res;
+
+	stm32_rtc_write_protect();
+
+	return TEE_SUCCESS;
+}
+
+static const struct rtc_ops stm32_rtc_ops = {
+	.get_time = stm32_rtc_get_time,
+	.set_time = stm32_rtc_set_time,
+};
+
+static struct rtc stm32_rtc = {
+	.ops = &stm32_rtc_ops,
+	.range_min = { 2000, 1, 1, 0, 0, 0, 0 },
+	.range_max = { 2099, 12, 31, 23, 59, 59, 0 },
+};
+
 static TEE_Result stm32_rtc_probe(const void *fdt, int node,
 				  const void *compat_data)
 {
@@ -774,6 +908,9 @@ static TEE_Result stm32_rtc_probe(const void *fdt, int node,
 
 		clk_disable(rtc_dev.pclk);
 	}
+
+	if (rtc_dev.is_secured)
+		rtc_register(&stm32_rtc);
 
 	return res;
 }
