@@ -8,6 +8,7 @@
 
 #include <dt-bindings/clock/stm32mp1-clksrc.h>
 #include <dt-bindings/mfd/st,stpmic1.h>
+#include <dt-bindings/power/stm32mp1-power.h>
 #include <dt-bindings/soc/stm32mp15-etzpc.h>
 
 #include "stm32mp157.dtsi"
@@ -215,6 +216,13 @@
 };
 
 &pwr_regulators {
+	system_suspend_supported_soc_modes = <
+		STM32_PM_CSLEEP_RUN
+		STM32_PM_CSTOP_ALLOW_LP_STOP
+		STM32_PM_CSTOP_ALLOW_LPLV_STOP
+		STM32_PM_CSTOP_ALLOW_STANDBY_DDR_SR
+	>;
+	system_off_soc_mode = <STM32_PM_CSTOP_ALLOW_STANDBY_DDR_OFF>;
 	vdd-supply = <&vdd>;
 	vdd_3v3_usbfs-supply = <&vdd_usb>;
 };
