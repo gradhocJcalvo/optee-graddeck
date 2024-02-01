@@ -6,11 +6,16 @@
 #ifndef __DRIVERS_RTC_H
 #define __DRIVERS_RTC_H
 
-#include <tee_api_types.h>
+#include <stdbool.h>
+#include <tee_api.h>
 #include <util.h>
 
 /* The RTC allows to set/get offset for correction */
 #define RTC_CORRECTION_FEATURE	BIT(0)
+/* The RTC allows to set/read an alarm */
+#define RTC_ALARM_FEATURE	BIT(1)
+/* The RTC can wake-up the platform through alarm */
+#define RTC_WAKEUP_ALARM	BIT(2)
 
 struct optee_rtc_time {
 	uint32_t tm_year;
@@ -26,6 +31,31 @@ struct rtc {
 	const struct rtc_ops *ops;
 	struct optee_rtc_time range_min;
 	struct optee_rtc_time range_max;
+	bool is_wakeup_source;
+};
+
+/*
+ * struct optee_rtc_alarm - The RTC alarm
+ * @enabled:		1 if the alarm is enabled, 0 otherwise
+ * @pending:		1 if the alarm is pending, 0 otherwise
+ * @time:		The alarm time
+ */
+struct optee_rtc_alarm {
+	uint8_t enabled;
+	uint8_t pending;
+	struct optee_rtc_time time;
+};
+
+/*
+ * enum rtc_wait_alarm_status - Return status of the wait for the RTC alarm
+ * @RTC_WAIT_ALARM_RESET:		Reset the wait for the RTC alarm
+ * @RTC_WAIT_ALARM_ALARM_OCCURRED:	The RTC alarm occurred
+ * @RTC_WAIT_ALARM_CANCELED:		The wait for the RTC alarm was canceled
+ */
+enum rtc_wait_alarm_status {
+	RTC_WAIT_ALARM_RESET = 0x0,
+	RTC_WAIT_ALARM_ALARM_OCCURRED = 0x1,
+	RTC_WAIT_ALARM_CANCELED = 0x2,
 };
 
 /*
@@ -35,12 +65,25 @@ struct rtc {
  * @set_time:	Set the RTC time.
  * @get_offset:	Get the RTC offset.
  * @set_offset: Set the RTC offset
+ * @read_alarm:	Read the RTC alarm
+ * @set_alarm:	Set the RTC alarm
+ * @enable_alarm: Enable the RTC alarm
+ * @wait_alarm:	Wait for the RTC alarm
+ * @cancel_wait: Cancel the wait for the RTC alarm
+ * @set_alarm_wakeup_status: Set the wakeup capability of the alarm
  */
 struct rtc_ops {
 	TEE_Result (*get_time)(struct rtc *rtc, struct optee_rtc_time *tm);
 	TEE_Result (*set_time)(struct rtc *rtc, struct optee_rtc_time *tm);
 	TEE_Result (*get_offset)(struct rtc *rtc, long *offset);
 	TEE_Result (*set_offset)(struct rtc *rtc, long offset);
+	TEE_Result (*read_alarm)(struct rtc *rtc, struct optee_rtc_alarm *alrm);
+	TEE_Result (*set_alarm)(struct rtc *rtc, struct optee_rtc_alarm *alrm);
+	TEE_Result (*enable_alarm)(struct rtc *rtc, bool enable);
+	TEE_Result (*wait_alarm)(struct rtc *rtc,
+				 enum rtc_wait_alarm_status *status);
+	TEE_Result (*cancel_wait)(struct rtc *rtc);
+	TEE_Result (*set_alarm_wakeup_status)(struct rtc *rtc, bool status);
 };
 
 #ifdef CFG_DRIVERS_RTC
@@ -60,6 +103,12 @@ static inline TEE_Result rtc_get_info(uint64_t *features,
 		*features = RTC_CORRECTION_FEATURE;
 	*range_min = rtc_device->range_min;
 	*range_max = rtc_device->range_max;
+
+	if (rtc_device->ops->set_alarm)
+		*features |= RTC_ALARM_FEATURE;
+
+	if (rtc_device->is_wakeup_source)
+		*features |= RTC_WAKEUP_ALARM;
 
 	return TEE_SUCCESS;
 }
@@ -96,6 +145,53 @@ static inline TEE_Result rtc_set_offset(long offset)
 	return rtc_device->ops->set_offset(rtc_device, offset);
 }
 
+static inline TEE_Result rtc_read_alarm(struct optee_rtc_alarm *alarm)
+{
+	if (!rtc_device || !rtc_device->ops->read_alarm)
+		return TEE_ERROR_NOT_SUPPORTED;
+
+	return rtc_device->ops->read_alarm(rtc_device, alarm);
+}
+
+static inline TEE_Result rtc_set_alarm(struct optee_rtc_alarm *alarm)
+{
+	if (!rtc_device || !rtc_device->ops->set_alarm)
+		return TEE_ERROR_NOT_SUPPORTED;
+
+	return rtc_device->ops->set_alarm(rtc_device, alarm);
+}
+
+static inline TEE_Result rtc_enable_alarm(bool enable)
+{
+	if (!rtc_device || !rtc_device->ops->enable_alarm)
+		return TEE_ERROR_NOT_SUPPORTED;
+
+	return rtc_device->ops->enable_alarm(rtc_device, enable);
+}
+
+static inline TEE_Result rtc_wait_alarm(enum rtc_wait_alarm_status *status)
+{
+	if (!rtc_device || !rtc_device->ops->wait_alarm)
+		return TEE_ERROR_NOT_SUPPORTED;
+
+	return rtc_device->ops->wait_alarm(rtc_device, status);
+}
+
+static inline TEE_Result rtc_alarm_cancel_wait(void)
+{
+	if (!rtc_device || !rtc_device->ops->cancel_wait)
+		return TEE_ERROR_NOT_SUPPORTED;
+
+	return rtc_device->ops->cancel_wait(rtc_device);
+}
+
+static inline TEE_Result rtc_alarm_wake_set_status(int status)
+{
+	if (!rtc_device || !rtc_device->ops->set_alarm_wakeup_status)
+		return TEE_ERROR_NOT_SUPPORTED;
+
+	return rtc_device->ops->set_alarm_wakeup_status(rtc_device, status);
+}
 #else
 
 static inline void rtc_register(struct rtc *rtc __unused) {}
@@ -123,6 +219,37 @@ static inline TEE_Result rtc_get_offset(long *offset __unused)
 }
 
 static inline TEE_Result rtc_set_offset(long offset __unused)
+{
+	return TEE_ERROR_NOT_SUPPORTED;
+}
+
+static inline TEE_Result rtc_read_alarm(struct optee_rtc_alarm *alarm __unused)
+{
+	return TEE_ERROR_NOT_SUPPORTED;
+}
+
+static inline TEE_Result rtc_set_alarm(struct optee_rtc_alarm *alarm __unused)
+{
+	return TEE_ERROR_NOT_SUPPORTED;
+}
+
+static inline TEE_Result rtc_enable_alarm(int enable __unused)
+{
+	return TEE_ERROR_NOT_SUPPORTED;
+}
+
+static inline TEE_Result
+rtc_wait_alarm(enum rtc_wait_alarm_status *status __unused)
+{
+	return TEE_ERROR_NOT_SUPPORTED;
+}
+
+static inline TEE_Result rtc_alarm_cancel_wait(void)
+{
+	return TEE_ERROR_NOT_SUPPORTED;
+}
+
+static inline TEE_Result rtc_alarm_wakeup_set_status(int status __unused)
 {
 	return TEE_ERROR_NOT_SUPPORTED;
 }
