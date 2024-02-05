@@ -86,6 +86,34 @@ struct rtc_ops {
 	TEE_Result (*set_alarm_wakeup_status)(struct rtc *rtc, bool status);
 };
 
+/**
+ * rtc_is_a_leap_year() - Check if a year is a leap year
+ * @year:	The year to check
+ *
+ * Return:	true if the year is a leap year, false otherwise
+ */
+bool rtc_is_a_leap_year(uint32_t year);
+
+/**
+ * rtc_get_month_days() - Get the number of days in a month
+ * @month:	The month to know the number of days
+ * @year:	The year of the month
+ *
+ * Return:	Number of days in the month
+ */
+uint8_t rtc_get_month_days(uint32_t month, uint32_t year);
+
+/**
+ * rtc_timecmp() - Compare two RTC time structures
+ * @a:		First RTC time
+ * @b:		Second RTC time
+ *
+ * Return a negative value if a < b
+ * Return 0 if a == b
+ * Return a positive value if a > b
+ */
+int rtc_timecmp(struct optee_rtc_time *a, struct optee_rtc_time *b);
+
 #ifdef CFG_DRIVERS_RTC
 extern struct rtc *rtc_device;
 
