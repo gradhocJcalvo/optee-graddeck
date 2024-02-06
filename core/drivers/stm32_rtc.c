@@ -8,21 +8,19 @@
 #else
 #include <arm32.h>
 #endif /* CFG_ARM64_core */
-#include <config.h>
 #include <drivers/clk.h>
 #include <drivers/clk_dt.h>
 #include <drivers/stm32_rtc.h>
 #include <drivers/stm32_rif.h>
-#include <initcall.h>
 #include <io.h>
-#include <kernel/boot.h>
-#include <kernel/delay.h>
 #include <kernel/dt.h>
 #include <kernel/panic.h>
 #include <libfdt.h>
 #include <mm/core_memprot.h>
-#include <stm32_util.h>
 
+/*
+ * Registers
+ */
 #define RTC_TR				U(0x00)
 #define RTC_DR				U(0x04)
 #define RTC_SSR				U(0x08)
@@ -87,11 +85,24 @@
 #define RTC_CR_BYPSHAD_SHIFT		U(5)
 #define RTC_CR_TAMPTS			BIT(25)
 
+#define RTC_PRIVCFGR_VALUES		GENMASK_32(3, 0)
+#define RTC_PRIVCFGR_VALUES_TO_SHIFT	GENMASK_32(5, 4)
+#define RTC_PRIVCFGR_SHIFT		U(9)
+#define RTC_PRIVCFGR_MASK		(GENMASK_32(14, 13) | GENMASK_32(3, 0))
+#define RTC_PRIVCFGR_FULL_PRIV		BIT(15)
+
 #define RTC_SMCR_TS_DPROT		BIT(3)
-#define RTC_SR_TSF			BIT(3)
-#define RTC_SCR_CTSF			BIT(3)
-#define RTC_SR_TSOVF			BIT(4)
-#define RTC_SCR_CTSOVF			BIT(4)
+
+#define RTC_SECCFGR_VALUES		GENMASK_32(3, 0)
+#define RTC_SECCFGR_TS_SEC		BIT(3)
+#define RTC_SECCFGR_VALUES_TO_SHIFT	GENMASK_32(5, 4)
+#define RTC_SECCFGR_SHIFT		U(9)
+#define RTC_SECCFGR_MASK		(GENMASK_32(14, 13) | GENMASK_32(3, 0))
+#define RTC_SECCFGR_FULL_SEC		BIT(15)
+
+#define RTC_WPR_KEY1			U(0xCA)
+#define RTC_WPR_KEY2			U(0x53)
+#define RTC_WPR_KEY_LOCK		U(0xFF)
 
 #define RTC_TSDR_MU_MASK		GENMASK_32(11, 8)
 #define RTC_TSDR_MU_SHIFT		U(8)
@@ -100,40 +111,20 @@
 #define RTC_TSDR_DU_MASK		GENMASK_32(3, 0)
 #define RTC_TSDR_DU_SHIFT		U(0)
 
-#define RTC_WPR_KEY1			U(0xCA)
-#define RTC_WPR_KEY2			U(0x53)
-#define RTC_WPR_KEY_LOCK		U(0xFF)
+#define RTC_SR_TSF			BIT(3)
+#define RTC_SR_TSOVF			BIT(4)
+
+#define RTC_SCR_CTSF			BIT(3)
+#define RTC_SCR_CTSOVF			BIT(4)
 
 #define RTC_CIDCFGR_SCID_MASK		GENMASK_32(6, 4)
 #define RTC_CIDCFGR_SCID_MASK_SHIFT	U(4)
 #define RTC_CIDCFGR_CONF_MASK		(_CIDCFGR_CFEN |	 \
 					 RTC_CIDCFGR_SCID_MASK)
 
-#define RTC_PRIVCFGR_FULL_PRIV		BIT(15)
-#define RTC_PRIVCFGR_VALUES		GENMASK_32(3, 0)
-#define RTC_PRIVCFGR_VALUES_TO_SHIFT	GENMASK_32(5, 4)
-#define RTC_PRIVCFGR_SHIFT		U(9)
-#define RTC_PRIVCFGR_MASK		(GENMASK_32(14, 13) | GENMASK_32(3, 0))
-
-#define RTC_SECCFGR_FULL_SEC		BIT(15)
-#define RTC_SECCFGR_VALUES		GENMASK_32(3, 0)
-#define RTC_SECCFGR_VALUES_TO_SHIFT	GENMASK_32(5, 4)
-#define RTC_SECCFGR_SHIFT		U(9)
-#define RTC_SECCFGR_TS_SEC		BIT(3)
-#define RTC_SECCFGR_MASK		(GENMASK_32(14, 13) | GENMASK_32(3, 0))
-
-#define RTC_RES_TIMESTAMP		U(3)
-
-#define RTC_FLAGS_READ_TWICE		BIT(0)
-#define RTC_FLAGS_SECURE		BIT(1)
-
-#define TIMEOUT_US_RTC_SHADOW		U(10000)
-#define MS_PER_SEC			U(1000)
-
 /*
  * RIF miscellaneous
  */
-
 #define RTC_NB_RIF_RESOURCES		U(6)
 
 #define RTC_RIF_FULL_PRIVILEGED		U(0x3F)
@@ -142,6 +133,17 @@
 #define RTC_NB_MAX_CID_SUPPORTED	U(7)
 
 #define RTC_CID_1			U(1)
+
+/*
+ * Driver miscellaneous
+ */
+#define RTC_RES_TIMESTAMP		U(3)
+
+#define RTC_FLAGS_READ_TWICE		BIT(0)
+#define RTC_FLAGS_SECURE		BIT(1)
+
+#define TIMEOUT_US_RTC_SHADOW		U(10000)
+#define MS_PER_SEC			U(1000)
 
 struct rtc_compat {
 	bool has_seccfgr;
