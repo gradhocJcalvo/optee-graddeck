@@ -9,8 +9,11 @@
 #include <dt-bindings/clock/stm32mp13-clksrc.h>
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/gpio/stm32mp_gpio.h>
-#include <dt-bindings/soc/stm32mp13-etzpc.h>
 #include <dt-bindings/regulator/st,stm32mp13-regulator.h>
+#include <dt-bindings/soc/stm32mp-tzc400-macro.h>
+#include <dt-bindings/soc/stm32mp13-etzpc.h>
+#include <dt-bindings/soc/stm32mp13-etzpc.h>
+#include <dt-bindings/soc/stm32mp13-tzc400.h>
 #include <dt-bindings/tamper/st,stm32mp13-tamp.h>
 #include "stm32mp135.dtsi"
 #include "stm32mp13xf.dtsi"
@@ -42,7 +45,7 @@
 		optee_framebuffer: optee-framebuffer@dd000000 {
 			/* Secure framebuffer memory */
 			reg = <0xdd000000 0x1000000>;
-			no-map;
+			st,protreg = <TZC_REGION_S_RDWR 0>;
 		};
 	};
 
@@ -571,6 +574,10 @@
 		pinctrl-0 = <&tamp0_in3_pin_a &tamp0_out1_pin_a>;
 		status = "disabled";
 	};
+};
+
+&tzc400 {
+	memory-region = <&optee_framebuffer>;
 };
 
 &uart4 {
