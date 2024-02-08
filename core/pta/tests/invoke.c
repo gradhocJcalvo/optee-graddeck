@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: BSD-2-Clause
 /*
- * Copyright (c) 2014, STMicroelectronics International N.V.
+ * Copyright (c) 2014-2024, STMicroelectronics International N.V.
  */
 
 #include <compiler.h>
@@ -17,6 +17,7 @@
 #include <trace.h>
 #include <types_ext.h>
 
+#include "mbox_test.h"
 #include "misc.h"
 
 #define TA_NAME		"invoke_tests.pta"
@@ -433,6 +434,8 @@ static TEE_Result invoke_command(void *pSessionContext __unused,
 		return core_aes_perf_tests(nParamTypes, pParams);
 	case PTA_INVOKE_TESTS_CMD_DT_DRIVER_TESTS:
 		return core_dt_driver_tests(nParamTypes, pParams);
+	case PTA_INVOKE_TESTS_CMD_MBOX_TESTS:
+		return core_mbox_tests(nParamTypes, pParams);
 	default:
 		break;
 	}
