@@ -301,6 +301,10 @@
 	status = "okay";
 };
 
+&m33_rproc {
+	status = "okay";
+};
+
 &pwr {
 	status = "okay";
 
