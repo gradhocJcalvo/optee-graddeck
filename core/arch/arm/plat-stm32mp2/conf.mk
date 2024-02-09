@@ -275,6 +275,12 @@ ifeq ($(CFG_STM32_BSEC_PTA),y)
 $(call force,CFG_STM32_BSEC3,y,Mandated by CFG_STM32_BSEC_PTA)
 endif
 
+# Enable RTC
+ifeq ($(CFG_STM32_RTC),y)
+$(call force,CFG_DRIVERS_RTC,y)
+$(call force,CFG_RTC_PTA,y)
+endif
+
 # Enable Early TA NVMEM for provisioning management
 CFG_TA_STM32MP_NVMEM ?= y
 ifeq ($(CFG_TA_STM32MP_NVMEM),y)
