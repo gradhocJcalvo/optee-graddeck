@@ -438,6 +438,15 @@ static TEE_Result pmic_regu_pm(enum pm_op op, uint32_t pm_hint,
 	return apply_pm_state(regulator, mode);
 }
 
+static TEE_Result pmic_init(struct regulator *regulator)
+{
+	/* default configuration for STPMIC regulator */
+	regulator->ramp_delay_uv_per_us = U(2200);
+	regulator->enable_ramp_delay_us = U(1000);
+
+	return TEE_SUCCESS;
+}
+
 static TEE_Result pmic_supplied_init(struct regulator *regulator,
 				     const void *fdt, int node)
 {
@@ -497,6 +506,7 @@ static const struct regulator_ops pmic_regu_ops = {
 	.set_voltage = pmic_set_voltage,
 	.get_voltage = pmic_get_voltage,
 	.supported_voltages = pmic_list_voltages,
+	.init = pmic_init,
 	.supplied_init = pmic_supplied_init,
 };
 
