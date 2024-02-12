@@ -511,6 +511,10 @@ static void stm32_rproc_a35ss_cfg(struct stm32_rproc_instance *rproc __unused)
 	stm32mp_syscfg_write(A35SSC_M33CFG_ACCESS_CR, rproc->m33_cr_right,
 			     A35SSC_M33_TZEN_CR_M33CFG_SEC |
 			     A35SSC_M33_TZEN_CR_M33CFG_PRIV);
+	/* Disable the TrustZone that is enabled by default */
+	stm32mp_syscfg_write(A35SSC_M33_TZEN_CR, 0,
+			     A35SSC_M33_TZEN_CR_CFG_SECEXT);
+
 #endif /* defined(CFG_STM32MP25) || defined(CFG_STM32MP23) */
 }
 
