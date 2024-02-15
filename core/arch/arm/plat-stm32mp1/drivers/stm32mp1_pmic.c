@@ -8,13 +8,16 @@
 #include <drivers/regulator.h>
 #include <drivers/stm32_i2c.h>
 #include <drivers/stm32mp1_pmic.h>
+#include <drivers/stm32mp1_pwr.h>
 #include <drivers/stpmic1.h>
 #include <drivers/stpmic1_regulator.h>
+#include <dt-bindings/mfd/st,stpmic1.h>
 #include <io.h>
 #include <keep.h>
 #include <kernel/boot.h>
 #include <kernel/delay.h>
 #include <kernel/dt.h>
+#include <kernel/notif.h>
 #include <kernel/panic.h>
 #include <kernel/pm.h>
 #include <libfdt.h>
@@ -61,6 +64,17 @@ struct pmic_regulator_data {
 static struct i2c_handle_s *i2c_handle;
 static uint32_t pmic_i2c_addr;
 static int pmic_status = -1;
+
+struct pmic_it_handle_s {
+	uint8_t pmic_reg;
+	uint8_t pmic_bit;
+	uint8_t notif_id;
+
+	SLIST_ENTRY(pmic_it_handle_s) link;
+};
+
+static SLIST_HEAD(pmic_it_handle_head, pmic_it_handle_s) pmic_it_handle_list =
+	SLIST_HEAD_INITIALIZER(pmic_it_handle_list);
 
 /* CPU voltage supplier if found */
 static char cpu_supply_name[PMIC_REGU_SUPPLY_NAME_LEN];
@@ -764,6 +778,141 @@ static TEE_Result initialize_pmic(const void *fdt, int pmic_node)
 	return TEE_SUCCESS;
 }
 
+static enum itr_return stpmic1_irq_handler(struct itr_handler *handler __unused)
+{
+	uint8_t read_val = 0U;
+	unsigned int i = 0U;
+
+	FMSG("Stpmic1 irq handler");
+
+	stm32mp_get_pmic();
+
+	for (i = 0U; i < 4U; i++) {
+		if (stpmic1_register_read(ITLATCH1_REG + i, &read_val))
+			panic();
+
+		if (read_val) {
+			struct pmic_it_handle_s *prv = NULL;
+
+			FMSG("Stpmic1 irq pending %u: %#"PRIx8, i, read_val);
+
+			if (stpmic1_register_write(ITCLEARLATCH1_REG + i,
+						   read_val))
+				panic();
+
+			SLIST_FOREACH(prv, &pmic_it_handle_list, link)
+				if ((prv->pmic_reg == ITCLEARMASK1_REG + i) &&
+				    (read_val & BIT(prv->pmic_bit))) {
+					FMSG("STPMIC1 send notif %u",
+					     prv->notif_id);
+
+					notif_send_it(prv->notif_id);
+				}
+		}
+	}
+
+	stm32mp_put_pmic();
+
+	return ITRR_HANDLED;
+}
+
+static TEE_Result stm32_pmic_init_it(const void *fdt, int node)
+{
+	TEE_Result res = TEE_ERROR_GENERIC;
+	const uint32_t *notif_ids = NULL;
+	int nb_notif = 0;
+	size_t pwr_it = 0;
+	struct itr_handler *hdl = NULL;
+	const fdt32_t *cuint = NULL;
+	uint32_t phandle = 0;
+	int wakeup_parent_node = 0;
+	int len = 0;
+
+	cuint = fdt_getprop(fdt, node, "wakeup-parent", &len);
+	if (!cuint || len != sizeof(uint32_t))
+		panic("Missing wakeup-parent");
+
+	phandle = fdt32_to_cpu(*cuint);
+	if (!dt_driver_get_provider_by_phandle(phandle,
+					       DT_DRIVER_NOTYPE))
+		return TEE_ERROR_DEFER_DRIVER_INIT;
+
+	wakeup_parent_node = fdt_node_offset_by_phandle(fdt, phandle);
+
+	cuint = fdt_getprop(fdt, node, "st,wakeup-pin-number", NULL);
+	if (!cuint) {
+		DMSG("Missing wake-up pin description");
+		return TEE_SUCCESS;
+	}
+
+	pwr_it = fdt32_to_cpu(*cuint) - 1U;
+
+	notif_ids = fdt_getprop(fdt, node, "st,notif-it-id", &nb_notif);
+	if (!notif_ids)
+		return TEE_ERROR_ITEM_NOT_FOUND;
+
+	if (nb_notif > 0) {
+		struct pmic_it_handle_s *prv = NULL;
+		unsigned int i = 0;
+		const uint32_t *pmic_its = NULL;
+		int nb_it = 0;
+
+		pmic_its = fdt_getprop(fdt, node, "st,pmic-it-id", &nb_it);
+		if (!pmic_its)
+			return TEE_ERROR_ITEM_NOT_FOUND;
+
+		if (nb_it != nb_notif)
+			panic("st,notif-it-id incorrect description");
+
+		for (i = 0; i < (nb_notif / sizeof(uint32_t)); i++) {
+			uint8_t val = 0;
+			uint8_t pmic_it = 0;
+
+			prv = calloc(1, sizeof(*prv));
+			if (!prv)
+				panic("pmic: Could not allocate pmic it");
+
+			pmic_it = fdt32_to_cpu(pmic_its[i]);
+
+			assert(pmic_it <= IT_SWIN_R);
+
+			prv->pmic_reg = ITCLEARMASK1_REG + pmic_it / U(8);
+			prv->pmic_bit = pmic_it % U(8);
+			prv->notif_id = fdt32_to_cpu(notif_ids[i]);
+
+			SLIST_INSERT_HEAD(&pmic_it_handle_list, prv, link);
+
+			stm32mp_get_pmic();
+
+			/* Enable requested interrupt */
+			if (stpmic1_register_read(prv->pmic_reg, &val))
+				panic();
+
+			val |= BIT(prv->pmic_bit);
+
+			if (stpmic1_register_write(prv->pmic_reg, val))
+				panic();
+
+			stm32mp_put_pmic();
+
+			FMSG("STPMIC1 forwards irq reg:%u bit:%u as notif:%u",
+			     prv->pmic_reg, prv->pmic_bit, prv->notif_id);
+		}
+	}
+
+	res = stm32mp1_pwr_itr_alloc_add(fdt, wakeup_parent_node, pwr_it,
+					 stpmic1_irq_handler,
+					 PWR_WKUP_FLAG_FALLING |
+					 PWR_WKUP_FLAG_THREADED,
+					 NULL, &hdl);
+	if (res)
+		panic("pmic: Could not allocate itr");
+
+	stm32mp1_pwr_itr_enable(hdl->it);
+
+	return res;
+}
+
 static TEE_Result stm32_pmic_probe(const void *fdt, int node,
 				   const void *compat_data __unused)
 {
@@ -784,7 +933,10 @@ static TEE_Result stm32_pmic_probe(const void *fdt, int node,
 		panic();
 	}
 
-	return TEE_SUCCESS;
+	if (IS_ENABLED(CFG_STM32MP13))
+		res = stm32_pmic_init_it(fdt, node);
+
+	return res;
 }
 
 static const struct dt_device_match stm32_pmic_match_table[] = {
