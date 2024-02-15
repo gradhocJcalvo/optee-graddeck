@@ -347,6 +347,7 @@
 
 &pwr {
 	status = "okay";
+	wakeup-gpios = <&gpioa 0 GPIO_ACTIVE_HIGH>, <0>, <0>, <0>, <0>, <0>;
 
 	vdd33ucpd: vdd33ucpd {
 		status = "okay";
