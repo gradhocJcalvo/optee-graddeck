@@ -200,6 +200,7 @@ int fdt_get_dt_driver_cells(const void *fdt, int nodeoffset,
 		break;
 	case DT_DRIVER_I2C:
 	case DT_DRIVER_REGULATOR:
+	case DT_DRIVER_NOTYPE:
 		return 0;
 	default:
 		panic();
