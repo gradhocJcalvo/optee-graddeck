@@ -63,6 +63,7 @@
 		compatible = "st,stpmic2";
 		reg = <0x33>;
 		st,wakeup-pin-number = <1>;
+		wakeup-parent = <&pwr>;
 		status = "okay";
 
 		regulators {
