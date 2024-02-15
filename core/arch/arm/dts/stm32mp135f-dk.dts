@@ -9,6 +9,7 @@
 #include <dt-bindings/clock/stm32mp13-clksrc.h>
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/gpio/stm32mp_gpio.h>
+#include <dt-bindings/mfd/st,stpmic1.h>
 #include <dt-bindings/power/stm32mp1-power.h>
 #include <dt-bindings/regulator/st,stm32mp13-regulator.h>
 #include <dt-bindings/soc/stm32mp-tzc400-macro.h>
@@ -33,6 +34,13 @@
 		stdout-path = "serial0:115200n8";
 	};
 
+	magic_wol: magic_wol {
+		compatible = "st,stm32mp1-pwr-irq-user";
+		wakeup-parent = <&pwr_irq>;
+		st,wakeup-pin-number = <2>;
+		status = "okay";
+	};
+
 	memory@c0000000 {
 		device_type = "memory";
 		reg = <0xc0000000 0x20000000>;
@@ -48,6 +56,14 @@
 			reg = <0xdd000000 0x1000000>;
 			st,protreg = <TZC_REGION_S_RDWR 0>;
 		};
+	};
+
+	typec_wakeup: typec_wakeup {
+		compatible = "st,stm32mp1-pwr-irq-user";
+		wakeup-parent = <&pwr_irq>;
+		st,wakeup-pin-number = <5>;
+		st,notif-it-id = <1>;
+		status = "okay";
 	};
 
 	vin: vin {
@@ -159,8 +175,10 @@
 		compatible = "st,stpmic1";
 		reg = <0x33>;
 		status = "okay";
+		wakeup-parent = <&pwr_irq>;
 		st,wakeup-pin-number = <1>;
-		st,notif-it-id = <0>;
+		st,pmic-it-id = <IT_PONKEY_F IT_PONKEY_R>;
+		st,notif-it-id = <0 2>;
 
 		regulators {
 			compatible = "st,stpmic1-regulators";
@@ -336,6 +354,11 @@
 
 &oem_enc_key {
 	st,non-secure-otp-provisioning;
+};
+
+&pwr_irq {
+	status = "okay";
+	wakeup-gpios = <&gpiof 8 GPIO_ACTIVE_HIGH>, <&gpioi 3 GPIO_ACTIVE_HIGH>, <0>, <0>, <&gpioi 2 GPIO_PULL_UP>, <0>;
 };
 
 &pwr_regulators {
