@@ -218,6 +218,8 @@
 
 		pwr_irq: pwr@50001010 {
 			compatible = "st,stm32mp1-pwr-irq";
+			wakeup-parent = <&exti>;
+			wakeup-gpios = <0>, <0>, <0>, <0>, <0>, <0>;
 			status = "disabled";
 		};
 
