@@ -217,7 +217,7 @@
 		};
 
 		pwr_irq: pwr@50001010 {
-			compatible = "st,stm32mp1,pwr-irq";
+			compatible = "st,stm32mp1-pwr-irq";
 			status = "disabled";
 		};
 
