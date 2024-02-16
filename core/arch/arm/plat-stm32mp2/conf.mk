@@ -1,11 +1,14 @@
+flavor_dts_file-235F_DK = stm32mp235f-dk.dts
 flavor_dts_file-257F_DK = stm32mp257f-dk.dts
 flavor_dts_file-257F_EV1 = stm32mp257f-ev1.dts
 
 flavorlist-MP25 = $(flavor_dts_file-257F_DK) \
 		  $(flavor_dts_file-257F_EV1)
 
+flavorlist-MP23 = $(flavor_dts_file-235F_DK)
+
 # List of all DTS for this PLATFORM
-ALL_DTS = $(flavorlist-MP25)
+ALL_DTS = $(flavorlist-MP25) $(flavorlist-MP23)
 
 # Check if device-tree exist in OP-TEE source code, else search it in external
 # device tree repository
@@ -31,9 +34,18 @@ CFG_EMBED_DTB_SOURCE_FILE ?= stm32mp257f-ev1.dts
 ifneq ($(filter $(CFG_EMBED_DTB_SOURCE_FILE),$(flavorlist-MP25)),)
 $(call force,CFG_STM32MP25,y)
 endif
+ifneq ($(filter $(CFG_EMBED_DTB_SOURCE_FILE),$(flavorlist-MP23)),)
+$(call force,CFG_STM32MP23,y)
+endif
 
-ifneq ($(CFG_STM32MP25),y)
-$(error STM32 Platform must be defined)
+# CFG_STM32MP2x switches are exclusive.
+# - CFG_STM32MP25 is enabled for STM32MP25x-* targets (default)
+# - CFG_STM32MP23 is enabled for STM32MP23x-* targets
+ifeq ($(CFG_STM32MP23),y)
+$(call force,CFG_STM32MP25,n)
+else
+$(call force,CFG_STM32MP25,y)
+$(call force,CFG_STM32MP23,n)
 endif
 
 include core/arch/arm/cpu/cortex-armv8-0.mk
