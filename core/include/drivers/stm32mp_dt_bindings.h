@@ -25,7 +25,7 @@
 #include <dt-bindings/soc/stm32mp15-tzc400.h>
 #endif
 
-#ifdef CFG_STM32MP25
+#if defined(CFG_STM32MP25) || defined(CFG_STM32MP23)
 #include <dt-bindings/clock/stm32mp25-clks.h>
 #include <dt-bindings/clock/stm32mp25-clksrc.h>
 #include <dt-bindings/reset/stm32mp25-resets.h>
