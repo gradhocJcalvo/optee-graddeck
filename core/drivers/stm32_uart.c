@@ -111,29 +111,29 @@ void stm32_uart_init(struct stm32_uart_pdata *pd, vaddr_t base)
 
 static void register_secure_uart(struct stm32_uart_pdata *pd)
 {
-#ifndef CFG_STM32MP25
+#if !(defined(CFG_STM32MP15) || defined(CFG_STM32MP13))
+	stm32_pinctrl_set_secure_cfg(pd->pinctrl, true);
+	if (pd->pinctrl_sleep)
+		stm32_pinctrl_set_secure_cfg(pd->pinctrl, true);
+#else
 	stm32mp_register_secure_periph_iomem(pd->base.pa);
 	stm32mp_register_secure_pinctrl(pd->pinctrl);
 	if (pd->pinctrl_sleep)
 		stm32mp_register_secure_pinctrl(pd->pinctrl_sleep);
-#else
-	stm32_pinctrl_set_secure_cfg(pd->pinctrl, true);
-	if (pd->pinctrl_sleep)
-		stm32_pinctrl_set_secure_cfg(pd->pinctrl, true);
 #endif
 }
 
 static void register_non_secure_uart(struct stm32_uart_pdata *pd)
 {
-#ifndef CFG_STM32MP25
+#if !(defined(CFG_STM32MP15) || defined(CFG_STM32MP13))
+	stm32_pinctrl_set_secure_cfg(pd->pinctrl, false);
+	if (pd->pinctrl_sleep)
+		stm32_pinctrl_set_secure_cfg(pd->pinctrl, false);
+#else
 	stm32mp_register_non_secure_periph_iomem(pd->base.pa);
 	stm32mp_register_non_secure_pinctrl(pd->pinctrl);
 	if (pd->pinctrl_sleep)
 		stm32mp_register_non_secure_pinctrl(pd->pinctrl_sleep);
-#else
-	stm32_pinctrl_set_secure_cfg(pd->pinctrl, false);
-	if (pd->pinctrl_sleep)
-		stm32_pinctrl_set_secure_cfg(pd->pinctrl, false);
 #endif
 
 }
