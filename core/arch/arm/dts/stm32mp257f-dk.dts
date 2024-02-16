@@ -48,6 +48,10 @@
 	};
 };
 
+&hash {
+	status = "okay";
+};
+
 &hsi_calibration {
 	status = "okay";
 };
