@@ -163,6 +163,7 @@
 			clocks = <&rcc CK_BUS_HPDMA1>;
 			resets = <&rcc HPDMA1_R>;
 			#dma-cells = <4>;
+			st,syscfg-arcr = <&syscfg 0x2050 0x1>;
 		};
 
 		hpdma2: dma-controller@40410000 {
@@ -171,6 +172,7 @@
 			clocks = <&rcc CK_BUS_HPDMA2>;
 			resets = <&rcc HPDMA2_R>;
 			#dma-cells = <4>;
+			st,syscfg-arcr = <&syscfg 0x2050 0x2>;
 		};
 
 		hpdma3: dma-controller@40420000 {
@@ -179,6 +181,7 @@
 			clocks = <&rcc CK_BUS_HPDMA3>;
 			resets = <&rcc HPDMA3_R>;
 			#dma-cells = <4>;
+			st,syscfg-arcr = <&syscfg 0x2050 0x4>;
 		};
 
 		ipcc1: mailbox@40490000 {
