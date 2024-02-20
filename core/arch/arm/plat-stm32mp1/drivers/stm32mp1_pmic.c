@@ -6,6 +6,7 @@
 #include <assert.h>
 #include <drivers/i2c.h>
 #include <drivers/regulator.h>
+#include <drivers/stm32_firewall.h>
 #include <drivers/stm32_i2c.h>
 #include <drivers/stm32mp1_pmic.h>
 #include <drivers/stm32mp1_pwr.h>
@@ -79,20 +80,21 @@ static SLIST_HEAD(pmic_it_handle_head, pmic_it_handle_s) pmic_it_handle_list =
 /* CPU voltage supplier if found */
 static char cpu_supply_name[PMIC_REGU_SUPPLY_NAME_LEN];
 
+static bool pmic_is_secure(void)
+{
+	assert(pmic_status != -1);
+
+	return pmic_status == DT_STATUS_OK_SEC;
+}
+
 bool stm32mp_with_pmic(void)
 {
-	return pmic_status > 0;
+	return pmic_status != -1;
 }
 
 static void init_pmic_state(const void *fdt, int pmic_node)
 {
 	pmic_status = fdt_get_status(fdt, pmic_node);
-}
-
-static bool dt_pmic_is_secure(void)
-{
-	return stm32mp_with_pmic() &&
-	       i2c_handle->dt_status == DT_STATUS_OK_SEC;
 }
 
 static void priv_dt_properties(const void *fdt, int regu_node,
@@ -721,12 +723,14 @@ DECLARE_KEEP_PAGER(pmic_pm);
 /* stm32mp_get/put_pmic allows secure atomic sequences to use non secure PMIC */
 void stm32mp_get_pmic(void)
 {
-	stm32_i2c_resume(i2c_handle);
+	if (!pmic_is_secure())
+		stm32_i2c_resume(i2c_handle);
 }
 
 void stm32mp_put_pmic(void)
 {
-	stm32_i2c_suspend(i2c_handle);
+	if (!pmic_is_secure())
+		stm32_i2c_suspend(i2c_handle);
 }
 
 static void register_non_secure_pmic(void)
@@ -749,7 +753,23 @@ static void register_secure_pmic(void)
 		stm32mp_register_secure_pinctrl(i2c_handle->pinctrl_sleep);
 
 	stm32mp_register_secure_periph_iomem(i2c_handle->base.pa);
-	register_pm_driver_cb(pmic_pm, NULL, "stm32mp1-pmic");
+}
+
+static void init_pmic_secure_state(void)
+{
+	TEE_Result res = TEE_SUCCESS;
+	const struct stm32_firewall_cfg sec_cfg[] = {
+		{ FWLL_SEC_RW | FWLL_MASTER(0) },
+		{ }, /* Null terminated */
+	};
+
+	res = stm32_firewall_check_access(i2c_handle->base.pa,
+					  0, sec_cfg);
+
+	if (!res)
+		pmic_status = DT_STATUS_OK_SEC;
+	else
+		pmic_status = DT_STATUS_OK_NSEC;
 }
 
 static TEE_Result initialize_pmic(const void *fdt, int pmic_node)
@@ -757,6 +777,8 @@ static TEE_Result initialize_pmic(const void *fdt, int pmic_node)
 	unsigned long pmic_version = 0;
 
 	init_pmic_state(fdt, pmic_node);
+
+	init_pmic_secure_state();
 
 	initialize_pmic_i2c(fdt, pmic_node);
 
@@ -768,10 +790,12 @@ static TEE_Result initialize_pmic(const void *fdt, int pmic_node)
 	DMSG("PMIC version = 0x%02lx", pmic_version);
 	stm32mp_put_pmic();
 
-	if (dt_pmic_is_secure())
+	if (pmic_is_secure())
 		register_secure_pmic();
 	else
 		register_non_secure_pmic();
+
+	register_pm_driver_cb(pmic_pm, NULL, "stm32mp1-pmic");
 
 	parse_regulator_fdt_nodes(fdt, pmic_node);
 
