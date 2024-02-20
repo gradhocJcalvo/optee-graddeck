@@ -276,6 +276,7 @@ CFG_STM32_CPU_OPP ?= y
 CFG_STM32_CRYP ?= y
 CFG_STM32_ETZPC ?= y
 CFG_STM32_GPIO ?= y
+CFG_STM32_HASH ?= y
 CFG_STM32_I2C ?= y
 CFG_STM32_IWDG ?= y
 CFG_STM32_LPTIMER ?= y
@@ -316,7 +317,7 @@ endif # cfg-all-enabled, CFG_STM32_CRYP CFG_STM32_SAES
 endif # CFG_STM32MP13
 
 # If any crypto driver is enabled, enable the crypto-framework layer
-ifeq ($(call cfg-one-enabled, CFG_STM32_CRYP CFG_STM32_SAES),y)
+ifeq ($(call cfg-one-enabled, CFG_STM32_CRYP CFG_STM32_SAES CFG_STM32_HASH),y)
 $(call force,CFG_STM32_CRYPTO_DRIVER,y)
 endif
 
