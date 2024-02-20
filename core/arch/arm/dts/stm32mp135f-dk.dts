@@ -167,6 +167,10 @@
 	st,protreg = < (TZPROT(15)) >;
 };
 
+&hash {
+	status = "okay";
+};
+
 &hse_monitor {
 	status = "okay";
 };
