@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-2-Clause */
 /*
- * Copyright (c) 2017-2022, STMicroelectronics
+ * Copyright (c) 2017-2024, STMicroelectronics
  */
 #ifndef __DRIVERS_STM32MP_DT_BINDINGS_H
 #define __DRIVERS_STM32MP_DT_BINDINGS_H
@@ -32,6 +32,15 @@
 #include <dt-bindings/soc/stm32mp25-rif.h>
 #include <dt-bindings/soc/stm32mp25-rifsc.h>
 #include <dt-bindings/soc/stm32mp25-risab.h>
+#include <dt-bindings/soc/stm32mp25-risaf.h>
+#endif
+
+#ifdef CFG_STM32MP21
+#include <dt-bindings/clock/st,stm32mp21-rcc.h>
+#include <dt-bindings/clock/stm32mp21-clksrc.h>
+#include <dt-bindings/reset/st,stm32mp21-rcc.h>
+#include <dt-bindings/soc/stm32mp25-rif.h>
+#include <dt-bindings/soc/stm32mp21-rifsc.h>
 #include <dt-bindings/soc/stm32mp25-risaf.h>
 #endif
 
