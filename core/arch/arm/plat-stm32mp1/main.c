@@ -557,6 +557,43 @@ static int get_part_number(uint32_t *part_nb)
 	return 0;
 }
 
+bool stm32mp_supports_cpu_opp(uint32_t opp_id)
+{
+	uint32_t part_number = 0;
+	uint32_t id = 0;
+
+	if (get_part_number(&part_number)) {
+		DMSG("Cannot get part number\n");
+		panic();
+	}
+
+	switch (part_number) {
+#ifdef CFG_STM32MP13
+	case STM32MP135F_PART_NB:
+	case STM32MP135D_PART_NB:
+	case STM32MP133F_PART_NB:
+	case STM32MP133D_PART_NB:
+	case STM32MP131F_PART_NB:
+	case STM32MP131D_PART_NB:
+#endif
+#ifdef CFG_STM32MP15
+	case STM32MP157F_PART_NB:
+	case STM32MP157D_PART_NB:
+	case STM32MP153F_PART_NB:
+	case STM32MP153D_PART_NB:
+	case STM32MP151F_PART_NB:
+	case STM32MP151D_PART_NB:
+#endif
+		id = BIT(1);
+		break;
+	default:
+		id = BIT(0);
+		break;
+	}
+
+	return (opp_id & id) == id;
+}
+
 bool stm32mp_supports_hw_cryp(void)
 {
 	uint32_t part_number = 0;
