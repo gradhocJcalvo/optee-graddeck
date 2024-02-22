@@ -135,6 +135,7 @@ CFG_STM32_IPCC ?= y
 CFG_STM32_IWDG ?= y
 CFG_STM32_LPTIMER ?= y
 CFG_STM32_OMM ?= y
+CFG_STM32_PKA ?= y
 CFG_STM32_PWR_IRQ ?= y
 CFG_STM32_RIF ?= y
 CFG_STM32_RIFSC ?= y
@@ -181,7 +182,7 @@ override CFG_STM32_CRYP := n
 endif # cfg-all-enabled, CFG_STM32_CRYP CFG_STM32_SAES
 
 # If any crypto driver is enabled, enable the crypto-framework layer
-ifeq ($(call cfg-one-enabled, CFG_STM32_HASH CFG_STM32_SAES),y)
+ifeq ($(call cfg-one-enabled, CFG_STM32_HASH CFG_STM32_PKA CFG_STM32_SAES),y)
 $(call force,CFG_STM32_CRYPTO_DRIVER,y)
 endif
 
