@@ -368,6 +368,16 @@
 	st,non-secure-otp-provisioning;
 };
 
+&osc_calibration {
+	csi-calibration {
+		status = "okay";
+	};
+
+	hsi-calibration {
+		status = "okay";
+	};
+};
+
 &pwr_irq {
 	status = "okay";
 	wakeup-gpios = <&gpiof 8 GPIO_ACTIVE_HIGH>, <&gpioi 3 GPIO_ACTIVE_HIGH>, <0>, <0>, <&gpioi 2 GPIO_PULL_UP>, <0>;
@@ -619,6 +629,14 @@
 	tamp-active@1 {
 		pinctrl-0 = <&tamp0_in3_pin_a &tamp0_out1_pin_a>;
 		status = "disabled";
+	};
+};
+
+&timers12 {
+	status = "okay";
+
+	counter {
+		status = "okay";
 	};
 };
 
