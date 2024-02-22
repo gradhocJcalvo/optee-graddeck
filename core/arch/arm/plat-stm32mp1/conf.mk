@@ -196,6 +196,7 @@ $(call force,CFG_HALT_CORES_ON_PANIC_SGI,15)
 $(call force,CFG_SCMI_MSG_PERF_DOMAIN,n)
 $(call force,CFG_SECONDARY_INIT_CNTFRQ,y)
 $(call force,CFG_STM32MP1_SHARED_RESOURCES,y)
+$(call force,CFG_STM32_PKA,n)
 $(call force,CFG_STM32_SAES,n)
 $(call force,CFG_STM32MP1_RSTCTRL,y)
 $(call force,CFG_STM32MP15_CLK,y)
@@ -280,6 +281,7 @@ CFG_STM32_HASH ?= y
 CFG_STM32_I2C ?= y
 CFG_STM32_IWDG ?= y
 CFG_STM32_LPTIMER ?= y
+CFG_STM32_PKA ?= y
 CFG_STM32_RNG ?= y
 CFG_STM32_RSTCTRL ?= y
 CFG_STM32_RTC ?= y
@@ -317,7 +319,7 @@ endif # cfg-all-enabled, CFG_STM32_CRYP CFG_STM32_SAES
 endif # CFG_STM32MP13
 
 # If any crypto driver is enabled, enable the crypto-framework layer
-ifeq ($(call cfg-one-enabled, CFG_STM32_CRYP CFG_STM32_SAES CFG_STM32_HASH),y)
+ifeq ($(call cfg-one-enabled, CFG_STM32_CRYP CFG_STM32_HASH CFG_STM32_PKA CFG_STM32_SAES ),y)
 $(call force,CFG_STM32_CRYPTO_DRIVER,y)
 endif
 
