@@ -386,6 +386,10 @@
 	};
 };
 
+&pka {
+	status = "okay";
+};
+
 &pwr_irq {
 	status = "okay";
 	wakeup-gpios = <&gpiof 8 GPIO_ACTIVE_HIGH>, <&gpioi 3 GPIO_ACTIVE_HIGH>, <0>, <0>, <&gpioi 2 GPIO_PULL_UP>, <0>;
