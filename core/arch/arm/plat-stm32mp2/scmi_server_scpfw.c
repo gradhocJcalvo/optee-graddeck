@@ -433,7 +433,9 @@ static struct stm32_scmi_rd stm32_scmi_reset[] = {
 	RESET_CELL(RST_SCMI_OSPI2, OSPI2_R, OSPI2_BASE, "ospi2"),
 #endif
 	RESET_CELL(RST_SCMI_OSPI1DLL, OSPI1DLL_R, OSPI1_BASE, "ospi1_ddl"),
+#ifdef CFG_STM32MP25
 	RESET_CELL(RST_SCMI_OSPI2DLL, OSPI2DLL_R, OSPI2_BASE, "ospi2_ddl"),
+#endif
 };
 
 static const struct channel_resources scmi_channel[] = {
