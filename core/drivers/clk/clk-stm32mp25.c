@@ -1664,20 +1664,19 @@ static void stm32mp2_a35_ss_on_hsi(void)
 		return;
 	}
 
-	timeout = timeout_init_us(CLKSRC_TIMEOUT);
-
 	stm32mp_syscfg_write(A35SS_SSC_CHGCLKREQ,
 			     A35SS_SSC_CHGCLKREQ_ARM_CHGCLKREQ_EN,
 			     A35SS_SSC_CHGCLKREQ_ARM_CHGCLKREQ_MASK);
 
-	while ((stm32mp_syscfg_read(A35SS_SSC_CHGCLKREQ) &
-		A35SS_SSC_CHGCLKREQ_ARM_CHGCLKACK_MASK) !=
-			A35SS_SSC_CHGCLKREQ_ARM_CHGCLKACK_MASK) {
-		if (timeout_elapsed(timeout)) {
-			EMSG("Cannot switch A35 to bypass clock\n");
-			panic();
-		}
-	}
+	timeout = timeout_init_us(CLKSRC_TIMEOUT);
+	while (!timeout_elapsed(timeout))
+		if (stm32mp_syscfg_read(A35SS_SSC_CHGCLKREQ) &
+		    A35SS_SSC_CHGCLKREQ_ARM_CHGCLKACK_MASK)
+			break;
+
+	if (!(stm32mp_syscfg_read(A35SS_SSC_CHGCLKREQ) &
+	      A35SS_SSC_CHGCLKREQ_ARM_CHGCLKACK_MASK))
+		panic("Cannot switch A35 to bypass clock");
 
 	stm32mp_syscfg_write(A35SS_SSC_PLL_EN,
 			     0,
@@ -1702,15 +1701,17 @@ static int stm32mp2_a35_pll1_start(void)
 			     A35SS_SSC_PLL_ENABLE_PD_EN,
 			     A35SS_SSC_PLL_ENABLE_PD_EN);
 
-	timeout = timeout_init_us(PLLRDY_TIMEOUT);
-
 	/* Wait PLL lock */
-	while ((stm32mp_syscfg_read(A35SS_SSC_PLL_EN) &
-		A35SS_SSC_PLL_ENABLE_LOCKP_MASK) == 0U) {
-		if (timeout_elapsed(timeout)) {
-			EMSG("PLL1 not locked !");
-			return -1;
-		}
+	timeout = timeout_init_us(PLLRDY_TIMEOUT);
+	while (!timeout_elapsed(timeout))
+		if (stm32mp_syscfg_read(A35SS_SSC_PLL_EN) &
+		    A35SS_SSC_PLL_ENABLE_LOCKP_MASK)
+			break;
+
+	if (!(stm32mp_syscfg_read(A35SS_SSC_PLL_EN) &
+	      A35SS_SSC_PLL_ENABLE_LOCKP_MASK)) {
+		EMSG("PLL1 not locked");
+		return -1;
 	}
 
 	/* De-assert reset on PLL output clock path */
@@ -1725,12 +1726,15 @@ static int stm32mp2_a35_pll1_start(void)
 
 	/* Wait for clock change acknowledge */
 	timeout = timeout_init_us(CLKSRC_TIMEOUT);
-	while ((stm32mp_syscfg_read(A35SS_SSC_CHGCLKREQ) &
-		A35SS_SSC_CHGCLKREQ_ARM_CHGCLKACK_MASK) != 0U) {
-		if (timeout_elapsed(timeout)) {
-			EMSG("A35 switch to PLL1 failed !\n");
-			return -1;
-		}
+	while (!timeout_elapsed(timeout))
+		if (!(stm32mp_syscfg_read(A35SS_SSC_CHGCLKREQ) &
+		      A35SS_SSC_CHGCLKREQ_ARM_CHGCLKACK_MASK))
+			break;
+
+	if (stm32mp_syscfg_read(A35SS_SSC_CHGCLKREQ) &
+	    A35SS_SSC_CHGCLKREQ_ARM_CHGCLKACK_MASK) {
+		EMSG("A35 switch to PLL1 failed");
+		return -1;
 	}
 
 	return 0;
@@ -1989,9 +1993,9 @@ static int stm32_clk_pll_configure(struct clk_stm32_priv *priv)
 static int wait_predivsr(uint16_t channel)
 {
 	uintptr_t rcc_base = stm32_rcc_base();
-	uintptr_t previvsr;
-	uint32_t channel_bit;
-	uint64_t timeout;
+	uintptr_t previvsr = 0;
+	uint32_t channel_bit = 0;
+	uint32_t value = 0;
 
 	if (channel < __WORD_BIT) {
 		previvsr = rcc_base + RCC_PREDIVSR1;
@@ -2001,13 +2005,10 @@ static int wait_predivsr(uint16_t channel)
 		channel_bit = BIT(channel - __WORD_BIT);
 	}
 
-	timeout = timeout_init_us(CLKDIV_TIMEOUT);
-	while ((io_read32(previvsr) & channel_bit) != 0U) {
-		if (timeout_elapsed(timeout)) {
-			EMSG("Pre divider status: %x\n",
-			      io_read32(previvsr));
-			return -1;
-		}
+	if (IO_READ32_POLL_TIMEOUT(previvsr, value, !(value & channel_bit), 0,
+				   CLKDIV_TIMEOUT)) {
+		EMSG("Pre divider status: %#"PRIx32, io_read32(previvsr));
+		return -1;
 	}
 
 	return 0;
@@ -2016,9 +2017,9 @@ static int wait_predivsr(uint16_t channel)
 static int wait_findivsr(uint16_t channel)
 {
 	uintptr_t rcc_base = stm32_rcc_base();
-	uintptr_t finvivsr;
-	uint32_t channel_bit;
-	uint64_t timeout;
+	uintptr_t finvivsr = 0;
+	uint32_t channel_bit = 0;
+	uint32_t value = 0;
 
 	if (channel < __WORD_BIT) {
 		finvivsr = rcc_base + RCC_FINDIVSR1;
@@ -2028,13 +2029,10 @@ static int wait_findivsr(uint16_t channel)
 		channel_bit = BIT(channel - __WORD_BIT);
 	}
 
-	timeout = timeout_init_us(CLKDIV_TIMEOUT);
-	while ((io_read32(finvivsr) & channel_bit) != 0U) {
-		if (timeout_elapsed(timeout)) {
-			EMSG("Final divider status: %x\n",
-			      io_read32(finvivsr));
-			return -1;
-		}
+	if (IO_READ32_POLL_TIMEOUT(finvivsr, value, !(value & channel_bit), 0,
+				   CLKDIV_TIMEOUT)) {
+		EMSG("Final divider status: %#"PRIx32, io_read32(finvivsr));
+		return -1;
 	}
 
 	return 0;
@@ -2044,15 +2042,14 @@ static int wait_xbar_sts(uint16_t channel)
 {
 	uintptr_t rcc_base = stm32_rcc_base();
 	uintptr_t xbar_cfgr = rcc_base + RCC_XBAR0CFGR + (0x4 * channel);
-	uint64_t timeout;
+	uint32_t value = 0;
 
-	timeout = timeout_init_us(CLKDIV_TIMEOUT);
-	while ((io_read32(xbar_cfgr) & RCC_XBAR0CFGR_XBAR0STS) != 0U) {
-		if (timeout_elapsed(timeout)) {
-			EMSG("XBAR%dCFGR: %x\n", channel,
-			      io_read32(xbar_cfgr));
-			return -1;
-		}
+	if (IO_READ32_POLL_TIMEOUT(xbar_cfgr, value,
+				   !(value & RCC_XBAR0CFGR_XBAR0STS), 0,
+				   CLKDIV_TIMEOUT)) {
+		EMSG("XBAR%"PRIu16"CFGR: %#"PRIx32, channel,
+		     io_read32(xbar_cfgr));
+		return -1;
 	}
 
 	return 0;
@@ -4310,7 +4307,6 @@ unsigned long clk_stm32_clock_frequency_calculator(uint32_t ckintsel)
 	uint32_t fcalctwc_val = 0xf;
 	uint32_t min_fcalctwc = 1;
 	uint32_t regval = 0;
-	uint64_t timeout = 0U;
 	bool freq_meas_complete_flag = false;
 	bool fcalcsts_bit = false;
 
@@ -4389,23 +4385,11 @@ unsigned long clk_stm32_clock_frequency_calculator(uint32_t ckintsel)
 		 * Timeout value (in ms) to be tuned according to lowest
 		 * frequency to be measured
 		 */
-		timeout = timeout_init_us(TIMEOUT_US_100MS);
-
-		while (!fcalcsts_bit) {
-			regval = io_read32(rcc_base + RCC_FCALCSR);
-
-			if (regval & RCC_FCALCSR_FVAL_MASK) {
-				if (regval & RCC_FCALCSR_FCALCSTS)
-					fcalcsts_bit = true;
-			}
-
-			/*
-			 * Detect timeout (time expired whereas counter
-			 * still zero)
-			 */
-			else if (timeout_elapsed(timeout))
-				break;
-		}
+		if (!IO_READ32_POLL_TIMEOUT(rcc_base + RCC_FCALCSR, regval,
+					    regval & RCC_FCALCSR_FVAL_MASK &&
+					    regval & RCC_FCALCSR_FCALCSTS,
+					    0, TIMEOUT_US_100MS))
+			fcalcsts_bit = true;
 
 		/*
 		 * Read the measured value via the FVAL field in the RCC Clock
@@ -4417,7 +4401,7 @@ unsigned long clk_stm32_clock_frequency_calculator(uint32_t ckintsel)
 		if (regval & RCC_FCALCSR_FVAL_OVERFLOW) {
 			/* Set status for next measurement iteration */
 			fstatus = TEE_SUCCESS;
-		} else if (timeout_elapsed(timeout)) {
+		} else if (!fcalcsts_bit) {
 			/* Set status for leaving measurement algorithm */
 			fstatus = TEE_ERROR_GENERIC;
 		} else {
@@ -4463,19 +4447,10 @@ unsigned long clk_stm32_clock_frequency_calculator(uint32_t ckintsel)
 			     RCC_FCALCOBS1CFGR_FCALCRSTN);
 
 		/* Waiting for status register to be cleared */
-		timeout = timeout_init_us(TIMEOUT_US_100MS);
-
-		regval = io_read32(rcc_base + RCC_FCALCSR);
-
-		while ((regval & 0xffff) != 0) {
-			regval = io_read32(rcc_base + RCC_FCALCSR);
-
-			/* Detect timeout */
-			if (timeout_elapsed(timeout)) {
-				fstatus = TEE_ERROR_GENERIC;
-				break;
-			}
-		}
+		if (IO_READ32_POLL_TIMEOUT(rcc_base + RCC_FCALCSR, regval,
+					   !(regval & GENMASK_32(15, 0)),
+					   0, TIMEOUT_US_100MS))
+			fstatus = TEE_ERROR_GENERIC;
 
 		/* Decrease FCALCTWC value */
 		fcalctwc_val -= 1;
