@@ -26,4 +26,6 @@ static inline void stm32mp_register_gpioz_pin_count(size_t count __unused) { }
 
 void __noreturn do_reset(const char *str);
 
+TEE_Result stm32_activate_internal_tamper(int id);
+
 #endif /*__STM32_UTIL_H__*/

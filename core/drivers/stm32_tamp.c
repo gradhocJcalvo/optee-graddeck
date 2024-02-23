@@ -1262,8 +1262,16 @@ static TEE_Result stm32_tamp_configure_int(struct stm32_tamp_conf *tamp_int,
 					   uint32_t mode,
 					   uint32_t (*cb)(int id))
 {
+	TEE_Result res = TEE_ERROR_GENERIC;
+
 	if (mode & TAMP_EVT_MASK)
 		return TEE_ERROR_BAD_PARAMETERS;
+
+	res = stm32_activate_internal_tamper(tamp_int->id);
+	if (res) {
+		EMSG("Could not activate internal tamper:%u", tamp_int->id + 1);
+		return res;
+	}
 
 	tamp_int->mode |= (mode & TAMP_MODE_MASK);
 	tamp_int->func = cb;
