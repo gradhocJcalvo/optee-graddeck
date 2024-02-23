@@ -39,6 +39,9 @@
 
 #define PWR_CR2_BREN		BIT(0)
 #define PWR_CR2_RREN		BIT(1)
+#define PWR_CR2_MONEN		BIT(4)
+#define PWR_CR2_BRRDY		BIT(16)
+#define PWR_CR2_RRRDY		BIT(17)
 
 #define PWR_CR3_VBE		BIT(8)
 #define PWR_CR3_VBRS		BIT(9)
@@ -62,9 +65,6 @@
 				 GENMASK_32(13, 8) | GENMASK_32(5, 0))
 
 #define PWR_MPUWKUPENR_MASK	GENMASK_32(5, 0)
-
-#define PWR_CR2_BRRDY		BIT(16)
-#define PWR_CR2_RRRDY		BIT(17)
 
 /*
  * Flags for PWR wakeup event management
@@ -114,5 +114,7 @@ TEE_Result stm32mp1_pwr_itr_alloc_add(const void *fdt, int wp_node, size_t it,
 
 void stm32mp1_pwr_itr_enable(size_t it);
 void stm32mp1_pwr_itr_disable(size_t it);
+
+void stm32mp_pwr_monitoring_enable(void);
 
 #endif /*__STM32MP1_PWR_H*/
