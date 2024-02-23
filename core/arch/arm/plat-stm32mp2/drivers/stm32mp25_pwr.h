@@ -33,6 +33,12 @@ enum pwr_wkup_pins {
 	PWR_NB_WAKEUPPINS
 };
 
+enum pwr_monitoring {
+	PWR_MON_V08CAP_TEMP,
+	PWR_MON_VCORE,
+	PWR_MON_VCPU,
+};
+
 TEE_Result
 stm32mp25_pwr_itr_alloc_add(const void *fdt, int wp_node, size_t it,
 			    itr_handler_t handler, uint32_t flags, void *data,
@@ -46,5 +52,7 @@ stm32mp25_pwr_irq_probe(const void *fdt, int node, int interrupt);
 #endif /* CFG_STM32_PWR_IRQ */
 
 vaddr_t stm32_pwr_base(void);
+
+void stm32mp_pwr_monitoring_enable(enum pwr_monitoring monitoring);
 
 #endif /*__STM32MP25_PWR_H*/
