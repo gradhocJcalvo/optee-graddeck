@@ -45,9 +45,18 @@ flavorlist-1G = $(flavorlist-cryp-1G) \
 		$(flavorlist-no_cryp-1G)
 
 flavorlist-MP15-HUK-DT = $(flavor_dts_file-157A_DK1) \
+			 $(flavor_dts_file-157A_ED1) \
+			 $(flavor_dts_file-157A_EV1) \
 			 $(flavor_dts_file-157C_DK2) \
 			 $(flavor_dts_file-157C_ED1) \
-			 $(flavor_dts_file-157C_EV1)
+			 $(flavor_dts_file-157C_EV1) \
+			 $(flavor_dts_file-157D_DK1) \
+			 $(flavor_dts_file-157D_ED1) \
+			 $(flavor_dts_file-157D_EV1) \
+			 $(flavor_dts_file-157F_DK2) \
+			 $(flavor_dts_file-157F_ED1) \
+			 $(flavor_dts_file-157F_EV1)
+
 
 flavorlist-MP15 = $(flavor_dts_file-157A_DHCOR_AVENGER96) \
 		  $(flavor_dts_file-157A_DK1) \
