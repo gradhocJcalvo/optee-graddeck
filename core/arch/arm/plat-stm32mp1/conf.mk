@@ -307,6 +307,14 @@ $(call force,CFG_STM32_I2C,y)
 $(call force,CFG_STM32_GPIO,y)
 endif
 
+#SAES and CRYP cannot be register at the same time in the crypto framework
+#If CRYP and SAES are enable on STMP32MP13, disable CRYP for safety purpose
+ifeq ($(CFG_STM32MP13),y)
+ifeq ($(call cfg-all-enabled, CFG_STM32_CRYP CFG_STM32_SAES), y)
+override CFG_STM32_CRYP := n
+endif # cfg-all-enabled, CFG_STM32_CRYP CFG_STM32_SAES
+endif # CFG_STM32MP13
+
 # If any crypto driver is enabled, enable the crypto-framework layer
 ifeq ($(call cfg-one-enabled, CFG_STM32_CRYP CFG_STM32_SAES),y)
 $(call force,CFG_STM32_CRYPTO_DRIVER,y)
