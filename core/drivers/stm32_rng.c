@@ -93,7 +93,6 @@ struct stm32_rng_instance {
 	uint32_t health_test_conf;
 	uint32_t noise_ctrl_conf;
 	uint32_t rng_config;
-	bool release_post_boot;
 	bool clock_error;
 	bool error_conceal;
 };
@@ -597,10 +596,6 @@ static TEE_Result stm32_rng_parse_fdt(const void *fdt, int node)
 	if (fdt_getprop(fdt, node, "clock-error-detect", NULL))
 		stm32_rng->clock_error = true;
 
-	/* Release device if not used at runtime or for pm transitions */
-	stm32_rng->release_post_boot = IS_ENABLED(CFG_WITH_SOFTWARE_PRNG) &&
-				       !IS_ENABLED(CFG_PM);
-
 	stm32_rng->rng_config = stm32_rng->ddata->cr;
 	if (stm32_rng->rng_config & ~RNG_CR_ENTROPY_SRC_MASK)
 		panic("Incorrect entropy source configuration");
@@ -669,7 +664,7 @@ static TEE_Result stm32_rng_probe(const void *fdt, int offs,
 	if (stm32_rng->bus_clock)
 		clk_disable(stm32_rng->bus_clock);
 
-	if (stm32_rng->release_post_boot)
+	if (IS_ENABLED(CFG_WITH_SOFTWARE_PRNG))
 		stm32mp_register_non_secure_periph_iomem(stm32_rng->base.pa);
 	else
 		stm32mp_register_secure_periph_iomem(stm32_rng->base.pa);
@@ -678,7 +673,9 @@ static TEE_Result stm32_rng_probe(const void *fdt, int offs,
 	assert(stm32_rng->ddata->has_power_optim ==
 	       stm32_rng->ddata->has_cond_reset);
 
-	register_pm_core_service_cb(stm32_rng_pm, &stm32_rng, "rng-service");
+	if (!IS_ENABLED(CFG_WITH_SOFTWARE_PRNG))
+		register_pm_core_service_cb(stm32_rng_pm, &stm32_rng,
+					    "rng-service");
 
 	return TEE_SUCCESS;
 
@@ -742,7 +739,8 @@ DEFINE_DT_DRIVER(stm32_rng_dt_driver) = {
 
 static TEE_Result stm32_rng_release(void)
 {
-	if (stm32_rng && stm32_rng->release_post_boot) {
+	if (stm32_rng && IS_ENABLED(CFG_WITH_SOFTWARE_PRNG) &&
+	    !IS_ENABLED(CFG_STM32MP1_OPTEE_IN_SYSRAM)) {
 		DMSG("Release RNG driver");
 		free(stm32_rng);
 		stm32_rng = NULL;
