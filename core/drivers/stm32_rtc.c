@@ -10,6 +10,7 @@
 #endif /* CFG_ARM64_core */
 #include <drivers/clk.h>
 #include <drivers/clk_dt.h>
+#include <drivers/rtc.h>
 #include <drivers/stm32_rtc.h>
 #include <drivers/stm32_rif.h>
 #include <io.h>
@@ -355,12 +356,6 @@ static signed long long stm32_rtc_diff_time_ms(struct optee_rtc_time *current,
 	return (curr_s - ref_s) * 1000U;
 }
 
-static bool stm32_is_a_leap_year(uint32_t year)
-{
-	return ((year % 4) == 0) &&
-	       (((year % 100) != 0) || ((year % 400) == 0));
-}
-
 /* Return absolute difference in milliseconds on day-in-year fraction */
 static signed long long stm32_rtc_diff_date_ms(struct optee_rtc_time *current,
 					       struct optee_rtc_time *ref)
@@ -399,7 +394,7 @@ static signed long long stm32_rtc_diff_date_ms(struct optee_rtc_time *current,
 	/* Particular cases: leap years (one day more) */
 	if (diff_in_days > 0) {
 		if (current->tm_year == ref->tm_year) {
-			if (stm32_is_a_leap_year(current->tm_year) &&
+			if (rtc_is_a_leap_year(current->tm_year) &&
 			    ref->tm_mon <= 2 &&
 			    current->tm_mon >= 3 && current->tm_mday <= 28)
 				diff_in_days++;
@@ -407,18 +402,18 @@ static signed long long stm32_rtc_diff_date_ms(struct optee_rtc_time *current,
 			uint32_t y = 0;
 
 			/* Ref year is leap */
-			if (stm32_is_a_leap_year(ref->tm_year) &&
+			if (rtc_is_a_leap_year(ref->tm_year) &&
 			    ref->tm_mon <= 2 && ref->tm_mday <= 28)
 				diff_in_days++;
 
 			/* Current year is leap */
-			if (stm32_is_a_leap_year(current->tm_year) &&
+			if (rtc_is_a_leap_year(current->tm_year) &&
 			    current->tm_mon >= 3)
 				diff_in_days++;
 
 			/* Interleaved years are leap */
 			for (y = ref->tm_year + 1; y < current->tm_year; y++)
-				if (stm32_is_a_leap_year(y))
+				if (rtc_is_a_leap_year(y))
 					diff_in_days++;
 		}
 	}
