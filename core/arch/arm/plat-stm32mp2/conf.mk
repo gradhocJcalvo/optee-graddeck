@@ -173,6 +173,12 @@ ifeq ($(CFG_STM32_HSE_MONITORING),y)
 $(call force,CFG_STM32_LPTIMER,y)
 endif
 
+#SAES and CRYP cannot be register at the same time in the crypto framework
+#If CRYP and SAES are enable, disable CRYP for safety purpose
+ifeq ($(call cfg-all-enabled, CFG_STM32_CRYP CFG_STM32_SAES), y)
+override CFG_STM32_CRYP := n
+endif # cfg-all-enabled, CFG_STM32_CRYP CFG_STM32_SAES
+
 # If any crypto driver is enabled, enable the crypto-framework layer
 ifeq ($(call cfg-one-enabled, CFG_STM32_SAES),y)
 $(call force,CFG_STM32_CRYPTO_DRIVER,y)
