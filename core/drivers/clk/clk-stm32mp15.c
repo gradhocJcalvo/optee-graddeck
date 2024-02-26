@@ -1418,6 +1418,11 @@ void stm32mp1_clk_mcuss_protect(bool enable)
 }
 
 #ifdef CFG_STM32_CPU_OPP
+static bool stm32mp1_clk_pll1_settings_are_valid(void)
+{
+	return pll1_settings.valid_id == PLL1_SETTINGS_VALID_ID;
+}
+
 static void save_current_opp(void)
 {
 	unsigned long freq_khz = UDIV_ROUND_NEAREST(_stm32_clock_get_rate(CK_MPU),
@@ -1770,18 +1775,19 @@ int stm32mp1_clk_compute_all_pll1_settings(uint32_t buck1_voltage)
 
 void stm32mp1_clk_lp_save_opp_pll1_settings(uint8_t *data, size_t size)
 {
-	if ((size != sizeof(pll1_settings)) ||
-	    !stm32mp1_clk_pll1_settings_are_valid())
-		panic();
+	assert(size == sizeof(pll1_settings));
 
-	memcpy(data, &pll1_settings, size);
+	if (stm32mp1_clk_pll1_settings_are_valid())
+		memcpy(data, &pll1_settings, size);
+	else
+		memset(data, 0, size);
 }
-
-bool stm32mp1_clk_pll1_settings_are_valid(void)
+#else
+void stm32mp1_clk_lp_save_opp_pll1_settings(uint8_t *data, size_t size)
 {
-	return pll1_settings.valid_id == PLL1_SETTINGS_VALID_ID;
+	memset(data, 0, size);
 }
-#endif
+#endif /* CFG_STM32_CPU_OPP */
 
 /*
  * Conversion between clk references and clock gates and clock on internals
