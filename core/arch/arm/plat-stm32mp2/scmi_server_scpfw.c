@@ -376,7 +376,7 @@ static struct stm32_scmi_clk stm32_scmi_clock[] = {
 
 	CLOCK_CELL(CK_SCMI_BKPSRAM, CK_BUS_BKPSRAM, "ck_bus_bkpsram", true),
 	CLOCK_CELL(CK_SCMI_BSEC, CK_BUS_BSEC, "ck_bus_bsec", true),
-	CLOCK_CELL(CK_SCMI_ETR, CK_BUS_ETR, "ck_bus_etr", true),
+	CLOCK_CELL(CK_SCMI_BUS_ETR, CK_BUS_ETR, "ck_icn_p_etr", true),
 	CLOCK_CELL(CK_SCMI_FMC, CK_KER_FMC, "ck_ker_fmc", true),
 	CLOCK_CELL(CK_SCMI_GPIOA, CK_BUS_GPIOA, "ck_bus_gpioa", true),
 	CLOCK_CELL(CK_SCMI_GPIOB, CK_BUS_GPIOB, "ck_bus_gpiob", true),
@@ -417,7 +417,9 @@ static struct stm32_scmi_clk stm32_scmi_clock[] = {
 	CLOCK_CELL(CK_SCMI_SYSDBG, CK_SYSDBG, "ck_sys_dbg", true),
 	CLOCK_CELL(CK_SCMI_SYSATB, CK_BUS_SYSATB, "ck_sys_atb", true),
 	CLOCK_CELL(CK_SCMI_TSDBG, CK_KER_TSDBG, "ck_ker_tsdbg", true),
-	CLOCK_CELL(CK_SCMI_STM500, CK_BUS_STM500, "ck_icn_s_stm500", true),
+	CLOCK_CELL(CK_SCMI_KER_ETR, CK_KER_ETR, "ck_icn_m_etr", true),
+	CLOCK_CELL(CK_SCMI_BUS_STM, CK_BUS_STM, "ck_icn_p_stm", true),
+	CLOCK_CELL(CK_SCMI_KER_STM, CK_BUS_STM, "ck_icn_s_stm", true),
 };
 #endif
 
