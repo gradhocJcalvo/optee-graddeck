@@ -555,6 +555,11 @@ uint32_t stm32_bsec_read_debug_conf(void)
 	return io_read32(bsec_base() + BSEC_DENR) & BSEC_DENR_ALL_MASK;
 }
 
+bool stm32_bsec_self_hosted_debug_is_enabled(void)
+{
+	return stm32_bsec_read_debug_conf() & BSEC_DENR_DBGSWEN;
+}
+
 /*
  * bsec_get_version: return BSEC version.
  */
