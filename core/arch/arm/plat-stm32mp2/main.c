@@ -201,6 +201,7 @@ static TEE_Result init_debug(void)
 {
 	TEE_Result res = TEE_SUCCESS;
 	struct clk *dbg_clk = stm32mp_rcc_clock_id_to_clk(CK_SYSDBG);
+	struct clk *flexgen_45_clk = stm32mp_rcc_clock_id_to_clk(CK_FLEXGEN_45);
 	uint32_t state = 0;
 
 	res = stm32_bsec_get_state(&state);
@@ -219,6 +220,13 @@ static TEE_Result init_debug(void)
 		assert(dbg_clk);
 		if (clk_enable(dbg_clk))
 			panic("Could not enable debug clock");
+	}
+
+	if (stm32_bsec_self_hosted_debug_is_enabled()) {
+		/* Enable flexgen 45 clock (ck_sys_atb / ck_icn_m_etr) */
+		assert(flexgen_45_clk);
+		if (clk_enable(flexgen_45_clk))
+			panic("Could not enable flexgen45 clock");
 	}
 
 	return res;
