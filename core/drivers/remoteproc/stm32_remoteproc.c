@@ -234,17 +234,11 @@ TEE_Result stm32_rproc_da_to_pa(uint32_t rproc_id, paddr_t da, size_t size,
 static TEE_Result stm32_rproc_map_mem(paddr_t pa, size_t size, void **va,
 				      enum teecore_memtypes type)
 {
-	/*
-	 * TODO: get memory RIF access right to determine the type.
-	 */
-	if (!core_mmu_add_mapping(type, pa, size)) {
-		EMSG("Can't map region %#"PRIxPA" size %zu",
-		     pa, size);
+	*va = core_mmu_add_mapping(type, pa, size);
+	if (!*va) {
+		EMSG("Can't map region %#"PRIxPA" size %zu", pa, size);
 		return TEE_ERROR_GENERIC;
 	}
-	*va = (void *)core_mmu_get_va(pa, type, size);
-	if (!*va)
-		return TEE_ERROR_ACCESS_DENIED;
 
 	return TEE_SUCCESS;
 }
