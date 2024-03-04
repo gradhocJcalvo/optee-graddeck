@@ -444,6 +444,12 @@ CFG_SCMI_MSG_SMT_THREAD_ENTRY ?= y
 CFG_SCMI_MSG_THREAD_ENTRY ?= y
 endif
 
+# Enable RTC
+ifeq ($(CFG_STM32_RTC),y)
+$(call force,CFG_DRIVERS_RTC,y)
+$(call force,CFG_RTC_PTA,y)
+endif
+
 # Enable Early TA NVMEM for provisioning management
 CFG_TA_STM32MP_NVMEM ?= y
 ifeq ($(CFG_TA_STM32MP_NVMEM),y)
