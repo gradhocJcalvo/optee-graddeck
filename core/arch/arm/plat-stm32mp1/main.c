@@ -7,6 +7,7 @@
 #include <boot_api.h>
 #include <config.h>
 #include <console.h>
+#include <drivers/clk_dt.h>
 #include <drivers/counter.h>
 #include <drivers/gic.h>
 #include <drivers/pinctrl.h>
@@ -715,25 +716,37 @@ DECLARE_KEEP_PAGER(stm32_hse_over_frequency);
 
 static TEE_Result stm32_hse_monitoring(void)
 {
-	struct clk *hse_clk = stm32mp_rcc_clock_id_to_clk(CK_HSE);
-	struct clk *hsi_clk = stm32mp_rcc_clock_id_to_clk(CK_HSI);
+	struct counter_device *counter = NULL;
+	struct clk *hse_clk = NULL;
+	struct clk *hsi_clk = NULL;
 	unsigned long hse = 0;
 	unsigned long hsi_cal = 0;
-	struct counter_device *counter;
 	uint32_t ticks = 0;
 	void *fdt = NULL;
 	void *config = NULL;
-	int node = 0;
-
-	DMSG("HSE monitoring");
+	int node = -1;
+	TEE_Result res = TEE_ERROR_GENERIC;
 
 	fdt = get_embedded_dt();
+	if (!fdt)
+		panic();
+
 	node = fdt_node_offset_by_compatible(fdt, 0, FREQ_MONITOR_COMPAT);
+	if (node == -FDT_ERR_NOTFOUND)
+		return TEE_SUCCESS;
 	if (node < 0)
 		panic();
 
 	if (fdt_get_status(fdt, node) == DT_STATUS_DISABLED)
 		return TEE_SUCCESS;
+
+	res = clk_dt_get_by_name(fdt, node, "hse", &hse_clk);
+	if  (res)
+		return res;
+
+	res = clk_dt_get_by_name(fdt, node, "hsi", &hsi_clk);
+	if  (res)
+		return res;
 
 	hse = clk_get_rate(hse_clk);
 	hsi_cal = clk_get_rate(hsi_clk);
