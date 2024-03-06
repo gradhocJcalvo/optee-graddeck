@@ -1,0 +1,69 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause)
+/*
+ * Copyright (C) 2024, STMicroelectronics - All Rights Reserved
+ */
+
+/dts-v1/;
+
+#include <dt-bindings/clock/stm32mp21-clksrc.h>
+#include <dt-bindings/soc/stm32mp21-rifsc.h>
+#include <dt-bindings/soc/stm32mp25-rif.h>
+#include <dt-bindings/soc/stm32mp25-risab.h>
+#include <dt-bindings/soc/stm32mp25-risaf.h>
+#include "stm32mp215.dtsi"
+#include "stm32mp21xf.dtsi"
+#include "stm32mp215f-dk-ca35tdcid-rcc.dtsi"
+#include "stm32mp215f-dk-ca35tdcid-resmem.dtsi"
+#include "stm32mp215f-dk-ca35tdcid-rif.dtsi"
+#include "stm32mp21-pinctrl.dtsi"
+#include "stm32mp21xxan-pinctrl.dtsi"
+
+/ {
+	model = "STMicroelectronics STM32MP215F-DK Discovery Board";
+	compatible = "st,stm32mp215f-dk", "st,stm32mp215";
+
+	aliases {
+		serial0 = &usart2;
+	};
+
+	chosen {
+		stdout-path = "serial0:115200n8";
+	};
+
+	memory@80000000 {
+		device_type = "memory";
+		reg = <0x0 0x80000000 0x0 0x80000000>;
+	};
+
+	/* TEMPORARY: waiting PMIC support */
+	vddcpu: vddcpu {
+		compatible = "regulator-fixed";
+		regulator-name = "vddcpu";
+		regulator-always-on;
+		regulator-max-microvolt = <800000>;
+		regulator-min-microvolt = <800000>;
+	};
+};
+
+&cpu0 {
+	cpu-supply = <&vddcpu>;
+};
+
+&rcc {
+	st,c1msrd = <2>;
+	st,clk_opp {
+		st,ck_cpu1 {
+			cfg_1 {
+				hz = <1500000000>;
+				st,clksrc = <0>;
+				st,pll = <&pll1_cfg_1500Mhz>;
+			};
+
+			cfg_2 {
+				hz = <1200000000>;
+				st,clksrc = <0>;
+				st,pll = <&pll1_cfg_1200Mhz>;
+			};
+		};
+	};
+};
