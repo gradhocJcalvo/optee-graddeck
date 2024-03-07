@@ -315,6 +315,19 @@ static void stm32_omm_configure(void)
 			req2ack | cssel_ovr | omm_d->mux);
 
 	clk_disable(omm_d->clock);
+
+	if (omm_d->mux & _OCTOSPIM_CR_MUXEN) {
+		/*
+		 * If the mux is enabled, the 2 OSPI clocks have to be
+		 * always enabled
+		 */
+		for (ospi_i = 0; ospi_i < OSPI_NB; ospi_i++) {
+			ospi_d = &omm_d->ospi_d[ospi_i];
+
+			if (clk_enable(ospi_d->clock))
+				panic();
+		}
+	}
 }
 
 static void stm32_omm_setup(void)
