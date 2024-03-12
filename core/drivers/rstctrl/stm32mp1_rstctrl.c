@@ -8,6 +8,7 @@
 #include <drivers/stm32mp_dt_bindings.h>
 #include <drivers/stm32mp1_rcc.h>
 #include <io.h>
+#include <keep.h>
 #include <kernel/delay.h>
 #include <kernel/dt.h>
 #include <kernel/dt_driver.h>
@@ -131,6 +132,7 @@ static struct rstctrl_ops stm32_rstctrl_ops = {
 	.assert_level = reset_assert,
 	.deassert_level = reset_deassert,
 };
+DECLARE_KEEP_PAGER(stm32_rstctrl_ops);
 
 static struct rstctrl_ops *stm32_reset_get_ops(unsigned int id __unused)
 {
