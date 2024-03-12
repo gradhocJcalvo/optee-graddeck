@@ -7,7 +7,7 @@
 
 #include <assert.h>
 #include <bitstring.h>
-#include <kernel/mutex.h>
+#include <kernel/mutex_pm_aware.h>
 #include <sys/queue.h>
 #include <tee_api_types.h>
 #include <stdbool.h>
@@ -97,7 +97,7 @@ struct regulator_voltages_desc {
  * @enable_ramp_delay_us: Delay after enable, in microseconds (us)
  * @flags: REGULATOR_* property flags
  * @refcount: Regulator enable request reference counter
- * @lock: Mutex for concurrent access protection
+ * @mutex: Concurrent access protection considering PM context sequences
  * @voltages_fallback: Default supported voltage range description
  * @link: Link in initialized regulator list
  */
@@ -114,7 +114,7 @@ struct regulator {
 	/* Fields internal to regulator framework */
 	unsigned int flags;
 	unsigned int refcount;
-	struct mutex lock;	/* Concurrent access protection */
+	struct mutex_pm_aware mutex;
 	struct voltages_fallback {
 		struct regulator_voltages_desc desc;
 		int levels[3];
