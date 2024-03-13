@@ -186,6 +186,18 @@ struct stm32_gpio_bank {
 	STAILQ_ENTRY(stm32_gpio_bank) link;
 };
 
+/*
+ * struct stm32_gpios_pm_state - Consumed GPIO for PM purpose
+ * @gpio_pinctrl: Reference and configuration state for a consumed GPIO
+ * @level: GPIO level
+ * @link: Link consumed GPIO list
+ */
+struct stm32_gpio_pm_state {
+	struct stm32_pinctrl gpio_pinctrl;
+	uint8_t level;
+	SLIST_ENTRY(stm32_gpio_pm_state) link;
+};
+
 /**
  * Compatibility information of supported banks
  *
@@ -203,6 +215,8 @@ static unsigned int gpio_lock;
 
 static STAILQ_HEAD(, stm32_gpio_bank) bank_list =
 		STAILQ_HEAD_INITIALIZER(bank_list);
+
+static SLIST_HEAD(, stm32_gpio_pm_state) consumed_gpios_head;
 
 static bool is_stm32_gpio_chip(struct gpio_chip *chip);
 
@@ -329,11 +343,35 @@ static void stm32_gpio_set_direction(struct gpio_chip *chip,
 	clk_disable(bank->clock);
 }
 
-static void stm32_gpio_put_gpio(struct gpio_chip *chip __maybe_unused,
-				struct gpio *gpio)
+/* Forward reference to the PM callback handler for consumed GPIOs */
+static TEE_Result consumed_gpios_pm(enum pm_op op, unsigned int pm_hint,
+				    const struct pm_callback_handle *pm_hdl);
+
+static void stm32_gpio_put_gpio(struct gpio_chip *chip, struct gpio *gpio)
 {
+	struct stm32_gpio_bank *bank = gpio_chip_to_bank(chip);
+	struct stm32_gpio_pm_state *tstate = NULL;
+	struct stm32_gpio_pm_state *state = NULL;
+	uint32_t exceptions = 0;
+
 	assert(is_stm32_gpio_chip(chip));
-	free(gpio);
+
+	exceptions = cpu_spin_lock_xsave(&gpio_lock);
+
+	SLIST_FOREACH_SAFE(state, &consumed_gpios_head, link, tstate) {
+		if (state->gpio_pinctrl.bank == bank->bank_id &&
+		    state->gpio_pinctrl.pin == gpio->pin) {
+			SLIST_REMOVE(&consumed_gpios_head, state,
+				     stm32_gpio_pm_state, link);
+			unregister_pm_driver_cb(consumed_gpios_pm, state);
+			free(state);
+			free(gpio);
+			break;
+		}
+	}
+	assert(state);
+
+	cpu_spin_unlock_xrestore(&gpio_lock, exceptions);
 }
 
 static const struct gpio_ops stm32_gpio_ops = {
@@ -361,8 +399,7 @@ static struct stm32_gpio_bank *stm32_gpio_get_bank(unsigned int bank_id)
 }
 
 /* Save to output @cfg the current GPIO (@bank_id/@pin) configuration */
-static void __maybe_unused get_gpio_cfg(uint32_t bank_id, uint32_t pin,
-					struct gpio_cfg *cfg)
+static void get_gpio_cfg(uint32_t bank_id, uint32_t pin, struct gpio_cfg *cfg)
 {
 	struct stm32_gpio_bank *bank = stm32_gpio_get_bank(bank_id);
 
@@ -559,10 +596,34 @@ static int get_pinctrl_from_fdt(const void *fdt, int node,
 	return (int)found;
 }
 
+static TEE_Result consumed_gpios_pm(enum pm_op op,
+				    unsigned int pm_hint __unused,
+				    const struct pm_callback_handle *pm_hdl)
+{
+	struct stm32_gpio_pm_state *handle = pm_hdl->handle;
+	unsigned int bank_id = handle->gpio_pinctrl.bank;
+	unsigned int pin = handle->gpio_pinctrl.pin;
+	struct gpio_chip *chip = &stm32_gpio_get_bank(bank_id)->gpio_chip;
+
+	if (op == PM_OP_RESUME) {
+		set_gpio_cfg(bank_id, pin, &handle->gpio_pinctrl.cfg);
+		if (handle->gpio_pinctrl.cfg.mode == GPIO_MODE_OUTPUT)
+			stm32_gpio_set_level(chip, pin, handle->level);
+	} else {
+		get_gpio_cfg(bank_id, pin, &handle->gpio_pinctrl.cfg);
+		if (handle->gpio_pinctrl.cfg.mode == GPIO_MODE_OUTPUT)
+			handle->level = stm32_gpio_get_level(chip, pin);
+	}
+
+	return TEE_SUCCESS;
+}
+DECLARE_KEEP_PAGER(consumed_gpios_pm);
+
 static TEE_Result stm32_gpio_get_dt(struct dt_pargs *pargs, void *data,
 				    struct gpio **out_gpio)
 {
 	TEE_Result res = TEE_ERROR_GENERIC;
+	struct stm32_gpio_pm_state *state = NULL;
 	struct stm32_gpio_bank *bank = data;
 	struct gpio *gpio = NULL;
 	unsigned int shift_1b = 0;
@@ -581,6 +642,19 @@ static TEE_Result stm32_gpio_get_dt(struct dt_pargs *pargs, void *data,
 		free(gpio);
 		return TEE_ERROR_GENERIC;
 	}
+
+	state = calloc(1, sizeof(*state));
+	if (!state) {
+		free(gpio);
+		return TEE_ERROR_OUT_OF_MEMORY;
+	}
+
+	state->gpio_pinctrl.pin = gpio->pin;
+	state->gpio_pinctrl.bank = bank->bank_id;
+	SLIST_INSERT_HEAD(&consumed_gpios_head, state, link);
+
+	register_pm_core_service_cb(consumed_gpios_pm, state,
+				    "stm32-gpio-state");
 
 	shift_1b = gpio->pin;
 	shift_2b = SHIFT_U32(gpio->pin, 1);
