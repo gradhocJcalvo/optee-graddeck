@@ -129,6 +129,19 @@ struct pm_callback_handle {
 void register_pm_cb(struct pm_callback_handle *pm_handle);
 
 /*
+ * Register a callback for suspend/resume sequence
+ * Refer to struct pm_callback_handle for description of the callbacks
+ * API and the registration directives.
+ *
+ * @pm_handle: Reference previously registered
+ *
+ * This function removes from the list of the PM called callbacks the
+ * entry that match callabck function reference and private handle or
+ * PM order (PM_CB_ORDER_*).
+ */
+void unregister_pm_cb(struct pm_callback_handle *pm_handle);
+
+/*
  * Register a driver callback for generic suspend/resume.
  * Refer to struct pm_callback_handle for description of the callbacks
  * API.
@@ -146,6 +159,19 @@ static inline void register_pm_driver_cb(pm_callback callback, void *handle,
 }
 
 /*
+ * Unregister a driver callback from generic suspend/resume sequence.
+ *
+ * @callback: Callback function that what registered
+ * @handle: Private handle argument that was registered for the callback
+ */
+static inline void unregister_pm_driver_cb(pm_callback callback, void *handle)
+{
+	unregister_pm_cb(&PM_CALLBACK_HANDLE_INITIALIZER(callback, handle,
+							 PM_CB_ORDER_DRIVER,
+							 NULL));
+}
+
+/*
  * Register a core service callback for generic suspend/resume.
  * Refer to struct pm_callback_handle for description of the callbacks
  * API.
@@ -160,6 +186,21 @@ static inline void register_pm_core_service_cb(pm_callback callback,
 	register_pm_cb(&PM_CALLBACK_HANDLE_INITIALIZER(callback, handle,
 						PM_CB_ORDER_CORE_SERVICE,
 						name));
+}
+
+/*
+ * Unregister a core service callback from generic suspend/resume sequence
+ *
+ * @callback: Callback function that what registered
+ * @handle: Private handle argument that was registered for the callback
+ */
+static inline void unregister_pm_core_service_cb(pm_callback callback,
+						 void *handle)
+{
+	enum pm_callback_order order = PM_CB_ORDER_CORE_SERVICE;
+
+	unregister_pm_cb(&PM_CALLBACK_HANDLE_INITIALIZER(callback, handle,
+							 order, NULL));
 }
 
 /*
