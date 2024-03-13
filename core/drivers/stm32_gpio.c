@@ -1241,7 +1241,7 @@ static void stm32_gpio_set_conf_sec(struct stm32_gpio_bank *bank)
 	}
 }
 
-static TEE_Result stm32_gpio_pm_resume(void)
+static TEE_Result stm32_gpio_sec_config_resume(void)
 {
 	struct stm32_gpio_bank *bank = NULL;
 
@@ -1267,7 +1267,7 @@ static TEE_Result stm32_gpio_pm_resume(void)
 	return TEE_SUCCESS;
 }
 
-static TEE_Result stm32_gpio_pm_suspend(void)
+static TEE_Result stm32_gpio_sec_config_suspend(void)
 {
 	struct stm32_gpio_bank *bank = NULL;
 
@@ -1289,23 +1289,23 @@ static TEE_Result stm32_gpio_pm_suspend(void)
 }
 
 static TEE_Result
-stm32_gpio_pm(enum pm_op op, unsigned int pm_hint __unused,
-	      const struct pm_callback_handle *pm_handle __unused)
+stm32_gpio_sec_config_pm(enum pm_op op, unsigned int pm_hint,
+			 const struct pm_callback_handle *hdl __unused)
 {
-	TEE_Result ret = 0;
+	TEE_Result ret = TEE_ERROR_GENERIC;
 
 	if (!IS_ENABLED(CFG_STM32MP13) && !IS_ENABLED(CFG_STM32MP15) &&
 	    pm_hint != PM_HINT_CONTEXT_STATE)
 		return TEE_SUCCESS;
 
 	if (op == PM_OP_RESUME)
-		ret = stm32_gpio_pm_resume();
+		ret = stm32_gpio_sec_config_resume();
 	else
-		ret = stm32_gpio_pm_suspend();
+		ret = stm32_gpio_sec_config_suspend();
 
 	return ret;
 }
-DECLARE_KEEP_PAGER(stm32_gpio_pm);
+DECLARE_KEEP_PAGER(stm32_gpio_sec_config_pm);
 
 /*
  * Several pinctrl nodes can be probed. Their bank will be put in the unique
@@ -1357,9 +1357,12 @@ static TEE_Result stm32_pinctrl_probe(const void *fdt, int node,
 		panic();
 
 	if (!pm_register) {
-		/* Register to PM once for all probed banks */
-		register_pm_core_service_cb(stm32_gpio_pm, NULL,
-					    "stm32-gpio-service");
+		/*
+		 * Register to PM once for all probed banks to restore
+		 * their secure configuration.
+		 */
+		register_pm_core_service_cb(stm32_gpio_sec_config_pm, NULL,
+					    "stm32-gpio-secure-config");
 		pm_register = true;
 	}
 
