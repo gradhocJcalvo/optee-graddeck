@@ -9,6 +9,7 @@
 #include <dt-bindings/clock/stm32mp1-clksrc.h>
 #include <dt-bindings/mfd/st,stpmic1.h>
 #include <dt-bindings/power/stm32mp1-power.h>
+#include <dt-bindings/soc/stm32mp-provisioning.h>
 #include <dt-bindings/soc/stm32mp15-etzpc.h>
 
 #include "stm32mp157.dtsi"
@@ -32,6 +33,15 @@
 	memory@c0000000 {
 		device_type = "memory";
 		reg = <0xC0000000 0x40000000>;
+	};
+
+	shadow-prov {
+		compatible = "st,provisioning";
+		hw2_prov {
+			nvmem-cells = <&hw2_otp>;
+			st,shadow-value = <0x000001E0>;
+			st,shadow-lock = <STICKY_LOCK_SR>;
+		};
 	};
 
 	vin: vin {
