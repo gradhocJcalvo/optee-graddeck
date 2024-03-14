@@ -638,19 +638,17 @@
 	st,tamp-passive-sample-clk-div = <16384>;
 
 	/* Tamper button */
-	tamp_button: tamp-passive@2 {
-		status = "okay";
-		reg = <EXT_TAMPER_2 0>;
-		pinctrl-0 = <&tamp0_in2_pin_a>;
+	tamp-button {
 		tamper-gpios = <&gpioa 6 0>;
 		st,tamp-mode = <TAMPER_CONFIRMED_MODE>;
 		st,tamp-id = <2>;
+		status = "okay";
 	};
 
 	/* Connect pin8 and pin22 from CN8 */
-	tamp-active@1 {
-		pinctrl-0 = <&tamp0_in3_pin_a &tamp0_out1_pin_a>;
+	tamp-active {
 		tamper-gpios = <&gpioc 0 0>, <&gpioi 0 0>;
+		st,tamp-mode = <TAMPER_CONFIRMED_MODE>;
 		st,tamp-id = <3>, <1>;
 		status = "disabled";
 	};
