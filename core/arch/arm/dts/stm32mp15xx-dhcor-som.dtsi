@@ -10,6 +10,7 @@
 #include "stm32mp15xxac-pinctrl.dtsi"
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/mfd/st,stpmic1.h>
+#include <dt-bindings/soc/stm32mp-provisioning.h>
 
 / {
 	aliases {
@@ -66,6 +67,15 @@
 			compatible = "shared-dma-pool";
 			reg = <0x38000000 0x10000>;
 			no-map;
+		};
+	};
+
+	shadow-prov {
+		compatible = "st,provisioning";
+		hw2_prov {
+			nvmem-cells = <&hw2_otp>;
+			st,shadow-value = <0x000001E0>;
+			st,shadow-lock = <STICKY_LOCK_SR>;
 		};
 	};
 };
