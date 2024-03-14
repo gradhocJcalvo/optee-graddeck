@@ -8,6 +8,7 @@
 #include <crypto/crypto.h>
 #include <drivers/clk.h>
 #include <drivers/clk_dt.h>
+#include <drivers/gpio.h>
 #include <drivers/stm32_exti.h>
 #include <drivers/stm32_gpio.h>
 #include <drivers/stm32_rtc.h>
@@ -1478,109 +1479,76 @@ static enum itr_return stm32_tamp_it_handler(struct itr_handler *h __unused)
 }
 DECLARE_KEEP_PAGER(stm32_tamp_it_handler);
 
-static void stm32_tamp_configure_pin(uint32_t id, struct pinctrl_state *pinctrl,
-				     bool out,
-				     struct stm32_tamp_platdata *pdata,
-				     unsigned int offset)
+static void stm32_tamp_configure_pin(uint32_t id, struct gpio *gpio, bool out,
+				     struct stm32_tamp_platdata *pdata)
 {
 	struct stm32_tamp_compat *compat = pdata->compat;
-	unsigned int *bank = 0;
-	unsigned int *pin = 0;
-	unsigned int count = 0;
+	unsigned int bank = stm32_gpio_chip_bank_id(gpio->chip);
+	unsigned int pin = gpio->pin;
 	size_t i = 0;
 
 	if (!compat)
 		return;
 
-	stm32_gpio_pinctrl_bank_pin(pinctrl, NULL, NULL, &count);
-	if (!count)
-		panic();
-
-	assert(offset <= count);
-
-	bank = calloc(count, sizeof(*bank));
-	pin = calloc(count, sizeof(*pin));
-	if (!bank || !pin)
-		panic();
-
-	stm32_gpio_pinctrl_bank_pin(pinctrl, bank, pin, &count);
-
 	/* Configure option registers */
 	for (i = 0; i < compat->pin_map_size; i++) {
 		if (id == compat->pin_map[i].id &&
-		    bank[offset] == compat->pin_map[i].bank &&
-		    pin[offset] == compat->pin_map[i].pin &&
-		    !out == !compat->pin_map[i].out) {
+		    bank == compat->pin_map[i].bank &&
+		    pin == compat->pin_map[i].pin &&
+		    out == compat->pin_map[i].out) {
 			pdata->pins_conf |= compat->pin_map[i].conf;
 			break;
 		}
 	}
 
 	/* TAMPER pins are always secure (without effect, but keep coherency) */
-	stm32_gpio_set_secure_cfg(bank[offset], pin[offset], true);
-
-	free(bank);
-	free(pin);
+	stm32_gpio_set_secure_cfg(bank, pin, true);
 }
 
 static TEE_Result
 stm32_tamp_configure_pin_from_dt(const void *fdt, int node,
-				 struct stm32_tamp_platdata *pdata)
+				 struct stm32_tamp_platdata *pdata,
+				 uint32_t ext_tamp_id, uint32_t out_tamp_id)
 {
-	TEE_Result res = TEE_SUCCESS;
-	struct pinctrl_state *pinctrl = NULL;
-	size_t i = 0;
-	enum stm32_tamp_id id = INVALID_TAMP;
 	enum stm32_tamp_out_id out_id = INVALID_OUT_TAMP;
 	struct stm32_tamp_conf *tamp_ext = NULL;
-	const fdt32_t *cuint = NULL;
-	const fdt32_t *tampid = NULL;
-	int lenp = 0;
-	int pinnode = -1;
+	enum stm32_tamp_id id = INVALID_TAMP;
+	TEE_Result res = TEE_SUCCESS;
+	struct gpio *gpio_out = NULL;
+	struct gpio *gpio_ext = NULL;
 	bool active = false;
+	unsigned int i = 0;
 
 	/*
-	 * First pin in the "pinctrl-0" node is the EXT_TAMP.
-	 * If two pins are defined, first is a pin for an active tamper and the
-	 * second is the OUT pin linked with the first.
-	 * If only one found, this is a pin for a passive tamper.
+	 * First GPIO in the tamper-gpios property is required and refers to the
+	 * EXT_TAMP control. Second GPIO in the tamper-gpios property is
+	 * optional and, if defined, refers to the OUT_TAMP control.
+	 * If only one GPIO is defined, the tamper control is a passive tamper.
+	 * Else, it is an active tamper.
 	 */
-	res = pinctrl_get_state_by_idx(fdt, node, 0, &pinctrl);
-	if (res)
+	res = gpio_dt_get_by_index(fdt, node, 1, "tamper", &gpio_out);
+	if (res && res != TEE_ERROR_ITEM_NOT_FOUND)
 		return res;
 
-	assert(pinctrl->conf_count == 1 || pinctrl->conf_count == 2);
-
-	cuint = fdt_getprop(fdt, node, "pinctrl-0", &lenp);
-	if (!cuint || (pinctrl->conf_count == 2 && (lenp / sizeof(*cuint)) < 2))
-		return TEE_ERROR_BAD_PARAMETERS;
-
-	if (pinctrl->conf_count == 2) {
-		pinnode = fdt_node_offset_by_phandle(fdt,
-						     fdt32_to_cpu(cuint[1]));
-		tampid = fdt_getprop(fdt, fdt_first_subnode(fdt, pinnode),
-				     "st,tamp-id", NULL);
-		if (!tampid)
-			return TEE_ERROR_BAD_PARAMETERS;
-
+	if (res != TEE_ERROR_ITEM_NOT_FOUND) {
 		active = true;
-		out_id = OUT_TAMP1 + fdt32_to_cpu(*tampid) - 1;
-		if (out_id - OUT_TAMP1 > pdata->compat->ext_tamp_size)
+		out_id = OUT_TAMP1 + out_tamp_id - 1;
+		if (out_tamp_id > pdata->compat->ext_tamp_size)
 			return TEE_ERROR_BAD_PARAMETERS;
 
-		stm32_tamp_configure_pin(out_id, pinctrl, true, pdata, 1);
+		stm32_tamp_configure_pin(out_id, gpio_out, true, pdata);
+	}
+
+	res = gpio_dt_get_by_index(fdt, node, 0, "tamper", &gpio_ext);
+	if (res) {
+		gpio_put(gpio_out);
+		return res;
 	}
 
 	/* We now configure first pin */
-	pinnode = fdt_node_offset_by_phandle(fdt, fdt32_to_cpu(cuint[0]));
-	tampid = fdt_getprop(fdt, fdt_first_subnode(fdt, pinnode),
-			     "st,tamp-id", NULL);
-	if (!tampid)
-		return TEE_ERROR_BAD_PARAMETERS;
+	id = ext_tamp_id + EXT_TAMP1 - 1;
 
-	id = fdt32_to_cpu(*tampid) + EXT_TAMP1 - 1;
-
-	/* Find external Tamp struct */
+	/* Find external TAMP struct */
 	for (i = 0; i < pdata->compat->ext_tamp_size; i++) {
 		if (pdata->compat->ext_tamp[i].id == id) {
 			tamp_ext = &pdata->compat->ext_tamp[i];
@@ -1605,7 +1573,7 @@ stm32_tamp_configure_pin_from_dt(const void *fdt, int node,
 
 	tamp_ext->mode |= TAMP_IN_DT;
 
-	stm32_tamp_configure_pin(id, pinctrl, false, pdata, 0);
+	stm32_tamp_configure_pin(id, gpio_ext, false, pdata);
 
 	return TEE_SUCCESS;
 }
@@ -1786,31 +1754,41 @@ static TEE_Result stm32_configure_tamp(const void *fdt, int node)
 
 skip_int_tamp:
 	fdt_for_each_subnode(subnode, fdt, node) {
-		if (fdt_getprop(fdt, subnode, "pinctrl-0", NULL)) {
-			const fdt32_t *mode = 0;
-			paddr_t reg = 0;
+		if (fdt_getprop(fdt, subnode, "tamper-gpios", NULL)) {
+			unsigned int ext_tamp_id = 0;
+			unsigned int out_tamp_id = 0;
+			const fdt32_t *cuint = 0;
+			unsigned int mode = 0;
+			int lenp = 0;
 
 			if (fdt_get_status(fdt, subnode) == DT_STATUS_DISABLED)
 				continue;
 
-			mode = fdt_getprop(fdt, subnode, "st,tamp-mode",
-					   NULL);
-			if (!mode)
-				continue;
+			cuint = fdt_getprop(fdt, subnode, "st,tamp-mode", NULL);
+			if (!cuint)
+				return TEE_ERROR_BAD_PARAMETERS;
+
+			mode = fdt32_to_cpu(*cuint);
+
+			cuint = fdt_getprop(fdt, subnode, "st,tamp-id", &lenp);
+			if (!cuint)
+				return TEE_ERROR_BAD_PARAMETERS;
+
+			ext_tamp_id = fdt32_to_cpu(*cuint);
+			if (lenp > (int)sizeof(uint32_t))
+				out_tamp_id = fdt32_to_cpu(*(cuint + 1));
 
 			res =
 			stm32_tamp_configure_pin_from_dt(fdt, subnode,
-							 &stm32_tamp.pdata);
+							 &stm32_tamp.pdata,
+							 ext_tamp_id,
+							 out_tamp_id);
 			if (res)
 				return res;
 
-			reg = fdt_reg_base_address(fdt, subnode);
-			if (reg == DT_INFO_INVALID_REG)
-				return TEE_ERROR_BAD_PARAMETERS;
-
 			res =
-			stm32_tamp_activate_tamp(EXT_TAMP1 + (uint32_t)reg - 1,
-						 fdt32_to_cpu(*mode),
+			stm32_tamp_activate_tamp(EXT_TAMP1 + ext_tamp_id - 1,
+						 mode,
 						 stm32_tamp_etamper_action);
 			if (res)
 				return res;
