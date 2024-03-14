@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 /*
- * Copyright (c) 2017-2023, STMicroelectronics
+ * Copyright (c) 2017-2024, STMicroelectronics
  *
  * STM32 GPIO driver is used as pin controller for stm32mp SoCs.
  */
@@ -209,6 +209,15 @@ static bool is_stm32_gpio_chip(struct gpio_chip *chip);
 static struct stm32_gpio_bank *gpio_chip_to_bank(struct gpio_chip *chip)
 {
 	return container_of(chip, struct stm32_gpio_bank, gpio_chip);
+}
+
+unsigned int stm32_gpio_chip_bank_id(struct gpio_chip *chip)
+{
+	struct stm32_gpio_bank *bank = gpio_chip_to_bank(chip);
+
+	assert(bank);
+
+	return bank->bank_id;
 }
 
 static enum gpio_level stm32_gpio_get_level(struct gpio_chip *chip,

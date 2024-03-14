@@ -1,12 +1,13 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright (c) 2017-2023, STMicroelectronics
+ * Copyright (c) 2017-2024, STMicroelectronics
  */
 
 #ifndef __DRIVERS_STM32_GPIO_H
 #define __DRIVERS_STM32_GPIO_H
 
 #include <assert.h>
+#include <drivers/gpio.h>
 #include <drivers/pinctrl.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -44,6 +45,12 @@ void stm32_pinctrl_set_secure_cfg(struct pinctrl_state *pinctrl, bool secure);
 void stm32_gpio_pinctrl_bank_pin(struct pinctrl_state *pinctrl,
 				 unsigned int *bank, unsigned int *pin,
 				 unsigned int *count);
+
+/*
+ * stm32_gpio_chip_bank_id() - Get the GPIO bank associated to a chip
+ * @chip: GPIO chip associated to the bank
+ */
+unsigned int stm32_gpio_chip_bank_id(struct gpio_chip *chip);
 #else
 static inline void
 stm32_pinctrl_set_secure_cfg(struct pinctrl_state *pinctrl __unused,
@@ -56,6 +63,12 @@ static inline void stm32_gpio_pinctrl_bank_pin(struct pinctrl_state *p __unused,
 					       unsigned int *pin __unused,
 					       unsigned int *count __unused)
 {
+}
+
+static inline unsigned int
+stm32_gpio_chip_bank_id(struct gpio_chip *chip __unused)
+{
+	panic();
 }
 #endif /*CFG_STM32_GPIO*/
 #endif /*__DRIVERS_STM32_GPIO_H*/
