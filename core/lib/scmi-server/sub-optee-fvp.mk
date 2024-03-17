@@ -1,5 +1,5 @@
-incdirs_ext-y += $(scpfw-path)/product/optee-fvp/fw
-incdirs_ext-y += $(scpfw-path)/product/optee-fvp/include
+scpfw-incdirs-y += $(scpfw-path)/product/optee-fvp/fw
+scpfw-incdirs-y += $(scpfw-path)/product/optee-fvp/include
 
 srcs-y += $(scpfw-path)/product/optee-fvp/fw/config_clock.c
 srcs-y += $(scpfw-path)/product/optee-fvp/fw/config_dvfs.c
