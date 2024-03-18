@@ -467,7 +467,9 @@
 	tamp_button: tamp-passive@1 {
 		status = "disabled";
 		reg = <EXT_TAMPER_1 0>;
+		tamper-gpios = <&gpioi 8 0>;
 		st,tamp-mode = <TAMPER_CONFIRMED_MODE>;
+		st,tamp-id = <1>;
 	};
 };
 
