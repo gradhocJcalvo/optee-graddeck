@@ -27,6 +27,8 @@
 #define PMIC_I2C_TRIALS			U(1)
 #define PMIC_I2C_TIMEOUT_BUSY_MS	U(5)
 
+static bool stm32_pmic2;
+
 /*
  * Low power configurations:
  *
@@ -880,6 +882,8 @@ static TEE_Result stm32_pmic2_probe(const void *fdt, int node,
 	if (res)
 		panic();
 
+	stm32_pmic2 = true;
+
 	return TEE_SUCCESS;
 }
 
@@ -894,3 +898,7 @@ DEFINE_DT_DRIVER(stm32_pmic2_dt_driver) = {
 	.probe = stm32_pmic2_probe,
 };
 
+bool stm32_pmic2_is_present(void)
+{
+	return stm32_pmic2;
+}

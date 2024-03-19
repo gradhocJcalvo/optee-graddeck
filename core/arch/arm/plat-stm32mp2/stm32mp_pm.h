@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-2-Clause */
 /*
- * Copyright (c) 2023, STMicroelectronics
+ * Copyright (c) 2023-2024, STMicroelectronics
  */
 
 #ifndef __STM32MP_PM_H__

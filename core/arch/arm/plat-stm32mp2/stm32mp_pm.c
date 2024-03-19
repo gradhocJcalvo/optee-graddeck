@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: BSD-2-Clause
 /*
- * Copyright (c) 2023, STMicroelectronics
+ * Copyright (c) 2023-2024, STMicroelectronics
  */
 
 #include <kernel/misc.h>
@@ -8,6 +8,7 @@
 #include <kernel/thread.h>
 #include <sm/psci.h>
 #include <stm32mp_pm.h>
+#include <stm32_util.h>
 
 /**
  * @brief   Handler for system off
@@ -86,6 +87,8 @@ unsigned long thread_cpu_suspend_handler(unsigned long a0,
 	TEE_Result retstatus = TEE_SUCCESS;
 
 	retstatus = pm_change_state(PM_OP_SUSPEND, get_pm_hint(a0));
+
+	stm32_debug_suspend(a0);
 
 	/*
 	 * Returned value to the TF-A.

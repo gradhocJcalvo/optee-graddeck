@@ -31,4 +31,16 @@ TEE_Result stm32_activate_internal_tamper(int id);
 #ifdef CFG_STM32_CPU_OPP
 bool stm32mp_supports_cpu_opp(uint32_t opp_id);
 #endif /*CFG_STM32_CPU_OPP*/
+
+#ifdef CFG_STPMIC2
+bool stm32_pmic2_is_present(void);
+#else
+static inline bool stm32_pmic2_is_present(void)
+{
+	return false;
+}
+#endif
+
+void stm32_debug_suspend(unsigned long a0);
+
 #endif /*__STM32_UTIL_H__*/
