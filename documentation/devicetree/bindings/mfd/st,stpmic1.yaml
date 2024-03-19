@@ -112,6 +112,10 @@ properties:
           interrupts:
             maxItems: 1
 
+          st,regulator-warm-boot-on:
+            description: enable the regulator after standby.
+            $ref: /schemas/types.yaml#/definitions/flag
+
           st,mask-reset:
             description: mask reset for this regulator, the regulator configuration
               is maintained during pmic reset.
@@ -133,6 +137,10 @@ properties:
         properties:
           interrupts:
             maxItems: 1
+
+          st,regulator-warm-boot-on:
+            description: enable the regulator after standby.
+            $ref: /schemas/types.yaml#/definitions/flag
 
           st,mask-reset:
             description: mask reset for this regulator, the regulator configuration
@@ -171,6 +179,10 @@ properties:
           interrupts:
             maxItems: 1
 
+          st,regulator-warm-boot-on:
+            description: enable the regulator after standby.
+            $ref: /schemas/types.yaml#/definitions/flag
+
           st,mask-reset:
             description: mask reset for this regulator, the regulator configuration
               is maintained during pmic reset.
@@ -197,6 +209,10 @@ properties:
           interrupts:
             maxItems: 1
 
+          st,regulator-warm-boot-on:
+            description: enable the regulator after standby.
+            $ref: /schemas/types.yaml#/definitions/flag
+
           st,mask-reset:
             description: mask reset for this regulator, the regulator configuration
               is maintained during pmic reset.
@@ -218,6 +234,10 @@ properties:
         properties:
           interrupts:
             maxItems: 1
+
+          st,regulator-warm-boot-on:
+            description: enable the regulator after standby.
+            $ref: /schemas/types.yaml#/definitions/flag
 
           st,mask-reset:
             description: mask reset for this regulator, the regulator configuration
