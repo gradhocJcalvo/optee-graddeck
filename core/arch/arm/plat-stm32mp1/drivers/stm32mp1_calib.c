@@ -285,16 +285,13 @@ static void osc_calibration(struct stm32mp1_clk_cal *clk_cal)
 
 		clk_cal->set_trim(new_trim, clk_cal->cal_ref);
 		freq = get_freq(clk_cal);
-		if (freq == 0) {
-			/* Calibration will be stopped */
-			clk_cal->ref_freq = 0U;
-			return;
-		}
 		conv = (clk_cal->ref_freq < freq) ?
 			freq - clk_cal->ref_freq : clk_cal->ref_freq - freq;
 		if (conv < min_conv) {
 			min_conv = conv;
 			trim = new_trim;
+		} else if (conv == min_conv) {
+			break;
 		}
 
 		if (timeout_elapsed(timeout_ref))
