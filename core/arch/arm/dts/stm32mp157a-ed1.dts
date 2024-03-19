@@ -179,7 +179,7 @@
 				regulator-name = "vdd_sd";
 				regulator-min-microvolt = <2900000>;
 				regulator-max-microvolt = <2900000>;
-				regulator-boot-on;
+				st,regulator-warm-boot-on;
 			};
 
 			v1v8: ldo6 {
