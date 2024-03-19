@@ -28,6 +28,8 @@
 
 #ifndef __ASSEMBLER__
 
+struct optee_msg_arg;
+
 struct thread_specific_data {
 	TAILQ_HEAD(, ts_session) sess_stack;
 	struct ts_ctx *ctx;
@@ -339,6 +341,18 @@ struct thread_param {
  */
 uint32_t thread_rpc_cmd(uint32_t cmd, size_t num_params,
 		struct thread_param *params);
+
+/*
+ * Prepare execution context for an Ocall thread.
+ * @rpc_arg: Output context to be provided back to thread_rpc_ocall2_unprepare()
+ */
+TEE_Result thread_rpc_ocall2_prepare(struct optee_msg_arg **rpc_arg);
+
+/*
+ * Restore execution context when terminating an Ocall thread.
+ * @rpc_arg: Input context got from thread_rpc_ocall2_prepare()
+ */
+void thread_rpc_ocall2_unprepare(struct optee_msg_arg *rpc_arg);
 
 /**
  * Does an Ocall2 RPC using only 2 in/out parameters passed with CPU registers
