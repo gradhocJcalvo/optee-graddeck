@@ -28,4 +28,7 @@ void __noreturn do_reset(const char *str);
 
 TEE_Result stm32_activate_internal_tamper(int id);
 
+#ifdef CFG_STM32_CPU_OPP
+bool stm32mp_supports_cpu_opp(uint32_t opp_id);
+#endif /*CFG_STM32_CPU_OPP*/
 #endif /*__STM32_UTIL_H__*/

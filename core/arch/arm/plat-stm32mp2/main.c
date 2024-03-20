@@ -226,6 +226,31 @@ static TEE_Result init_debug(void)
 early_init_late(init_debug);
 #endif /* CFG_STM32_BSEC3 */
 
+#ifdef CFG_STM32_CPU_OPP
+bool stm32mp_supports_cpu_opp(uint32_t opp_id)
+{
+	static uint32_t part_number;
+	uint32_t otp = 0;
+	size_t bit_len = 0;
+	uint32_t id = 0;
+
+	if (stm32_bsec_find_otp_in_nvmem_layout("part_number_otp",
+						&otp, NULL, &bit_len))
+		return false;
+
+	if (stm32_bsec_read_otp(&part_number, otp))
+		return false;
+
+	/* The bit 31 indicate support of 1.5GHz in RPN (variant d/f) */
+	if (part_number & BIT(31))
+		id = BIT(1);
+	else
+		id = BIT(0);
+
+	return (opp_id & id) == id;
+}
+#endif /* CFG_STM32_CPU_OPP */
+
 static bool stm32mp_supports_second_core(void)
 {
 	if (CFG_TEE_CORE_NB_CORE == 1)
