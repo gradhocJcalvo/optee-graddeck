@@ -35,6 +35,7 @@
 #include <dt-bindings/soc/stm32mp25-rifsc.h>
 #include <dt-bindings/soc/stm32mp25-risab.h>
 #include <dt-bindings/soc/stm32mp25-risaf.h>
+#include <dt-bindings/power/st,stm32mp25-power.h>
 #include <dt-bindings/tamper/st,stm32mp25-tamp.h>
 #endif
 
