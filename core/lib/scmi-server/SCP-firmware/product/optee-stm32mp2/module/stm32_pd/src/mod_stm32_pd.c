@@ -17,6 +17,8 @@
 struct mod_stm32_pd {
     const struct mod_stm32_pd_config *config;
     unsigned int current_state;
+    fwk_id_t requester_id;
+    struct mod_pd_driver_input_api *pd_driver_input_api;
 };
 
 static struct mod_stm32_pd *mod_stm32_pd_ctx;
@@ -49,7 +51,9 @@ static int stm32_pd_set_state_gpu(fwk_id_t pd_id, unsigned int state)
     struct mod_stm32_pd *ctx = mod_stm32_pd_ctx + fwk_id_get_element_idx(pd_id);
     struct clk *clk = ctx->config->clk;
     struct regulator *regu = ctx->config->regu;
+    int status;
 
+    fwk_assert(ctx->pd_driver_input_api != NULL);
     fwk_assert(fwk_id_get_element_idx(pd_id) == PD_SCMI_GPU);
 
     /* Nothing to do */
@@ -86,6 +90,11 @@ static int stm32_pd_set_state_gpu(fwk_id_t pd_id, unsigned int state)
             return FWK_E_SUPPORT;
     }
 
+    status = ctx->pd_driver_input_api->report_power_state_transition(
+        ctx->requester_id,
+        state);
+    assert(status == FWK_SUCCESS);
+
     FWK_LOG_DEBUG("Power domain %s change state to %s",
                   fwk_module_get_element_name(pd_id),
                   state == MOD_PD_STATE_ON ? "ON" : "OFF");
@@ -96,7 +105,38 @@ static int stm32_pd_set_state_gpu(fwk_id_t pd_id, unsigned int state)
 
 static int stm32_pd_bind(fwk_id_t id, unsigned int round)
 {
-    return FWK_SUCCESS;
+    struct mod_stm32_pd *ctx;
+
+    /* Nothing to do for the module */
+    if (fwk_module_is_valid_module_id(id)) {
+        return FWK_SUCCESS;
+    }
+
+    /* Element id is not valid */
+    if (!fwk_module_is_valid_element_id(id)) {
+        FWK_LOG_ERR("Cannot bind %s, element id is needed",
+                    fwk_module_get_element_name(id));
+        return FWK_E_SUPPORT;
+    }
+
+    ctx = mod_stm32_pd_ctx + fwk_id_get_element_idx(id);
+
+    /* stm32_pd_process_bind_request probably isn't been called right now */
+    if (!fwk_module_is_valid_element_id(ctx->requester_id)) {
+        FWK_LOG_ERR("stm32_pd_process_bind_request hasn't been called yet");
+        return FWK_E_ACCESS;
+    }
+
+    /* Only get an input API from power domain framework */
+    if (fwk_id_get_module_idx(ctx->requester_id) !=
+            FWK_MODULE_IDX_POWER_DOMAIN) {
+        FWK_LOG_ERR("Requester is not power domain module");
+        return FWK_E_SUPPORT;
+    }
+
+    return fwk_module_bind(ctx->requester_id,
+                           mod_pd_api_id_driver_input,
+                           &ctx->pd_driver_input_api);
 }
 
 static int stm32_pd_element_init(fwk_id_t element_id,
@@ -134,6 +174,11 @@ static int stm32_pd_process_bind_request(fwk_id_t requester_id,
                                          fwk_id_t api_type,
                                          const void **api)
 {
+    struct mod_stm32_pd *ctx = NULL;
+
+    ctx = mod_stm32_pd_ctx + fwk_id_get_element_idx(target_id);
+    ctx->requester_id = requester_id;
+
     if (fwk_id_get_element_idx(target_id) == PD_SCMI_GPU) {
         *api = &stm32_pd_api_gpu;
         return FWK_SUCCESS;
