@@ -76,6 +76,18 @@ struct stm32_scmi_perfd {
 	const char *name;
 };
 
+/*
+ * struct stm32_scmi_pd - Data for the exposed power domains
+ * @name: Power domain name exposed to the channel
+ * @clock_id: Clock identifier in RCC clock driver
+ * @regu_name: Regulator node name in OP-TEE secure FDT
+ */
+struct stm32_scmi_pd {
+	const char *name;
+	unsigned long clock_id;
+	const char *regu_name;
+};
+
 #define CLOCK_CELL(_scmi_id, _id, _name, _init_enabled) \
 	[_scmi_id] = { \
 		.clock_id = _id, \
@@ -106,6 +118,13 @@ struct stm32_scmi_perfd {
 		.name = (_name), \
 	}
 
+#define PD_CELL(_scmi_id, _name, _clock_id, _regu_name) \
+	[_scmi_id] = { \
+		.name = (_name), \
+		.clock_id = (_clock_id), \
+		.regu_name = (_regu_name), \
+	}
+
 struct channel_resources {
 	struct stm32_scmi_clk *clock;
 	size_t clock_count;
@@ -113,6 +132,8 @@ struct channel_resources {
 	size_t rd_count;
 	struct stm32_scmi_perfd *perfd;
 	size_t perfd_count;
+	struct stm32_scmi_pd *pd;
+	size_t pd_count;
 };
 
 #ifdef CFG_STM32MP21
@@ -441,12 +462,22 @@ static struct stm32_scmi_rd stm32_scmi_reset[] = {
 #endif
 };
 
+#if (defined(CFG_STM32MP25) || defined(CFG_STM32MP23))
+static struct stm32_scmi_pd stm32_scmi_pd[] = {
+	PD_CELL(PD_SCMI_GPU, "gpu", PLL3_CK, "vddgpu"),
+};
+#endif
+
 static const struct channel_resources scmi_channel[] = {
 	[0] = {
 		.clock = stm32_scmi_clock,
 		.clock_count = ARRAY_SIZE(stm32_scmi_clock),
 		.rd = stm32_scmi_reset,
 		.rd_count = ARRAY_SIZE(stm32_scmi_reset),
+#if (defined(CFG_STM32MP25) || defined(CFG_STM32MP23))
+		.pd = stm32_scmi_pd,
+		.pd_count = ARRAY_SIZE(stm32_scmi_pd),
+#endif
 	},
 };
 
@@ -694,6 +725,46 @@ static TEE_Result scmi_scpfw_cfg_init(void)
 				};
 			}
 		}
+
+#if (defined(CFG_STM32MP25) || defined(CFG_STM32MP23))
+		channel_cfg->pd_count = ARRAY_SIZE(stm32_scmi_pd);
+		if (channel_cfg->pd_count) {
+			channel_cfg->pd = calloc(channel_cfg->pd_count,
+						 sizeof(*channel_cfg->pd));
+			assert(channel_cfg->pd);
+
+			for (j = 0; j < channel_cfg->pd_count; j++) {
+				struct clk *clk = stm32mp_rcc_clock_id_to_clk(
+					stm32_scmi_pd[j].clock_id);
+				struct regulator *regu = NULL;
+
+				if (stm32_scmi_pd[j].regu_name != NULL) {
+					regu = regulator_get_by_name(
+						stm32_scmi_pd[j].regu_name);
+
+					if (!regu) {
+						EMSG("Regulator %s not found "
+						     "for %s power domain",
+						     stm32_scmi_pd[j].regu_name,
+						     stm32_scmi_pd[j].name);
+						panic();
+					}
+				}
+
+				if (!clk)
+					DMSG("Clock ID %ld not found for %s "
+					     "power domain",
+					     stm32_scmi_pd[j].clock_id,
+					     stm32_scmi_pd[j].name);
+
+				channel_cfg->pd[j] = (struct scmi_pd){
+					.name = stm32_scmi_pd[j].name,
+					.clk = clk,
+					.regu = regu,
+				};
+			}
+		}
+#endif
 	}
 
 	/* DVFS will be populated from cpu_opp driver */
@@ -739,6 +810,7 @@ void scmi_scpfw_release_configuration(void)
 			}
 
 			free(channel_cfg->perfd);
+			free(channel_cfg->pd);
 		}
 
 		free(agent_cfg->channel_config);
