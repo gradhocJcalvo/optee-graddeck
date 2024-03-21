@@ -35,6 +35,10 @@ if(CFG_SCPFW_MOD_PSU_OPTEE_REGULATOR)
 list(PREPEND SCP_MODULE_PATHS "${CMAKE_CURRENT_LIST_DIR}/../module/psu_optee_regulator")
 endif(CFG_SCPFW_MOD_PSU_OPTEE_REGULATOR)
 
+if(CFG_SCPFW_MOD_STM32_PD)
+list(PREPEND SCP_MODULE_PATHS "${CMAKE_CURRENT_LIST_DIR}/../module/stm32_pd")
+endif(CFG_SCPFW_MOD_STM32_PD)
+
 # The order of the modules in the following list is the order in which the
 # modules are initialized, bound, started during the pre-runtime phase.
 # any change in the order will cause firmware initialization errors.
@@ -78,6 +82,18 @@ endif(CFG_SCPFW_MOD_VOLTAGE_DOMAIN)
 if(CFG_SCPFW_MOD_SCMI_VOLTAGE_DOMAIN)
 list(APPEND SCP_MODULES "scmi-voltage-domain")
 endif(CFG_SCPFW_MOD_SCMI_VOLTAGE_DOMAIN)
+
+if(CFG_SCPFW_MOD_POWER_DOMAIN)
+list(APPEND SCP_MODULES "power-domain")
+endif(CFG_SCPFW_MOD_POWER_DOMAIN)
+
+if(CFG_SCPFW_MOD_STM32_PD)
+list(APPEND SCP_MODULES "stm32-pd")
+endif(CFG_SCPFW_MOD_STM32_PD)
+
+if(CFG_SCPFW_MOD_SCMI_POWER_DOMAIN)
+list(APPEND SCP_MODULES "scmi-power-domain")
+endif(CFG_SCPFW_MOD_SCMI_POWER_DOMAIN)
 
 if(CFG_SCPFW_MOD_DVFS)
 list(APPEND SCP_MODULES "dvfs")
