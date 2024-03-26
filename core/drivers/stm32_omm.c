@@ -111,6 +111,8 @@ static TEE_Result stm32_omm_parse_fdt(const void *fdt, int node)
 
 	omm_d->region.start = base;
 	omm_d->region.end = base + size;
+	if (size)
+		omm_d->region.end--;
 
 	res = clk_dt_get_by_index(fdt, node, 0, &omm_d->clock);
 	if (res)
@@ -176,6 +178,8 @@ static TEE_Result stm32_omm_parse_fdt(const void *fdt, int node)
 				panic();
 
 			region->end = region->start + size;
+			if (size)
+				region->end--;
 		}
 	}
 
@@ -228,7 +232,7 @@ static void stm32_omm_set_mm(void)
 {
 	unsigned int ospi_i = 0;
 	struct stm32_mm_region *region[OSPI_NB] = {};
-	size_t mm_size[OSPI_NB] = {};
+	size_t mm_size[OSPI_NB] = {0};
 	unsigned int valid_regions = 0;
 
 	for (ospi_i = 0; ospi_i < OSPI_NB; ospi_i++) {
@@ -240,12 +244,13 @@ static void stm32_omm_set_mm(void)
 		if (!stm32_omm_region_contains(&omm_d->region, region[ospi_i]))
 			panic();
 
-		mm_size[ospi_i] = region[ospi_i]->end - region[ospi_i]->start;
+		mm_size[ospi_i] = region[ospi_i]->end - region[ospi_i]->start
+				  + 1;
 		valid_regions++;
 	}
 
 	if (valid_regions == OSPI_NB &&
-	    !stm32_omm_region_overlaps(region[0], region[1]))
+	    stm32_omm_region_overlaps(region[0], region[1]))
 		panic();
 
 	if (valid_regions)
