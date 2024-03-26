@@ -146,35 +146,23 @@ void stm32mp25_syscfg_set_amcr(size_t mm1_size, size_t mm2_size)
 			    SYSCON_OFFSET(SYSCFG_OCTOSPIAMCR);
 	uint32_t amcr = 0;
 
+	if (mm1_size + mm2_size != SZ_256M)
+		panic();
+
 	switch (mm1_size) {
 	case 0:
-		if (mm2_size != SZ_256M)
-			panic();
-
 		amcr = SYSCFG_OCTOSPIAMCR_MM1_0_MM2_256;
 		break;
 	case SZ_64M:
-		if (mm2_size != SZ_192M)
-			panic();
-
 		amcr = SYSCFG_OCTOSPIAMCR_MM1_64_MM2_192;
 		break;
 	case SZ_128M:
-		if (mm2_size != SZ_128M)
-			panic();
-
 		amcr = SYSCFG_OCTOSPIAMCR_MM1_128_MM2_128;
 		break;
 	case SZ_192M:
-		if (mm2_size != SZ_64M)
-			panic();
-
 		amcr = SYSCFG_OCTOSPIAMCR_MM1_192_MM2_64;
 		break;
 	case SZ_256M:
-		if (mm2_size != 0)
-			panic();
-
 		amcr = SYSCFG_OCTOSPIAMCR_MM1_256_MM2_0;
 		break;
 	default:
