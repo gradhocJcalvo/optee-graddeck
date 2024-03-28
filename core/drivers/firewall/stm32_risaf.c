@@ -6,6 +6,7 @@
 #include <assert.h>
 #include <drivers/clk.h>
 #include <drivers/clk_dt.h>
+#include <drivers/stm32_rif.h>
 #include <drivers/stm32_risaf.h>
 #include <dt-bindings/soc/stm32mp25-risaf.h>
 #include <io.h>
@@ -585,6 +586,14 @@ static TEE_Result stm32_risaf_probe(const void *fdt, int node,
 	const fdt64_t *cuint = NULL;
 	const fdt32_t *conf_list = NULL;
 	const struct stm32_risaf_compat_data *compat = compat_data;
+	bool is_tdcid = false;
+
+	res = stm32_rifsc_check_tdcid(&is_tdcid);
+	if (res)
+		return res;
+
+	if (!is_tdcid)
+		return TEE_SUCCESS;
 
 	risaf = calloc(1, sizeof(*risaf));
 	if (!risaf)
