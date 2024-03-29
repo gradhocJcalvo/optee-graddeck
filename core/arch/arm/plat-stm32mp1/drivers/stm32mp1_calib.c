@@ -573,7 +573,7 @@ static TEE_Result init_stm32mp1_calib(void)
 	return TEE_SUCCESS;
 }
 
-driver_init_late(init_stm32mp1_calib);
+service_init(init_stm32mp1_calib);
 
 typedef TEE_Result (*ta_func)(struct ts_session *s, uint32_t param_types,
 			      TEE_Param params[TEE_NUM_PARAMS]);
