@@ -27,12 +27,20 @@ enum syscon_banks {
  */
 #define SYSCFG_VDERAMCR		SYSCON_ID(SYSCON_SYSCFG, 0x1800U)
 #define SYSCFG_POTTAMPRSTCR	SYSCON_ID(SYSCON_SYSCFG, 0x1804U)
+#define SYSCFG_HPDMAARCR	SYSCON_ID(SYSCON_SYSCFG, 0x2050U)
 
 /*
  * SYSCFG_VDERAMCR register offsets
  */
 #define VDERAMCR_VDERAM_EN		BIT(0)
 #define VDERAMCR_MASK			BIT(0)
+
+/*
+ * SYSCFG HPDMA address remapping control register (SYSCFG_HPDMAARCR)
+ */
+#define SYSCFG_HPDMAARCR_HPDMA1AREN	BIT(0)
+#define SYSCFG_HPDMAARCR_HPDMA2AREN	BIT(1)
+#define SYSCFG_HPDMAARCR_HPDMA3AREN	BIT(2)
 
 /*
  * A35SSC register offsets (base relative)
