@@ -7,6 +7,7 @@
 #include <compiler.h>
 #include <drivers/regulator.h>
 #include <drivers/stm32mp25_pwr.h>
+#include <drivers/stm32_rif.h>
 #include <io.h>
 #include <kernel/delay.h>
 #include <kernel/dt.h>
@@ -98,15 +99,29 @@ struct pwr_regu {
 	 */
 	bool is_an_iod;
 	bool keep_monitor_on;
+	/*
+	 * rifsc_filtering_id is used to disable filtering when
+	 * accessing to the register
+	 */
+	uint8_t rifsc_filtering_id;
 };
 
 static TEE_Result pwr_enable_reg(struct pwr_regu *pwr_regu)
 {
 	uintptr_t reg = stm32_pwr_base() + pwr_regu->enable_reg;
 	uint64_t to = 0;
+	bool cid_enabled = false;
 
 	if (!pwr_regu->enable_mask)
 		return TEE_SUCCESS;
+
+	if (pwr_regu->rifsc_filtering_id)
+		cid_enabled =
+			stm32_rifsc_cid_is_enabled
+				(pwr_regu->rifsc_filtering_id);
+
+	if (cid_enabled)
+		stm32_rifsc_cid_disable(pwr_regu->rifsc_filtering_id);
 
 	io_setbits32(reg, pwr_regu->enable_mask);
 
@@ -121,6 +136,8 @@ static TEE_Result pwr_enable_reg(struct pwr_regu *pwr_regu)
 
 	if (!(io_read32(reg) & pwr_regu->ready_mask)) {
 		io_clrbits32(reg, pwr_regu->enable_mask);
+		if (cid_enabled)
+			stm32_rifsc_cid_enable(pwr_regu->rifsc_filtering_id);
 		return TEE_ERROR_GENERIC;
 	}
 
@@ -130,18 +147,34 @@ static TEE_Result pwr_enable_reg(struct pwr_regu *pwr_regu)
 	if (!pwr_regu->keep_monitor_on)
 		io_clrbits32(reg, pwr_regu->enable_mask);
 
+	if (cid_enabled)
+		stm32_rifsc_cid_enable(pwr_regu->rifsc_filtering_id);
+
 	return TEE_SUCCESS;
 }
 
 static void pwr_disable_reg(struct pwr_regu *pwr_regu)
 {
 	uintptr_t reg = stm32_pwr_base() + pwr_regu->enable_reg;
+	bool cid_enabled = false;
 
 	if (pwr_regu->enable_mask) {
+		if (pwr_regu->rifsc_filtering_id)
+			cid_enabled =
+				stm32_rifsc_cid_is_enabled
+					(pwr_regu->rifsc_filtering_id);
+
+		if (cid_enabled)
+			stm32_rifsc_cid_disable(pwr_regu->rifsc_filtering_id);
+
 		/* Make sure the previous operations are visible */
 		dsb();
 		io_clrbits32(reg, pwr_regu->enable_mask | pwr_regu->valid_mask);
 	}
+
+	if (cid_enabled)
+		stm32_rifsc_cid_enable(pwr_regu->rifsc_filtering_id);
+
 }
 
 static TEE_Result pwr_set_state(struct regulator *regulator, bool enable)
@@ -461,6 +494,7 @@ static struct pwr_regu pwr_regulators[PWR_REGU_COUNT] = {
 		.ready_mask = PWR_CR12_VDDGPURDY,
 		.valid_mask = PWR_CR12_GPUSV,
 		.keep_monitor_on = true,
+		.rifsc_filtering_id = STM32MP25_RIFSC_GPU_ID,
 	 },
 };
 
