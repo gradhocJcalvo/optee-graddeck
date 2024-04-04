@@ -2709,8 +2709,13 @@ static TEE_Result clk_stm32_pll3_enable(struct clk *clk)
 	struct clk *parent = NULL;
 	size_t pidx = 0;
 
-	if (clk_stm32_pll_init(priv, PLL3_ID, pll_conf))
+	/* ck_icn_p_gpu activate */
+	stm32_gate_enable(GATE_GPU);
+
+	if (clk_stm32_pll_init(priv, PLL3_ID, pll_conf)) {
+		stm32_gate_disable(GATE_GPU);
 		return TEE_ERROR_GENERIC;
+	}
 
 	res = stm32_gate_rdy_enable(cfg->gate_id);
 	if (res)
@@ -2727,11 +2732,17 @@ static TEE_Result clk_stm32_pll3_enable(struct clk *clk)
 	return res;
 }
 
+static void clk_stm32_pll3_disable(struct clk *clk)
+{
+	clk_stm32_pll_disable(clk);
+	stm32_gate_disable(GATE_GPU);
+}
+
 static const struct clk_ops clk_stm32_pll3_ops = {
 	.get_parent	= clk_stm32_pll_get_parent,
 	.get_rate	= clk_stm32_pll_get_rate,
 	.enable		= clk_stm32_pll3_enable,
-	.disable	= clk_stm32_pll_disable,
+	.disable	= clk_stm32_pll3_disable,
 	.is_enabled	= clk_stm32_pll_is_enabled,
 };
 
