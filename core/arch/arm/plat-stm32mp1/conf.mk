@@ -177,7 +177,6 @@ $(call force,CFG_STM32_HSE_MONITORING,y)
 $(call force,CFG_STM32_VREFBUF,y)
 $(call force,CFG_STM32MP_CLK_CORE,y)
 $(call force,CFG_STM32MP1_OPTEE_IN_SYSRAM,n)
-$(call force,CFG_STM32MP1_SCMI_SIP,n)
 $(call force,CFG_STM32MP1_SHARED_RESOURCES,n)
 $(call force,CFG_STM32MP1_RSTCTRL,y)
 $(call force,CFG_STM32MP13_CLK,y)
@@ -348,16 +347,9 @@ CFG_SCMI_MSG_DRIVERS ?= y
 endif
 
 # SiP/OEM service for non-secure world
-# BSEC fuse access, PWR services, SCMI transport.
 CFG_STM32_BSEC_SIP ?= n
 CFG_STM32_LOWPOWER_SIP ?= y
 CFG_STM32_PWR_SIP ?= y
-CFG_STM32MP1_SCMI_SIP ?= n
-ifeq ($(CFG_STM32MP1_SCMI_SIP),y)
-$(call force,CFG_SCMI_MSG_DRIVERS,y,Mandated by CFG_STM32MP1_SCMI_SIP)
-$(call force,CFG_SCMI_MSG_SMT,y,Mandated by CFG_STM32MP1_SCMI_SIP)
-$(call force,CFG_SCMI_MSG_SMT_FASTCALL_ENTRY,y,Mandated by CFG_STM32MP1_SCMI_SIP)
-endif
 
 # Enable BSEC PTA for fuses access management
 CFG_STM32_BSEC_PTA ?= y
@@ -425,7 +417,7 @@ $(call force,CFG_HWRNG_QUALITY,1024)
 endif
 
 # Provision enough threads to pass xtest
-ifneq (,$(filter y,$(CFG_SCMI_PTA) $(CFG_STM32MP1_SCMI_SIP)))
+ifeq ($(CFG_SCMI_PTA),y)
 ifeq ($(CFG_WITH_PAGER),y)
 CFG_NUM_THREADS ?= 3
 else
