@@ -19,7 +19,7 @@ struct regulator;
  * \brief Platform regulator configuration.
  */
 struct mod_psu_optee_regulator_dev_config {
-    struct rdev *rdev;
+    struct regulator *regulator;
 };
 
 #endif /* MOD_PSU_OPTEE_REGULATOR_H */

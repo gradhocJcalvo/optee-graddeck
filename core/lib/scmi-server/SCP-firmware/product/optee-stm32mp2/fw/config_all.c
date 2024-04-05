@@ -763,7 +763,7 @@ static void set_resources(struct scpfw_config *cfg)
                     dvfs_elt[dvfs_index].data = (void *)(dvfs_data + dvfs_index);
 
                     /* Module psu_optee module (elements and  configuration data) */
-                    psu_optee_regu_elt[psu_index].name = perfd_cfg->regulator->reg_name;
+                    psu_optee_regu_elt[psu_index].name = perfd_cfg->regulator->name;
                     psu_optee_regu_elt[psu_index].sub_element_count = scpfw_resource_counter.psu_count;
                     psu_optee_regu_elt[psu_index].data = (void *)(psu_optee_regu_data + psu_index);
 

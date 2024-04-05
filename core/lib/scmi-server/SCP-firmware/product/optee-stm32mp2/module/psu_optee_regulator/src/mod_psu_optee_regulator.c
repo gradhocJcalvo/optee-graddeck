@@ -32,15 +32,15 @@ struct psu_optee_regulator_ctx {
 /* A single instance handles all voltage regulators abstracted by regulator.h */
 static struct psu_optee_regulator_ctx module_ctx;
 
-static char __maybe_unused *regulator_name(struct rdev *rdev)
+static char __maybe_unused *psu_regulator_name(struct regulator *regulator)
 {
-    if (rdev)
-        return (char *)rdev->reg_name;
+    if (regulator)
+        return (char *)regulator->name;
 
     return NULL;
 }
 
-static struct rdev *get_regulator(fwk_id_t id)
+static struct regulator *get_regulator(fwk_id_t id)
 {
     unsigned int elt_index;
 
@@ -48,7 +48,7 @@ static struct rdev *get_regulator(fwk_id_t id)
     if (elt_index >= module_ctx.dev_count)
         return NULL;
 
-    return module_ctx.config[elt_index].rdev;
+    return module_ctx.config[elt_index].regulator;
 }
 
 /*
@@ -57,15 +57,15 @@ static struct rdev *get_regulator(fwk_id_t id)
 static int psu_optee_regulator_set_enabled(fwk_id_t id, bool enabled)
 {
     TEE_Result res = TEE_ERROR_GENERIC;
-    struct rdev *regulator;
+    struct regulator *regulator;
 
     regulator = get_regulator(id);
     if (!regulator) {
         return FWK_E_PARAM;
     }
 
-    DEBUG_MSG("PSU set %s %s", regulator_name(regulator),
-          enabled ? "ON" : "OFF");
+    DEBUG_MSG("PSU set %s %s", psu_regulator_name(regulator),
+              enabled ? "ON" : "OFF");
 
     if (enabled) {
         res = regulator_enable(regulator);
@@ -82,15 +82,16 @@ static int psu_optee_regulator_set_enabled(fwk_id_t id, bool enabled)
 
 static int psu_optee_regulator_get_enabled(fwk_id_t id, bool *enabled)
 {
-    struct rdev *regulator;
+    struct regulator *regulator;
 
    regulator = get_regulator(id);
    if (!regulator || (enabled == NULL)) {
         return FWK_E_PARAM;
     }
 
-    *enabled = regulator_is_enabled((const struct rdev *)regulator);
-    DEBUG_MSG("PSU get %s state: %s", regulator_name(regulator),
+    *enabled = regulator_is_enabled(regulator);
+
+    DEBUG_MSG("PSU get %s state: %s", psu_regulator_name(regulator),
               enabled ? "ON" : "OFF");
 
     return FWK_SUCCESS;
@@ -99,18 +100,17 @@ static int psu_optee_regulator_get_enabled(fwk_id_t id, bool *enabled)
 static int psu_optee_regulator_set_voltage(fwk_id_t id, uint32_t voltage)
 {
     TEE_Result res = TEE_ERROR_GENERIC;
-    struct rdev *regulator;
-    uint16_t level_mv = voltage;
+    struct regulator *regulator;
 
     regulator = get_regulator(id);
     if (!regulator) {
         return FWK_E_PARAM;
     }
 
-    DEBUG_MSG("PSU set regulator %s level: %"PRIu32"mV",
-              regulator_name(regulator), (uint32_t)level_mv);
+    DEBUG_MSG("PSU set regulator %s level: %u mV",
+              psu_regulator_name(regulator), voltage);
 
-    res = regulator_set_voltage(regulator, level_mv);
+    res = regulator_set_voltage(regulator, (int)voltage * 1000);
 
     if (res) {
         return FWK_E_HANDLER;
@@ -122,25 +122,20 @@ static int psu_optee_regulator_set_voltage(fwk_id_t id, uint32_t voltage)
 
 static int psu_optee_regulator_get_voltage(fwk_id_t id, uint32_t *voltage)
 {
-    TEE_Result res = TEE_ERROR_GENERIC;
-    struct rdev *regulator;
-    uint16_t level_mv;
+    struct regulator *regulator;
+    int level_mv;
 
     regulator = get_regulator(id);
     if (!regulator || (voltage == NULL)) {
         return FWK_E_PARAM;
     }
 
-    res = regulator_get_voltage(regulator, &level_mv);
+    level_mv = regulator_get_voltage(regulator) / 1000;
 
-    DEBUG_MSG("PSU get regulator %s level: %"PRIu32"mV (res %#"PRIx32")",
-              regulator_name(regulator), (uint32_t)level_mv, res);
+    DEBUG_MSG("PSU get regulator %s level: %d mV",
+              psu_regulator_name(regulator), level_mv);
 
-    if (res) {
-        return FWK_E_HANDLER;
-    }
-
-    *voltage = level_mv;
+    *voltage = (uint32_t)level_mv;
 
     return FWK_SUCCESS;
 }
