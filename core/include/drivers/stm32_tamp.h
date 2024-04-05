@@ -109,6 +109,7 @@ struct stm32_tamp_compat {
 	uint32_t int_tamp_size;
 	uint32_t pin_map_size;
 	uint32_t tags;
+	uint32_t exti_wakeup_line;
 };
 
 struct stm32_tamp_platdata {
