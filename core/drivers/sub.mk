@@ -91,6 +91,7 @@ subdirs-y += counter
 subdirs-y += crypto
 subdirs-y += firewall
 subdirs-$(CFG_BNXT_FW) += bnxt
+subdirs-$(CFG_DRIVERS_ADC) += adc
 subdirs-$(CFG_DRIVERS_CLK) += clk
 subdirs-$(CFG_DRIVERS_GPIO) += gpio
 subdirs-$(CFG_DRIVERS_I2C) += i2c
