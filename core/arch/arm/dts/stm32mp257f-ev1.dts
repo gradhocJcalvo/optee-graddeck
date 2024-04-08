@@ -7,6 +7,7 @@
 /dts-v1/;
 
 #include <dt-bindings/clock/stm32mp25-clksrc.h>
+#include <dt-bindings/mfd/st,stpmic2.h>
 #include <dt-bindings/regulator/st,stm32mp25-regulator.h>
 #include <dt-bindings/soc/stm32mp-provisioning.h>
 #include <dt-bindings/soc/stm32mp25-rif.h>
@@ -75,6 +76,8 @@
 		compatible = "st,stpmic2";
 		reg = <0x33>;
 		st,wakeup-pin-number = <1>;
+		st,pmic-it-id = <IT_PKEY_FA IT_PKEY_RI>;
+		st,notif-it-id = <0 1>;
 		wakeup-parent = <&pwr>;
 		status = "okay";
 
