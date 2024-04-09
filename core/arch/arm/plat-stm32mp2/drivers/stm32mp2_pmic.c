@@ -65,7 +65,7 @@
  *
  * @pmic: Handle to PMIC device
  * @id: ID in PMIC device of the regulator controllers
- * @bypass_mv: 0 if not used, else is the voltage level to switch to bypass mode
+ * @bypass_uv: 0 if not used, else is the voltage level to switch to bypass mode
  * @lp_state: Regulator mode during PM low power state, per PM states
  * @lp_level_uv: Regulator voltage level during PM low power state, per PM state
  * @levels_desc: Description of the supported voltage levels
@@ -74,7 +74,7 @@
 struct pmic_regu {
 	struct stpmic2 *pmic;
 	uint32_t id;
-	uint16_t bypass_mv;
+	int bypass_uv;
 	uint8_t lp_state[STM32_PM_NB_SOC_MODES];
 	int lp_level_uv[STM32_PM_NB_SOC_MODES];
 	struct regulator_voltages_desc levels_desc;
@@ -204,7 +204,7 @@ static TEE_Result pmic_get_voltage(struct regulator *regulator, int *level_uv)
 
 	lock_pmic_access();
 
-	if (regu->bypass_mv) {
+	if (regu->bypass_uv) {
 		uint8_t arg = 0;
 
 		/* If the regul is in bypass mode, return bypass value */
@@ -214,7 +214,7 @@ static TEE_Result pmic_get_voltage(struct regulator *regulator, int *level_uv)
 			goto out;
 
 		if (arg == PROP_BYPASS_SET) {
-			*level_uv = (int)regu->bypass_mv * 1000;
+			*level_uv = regu->bypass_uv;
 			goto out;
 		}
 	}
@@ -241,7 +241,7 @@ static TEE_Result pmic_set_voltage(struct regulator *regulator, int level_uv)
 
 	lock_pmic_access();
 
-	if (level_uv == regu->bypass_mv * 1000) {
+	if (level_uv == regu->bypass_uv) {
 		res = stpmic2_regulator_set_prop(regu->pmic, regu->id,
 						 STPMIC2_BYPASS,
 						 PROP_BYPASS_SET);
@@ -255,7 +255,7 @@ static TEE_Result pmic_set_voltage(struct regulator *regulator, int level_uv)
 		goto out;
 
 	/* disable bypass after set voltage ; wait settling time ? */
-	if (regu->bypass_mv && level_uv != regu->bypass_mv * 1000)
+	if (regu->bypass_uv && level_uv != regu->bypass_uv)
 		res = stpmic2_regulator_set_prop(regu->pmic, regu->id,
 						 STPMIC2_BYPASS,
 						 PROP_BYPASS_RESET);
@@ -265,9 +265,51 @@ out:
 	return res;
 }
 
+static int cmp_int_value(const void *a, const void *b)
+{
+	const int *ia = a;
+	const int *ib = b;
+
+	return CMP_TRILEAN(*ia, *ib);
+}
+
+static size_t refine_levels_array(size_t count, int *levels_uv,
+				  int min_uv, int max_uv)
+{
+	size_t n = 0;
+	size_t m = 0;
+
+	qsort(levels_uv, count, sizeof(*levels_uv), cmp_int_value);
+
+	/* Remove duplicates and return optimized count */
+	for (n = 1; n < count; n++) {
+		if (levels_uv[m] != levels_uv[n]) {
+			if (m + 1 != n)
+				levels_uv[m + 1] = levels_uv[n];
+			m++;
+		}
+	}
+	count = m + 1;
+
+	/* Find max voltage index */
+	for (n = count; n; n--)
+		if (levels_uv[n - 1] <= max_uv)
+			break;
+	count = n;
+
+	for (n = 0; n < count; n++)
+		if (levels_uv[n] >= min_uv)
+			break;
+	count -= n;
+
+	memmove(levels_uv, levels_uv + n, count * sizeof(*levels_uv));
+
+	return count;
+}
+
 static TEE_Result pmic_list_voltages(struct regulator *regulator,
-				     struct regulator_voltages_desc **desc,
-				     const int **levels)
+				     struct regulator_voltages_desc **out_desc,
+				     const int **out_levels)
 {
 	struct pmic_regu *regu = regulator->priv;
 
@@ -275,28 +317,56 @@ static TEE_Result pmic_list_voltages(struct regulator *regulator,
 
 	if (!regu->levels) {
 		TEE_Result res = TEE_ERROR_GENERIC;
-		const uint16_t *levels_mv = NULL;
-		size_t count = 0;
+		const uint16_t *level_ref = NULL;
+		size_t level_count = 0;
+		size_t count_ref = 0;
+		int *levels2 = NULL;
+		int *levels = NULL;
 		size_t n = 0;
 
+		/*
+		 * Allocate and build a consise and ordered voltage list
+		 * based on the voltage list provided by stpmic2 driver.
+		 * Also add bypass voltage to the list.
+		 */
 		res = stpmic2_regulator_levels_mv(regu->pmic, regu->id,
-						  &levels_mv, &count);
+						  &level_ref, &count_ref);
 		if (res)
 			return res;
 
-		n = sizeof(regu->levels_desc) + count * sizeof(*regu->levels);
-		regu->levels = calloc(1, n);
-		if (!regu->levels)
+		if (regu->bypass_uv)
+			level_count = count_ref + 1;
+		else
+			level_count = count_ref;
+
+		levels = calloc(level_count, sizeof(*levels));
+		if (!levels)
 			return TEE_ERROR_OUT_OF_MEMORY;
 
+		for (n = 0; n < count_ref; n++)
+			levels[n] = level_ref[n] * 1000;
+
+		if (regu->bypass_uv)
+			levels[n] = regu->bypass_uv;
+
+		level_count = refine_levels_array(level_count, levels,
+						  regulator->min_uv,
+						  regulator->max_uv);
+
+		/* Shrink levels array to not waste heap memory */
+		levels2 = realloc(levels, sizeof(*levels) * level_count);
+		if (!levels2) {
+			free(levels);
+			return TEE_ERROR_OUT_OF_MEMORY;
+		}
+
 		regu->levels_desc.type = VOLTAGE_TYPE_FULL_LIST;
-		regu->levels_desc.num_levels = count;
-		for (n = 0; n < count; n++)
-			regu->levels[n] = (int)levels_mv[n] * 1000;
+		regu->levels_desc.num_levels = level_count;
+		regu->levels = levels2;
 	}
 
-	*desc = &regu->levels_desc;
-	*levels = regu->levels;
+	*out_desc = &regu->levels_desc;
+	*out_levels = regu->levels;
 
 	return TEE_SUCCESS;
 }
@@ -404,7 +474,6 @@ static TEE_Result pmic_supplied_init(struct regulator *regulator,
 						 p->prop, value);
 		if (res)
 			return res;
-
 	}
 
 	res = apply_pm_state(regulator, STM32_PM_DEFAULT);
@@ -462,18 +531,14 @@ static void pmic_parse_regu_node(struct regu_dt_desc *regu_desc,
 {
 	struct pmic_regu *regu = regu_desc->priv;
 	const fdt32_t *cuint = NULL;
-	uint32_t value = 0;
 	const char __maybe_unused *regu_name = pmic_reguls[regu->id].name;
 
 	cuint = fdt_getprop(fdt, node, "st,regulator-bypass-microvolt", NULL);
 	if (!cuint)
 		return;
 
-	value = fdt32_to_cpu(*cuint);
-	FMSG("%s: bypass= %#"PRIx32, regu_name, value);
-
-	assert((value / 1000) <= UINT16_MAX);
-	regu->bypass_mv = value / 1000;
+	regu->bypass_uv = fdt32_to_cpu(*cuint);
+	FMSG("%s: bypass= %#"PRIx32"uV", regu_name, regu->bypass_uv);
 }
 
 static void parse_low_power_mode(const void *fdt, int node,
