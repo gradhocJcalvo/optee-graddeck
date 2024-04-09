@@ -1049,9 +1049,11 @@ static void stm32_enable_oscillator_msi(struct clk_stm32_priv *priv,
 	if (osci->freq == 0U)
 		return;
 
-	if (clk_stm32_osc_msi_set_rate(priv, osci->freq) != TEE_SUCCESS)
+	if (clk_stm32_osc_msi_set_rate(priv, osci->freq) != TEE_SUCCESS) {
 		EMSG("invalid rate %ld Hz for MSI ! (4000000 or 16000000 only)",
 		     osci->freq);
+		panic();
+	}
 
 	/* Enable clock and wait ready bit */
 	if (stm32_gate_rdy_enable(osc_data->gate_id))
@@ -1917,7 +1919,8 @@ static int clk_stm32_pll_init(struct clk_stm32_priv *priv, int pll_idx,
 	 * a configuration on the fly.
 	 */
 
-	stm32_gate_rdy_disable(pll->gate_id);
+	if (stm32_gate_rdy_disable(pll->gate_id))
+		panic();
 
 	ret = clk_stm32_pll_set_mux(priv, pll_conf->src);
 	if (ret != 0)
@@ -1935,7 +1938,8 @@ static int clk_stm32_pll_init(struct clk_stm32_priv *priv, int pll_idx,
 		spread_spectrum = true;
 	}
 
-	stm32_gate_rdy_enable(pll->gate_id);
+	if (stm32_gate_rdy_enable(pll->gate_id))
+		panic();
 
 	if (spread_spectrum)
 		io_clrbits32(pllxcfgr1, RCC_PLLxCFGR1_SSMODRST);
@@ -2372,8 +2376,8 @@ static void __maybe_unused clk_stm32_osc_pm_restore(struct clk *clk)
 	if (!stm32_rcc_has_access_by_id(RCC_RIF_OSCILLATORS))
 		return;
 
-	if (clk_is_enabled(clk))
-		clk_stm32_osc_enable(clk);
+	if (clk_is_enabled(clk) && clk_stm32_osc_enable(clk))
+		panic();
 }
 
 static const struct clk_ops clk_stm32_osc_ops = {
@@ -2424,10 +2428,11 @@ static void __maybe_unused clk_stm32_osc_msi_pm_restore(struct clk *clk)
 	if (!stm32_rcc_has_access_by_id(RCC_RIF_OSCILLATORS))
 		return;
 
-	clk_stm32_msi_set_rate(clk, clk->rate, clk->parent->rate);
+	if (clk_stm32_msi_set_rate(clk, clk->rate, clk->parent->rate))
+		panic();
 
-	if (clk_is_enabled(clk))
-		clk_stm32_osc_enable(clk);
+	if (clk_is_enabled(clk) && clk_stm32_osc_enable(clk))
+		panic();
 }
 
 static const struct clk_ops clk_stm32_oscillator_msi_ops = {
@@ -2455,7 +2460,8 @@ static void __maybe_unused clk_stm32_hse_div_pm_restore(struct clk *clk)
 	if (!stm32_rcc_has_access_by_id(RCC_RIF_OSCILLATORS))
 		return;
 
-	clk_stm32_hse_div_set_rate(clk, clk->rate, clk->parent->rate);
+	if (clk_stm32_hse_div_set_rate(clk, clk->rate, clk->parent->rate))
+		panic();
 }
 
 static const struct clk_ops clk_stm32_hse_div_ops = {
@@ -2468,7 +2474,7 @@ static const struct clk_ops clk_stm32_hse_div_ops = {
 static TEE_Result clk_stm32_hsediv2_enable(struct clk *clk)
 {
 	if (stm32_rcc_has_access_by_id(RCC_RIF_OSCILLATORS))
-		clk_stm32_gate_enable(clk);
+		return clk_stm32_gate_enable(clk);
 
 	return TEE_SUCCESS;
 }
@@ -2678,9 +2684,15 @@ static TEE_Result clk_stm32_pll_enable(struct clk *clk)
 {
 	struct clk_stm32_pll_cfg *cfg = clk->priv;
 
-	if (stm32_rcc_has_access_by_id(RCC_RIF_PLL4_TO_8))
-		if (stm32_gate_rdy_enable(cfg->gate_id) != 0U)
+	if (stm32_rcc_has_access_by_id(RCC_RIF_PLL4_TO_8)) {
+		TEE_Result res = TEE_ERROR_GENERIC;
+
+		res = stm32_gate_rdy_enable(cfg->gate_id);
+		if (res)
 			EMSG("%s timeout", clk_get_name(clk));
+
+		return res;
+	}
 
 	return TEE_SUCCESS;
 }
@@ -2706,8 +2718,8 @@ static void __maybe_unused clk_stm32_pll_pm_restore(struct clk *clk)
 	if (!stm32_rcc_has_access_by_id(RCC_RIF_PLL4_TO_8))
 		return;
 
-	if (clk_is_enabled(clk))
-		clk_stm32_pll_enable(clk);
+	if (clk_is_enabled(clk) && clk_stm32_pll_enable(clk))
+		panic();
 }
 
 static const struct clk_ops clk_stm32_pll_ops = {
@@ -2737,8 +2749,10 @@ static TEE_Result clk_stm32_pll3_enable(struct clk *clk)
 	}
 
 	res = stm32_gate_rdy_enable(cfg->gate_id);
-	if (res)
+	if (res) {
 		EMSG("%s timeout", clk_get_name(clk));
+		return res;
+	}
 
 	/* Update parent */
 	pidx = clk_stm32_pll_get_parent(clk);
@@ -3218,11 +3232,13 @@ static void __maybe_unused clk_stm32_rif_composite_pm_restore(struct clk *clk)
 		if (clk_get_parent_idx(clk, clk->parent, &pidx))
 			panic();
 
-		stm32_mux_set_parent(cfg->mux_id, pidx);
+		if (stm32_mux_set_parent(cfg->mux_id, pidx))
+			panic();
 	}
 
-	if (cfg->div_id != NO_DIV)
-		stm32_div_set_rate(cfg->div_id, clk->rate, clk->parent->rate);
+	if (cfg->div_id != NO_DIV &&
+	    stm32_div_set_rate(cfg->div_id, clk->rate, clk->parent->rate))
+		panic();
 
 	if (cfg->gate_id != NO_GATE)
 		if (clk_is_enabled(clk))
