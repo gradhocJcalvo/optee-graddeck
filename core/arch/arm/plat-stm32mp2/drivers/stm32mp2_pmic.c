@@ -704,7 +704,12 @@ static void initialize_pmic2(const void *fdt, int node,
 	    stpmic2_get_version(pmic, &ver))
 		panic("Failed to access PMIC");
 
-	DMSG("PMIC pid=%#"PRIx8" version=%#"PRIx8, pid, ver);
+	/* NVM version A stands for NVM_ID=1 */
+	IMSG("PMIC STPMIC25%c V%"PRIu8".%"PRIu8,
+	     'A' + (pid & PMIC_NVM_ID_MASK) - U(1),
+	     (ver & MAJOR_VERSION_MASK) >> MAJOR_VERSION_SHIFT,
+	     ver & MINOR_VERSION_MASK);
+
 	stpmic2_dump_regulators(pmic);
 }
 

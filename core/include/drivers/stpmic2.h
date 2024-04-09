@@ -145,6 +145,14 @@ enum {
 #define INT_DBG_LATCH_R3	U(0x82)
 #define INT_DBG_LATCH_R4	U(0x83)
 
+/* PRODUCT_ID bits definition */
+#define PMIC_NVM_ID_MASK	GENMASK_32(3, 0)
+
+/* VERSION_SR bits definition */
+#define MINOR_VERSION_MASK	GENMASK_32(3, 0)
+#define MAJOR_VERSION_MASK	GENMASK_32(7, 4)
+#define MAJOR_VERSION_SHIFT	4
+
 /* BUCKS_MRST_CR bits definition */
 #define BUCK1_MRST		BIT(0)
 #define BUCK2_MRST		BIT(1)
