@@ -646,6 +646,8 @@
 	st,backup-zones = <10 5 17>;
 	st,tamp-passive-nb-sample = <4>;
 	st,tamp-passive-sample-clk-div = <16384>;
+	wakeup-source;
+	wakeup-parent = <&exti>;
 
 	/* Tamper button */
 	tamp-button {
