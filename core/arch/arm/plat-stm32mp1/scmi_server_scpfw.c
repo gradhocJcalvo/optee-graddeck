@@ -530,7 +530,8 @@ TEE_Result scmi_scpfw_cfg_add_dvfs(unsigned int agent_id,
 				   unsigned int domain_id,
 				   struct regulator *regulator, struct clk *clk,
 				   unsigned int *dvfs_khz,
-				   unsigned int *dvfs_mv, size_t dvfs_count)
+				   unsigned int *dvfs_mv, size_t dvfs_count,
+				   size_t initial_index)
 {
 	struct scpfw_channel_config *channel_cfg = NULL;
 	struct scpfw_agent_config *agent_cfg = NULL;
@@ -578,6 +579,7 @@ TEE_Result scmi_scpfw_cfg_add_dvfs(unsigned int agent_id,
 
 	channel_cfg->perfd[domain_id] = (struct scmi_perfd){
 		.name = "DVFS",
+		.initial_opp = initial_index,
 		.dvfs_opp_count = dvfs_count,
 		.dvfs_opp_khz = dvfs_opp_khz,
 		.dvfs_opp_mv = dvfs_opp_mv,

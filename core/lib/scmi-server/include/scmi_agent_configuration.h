@@ -52,6 +52,7 @@ struct scmi_voltd {
  * struct scmi_perfd - DVFS/performance domaindescription
  * @name: DVFS name
  * @dvfs_opp_count: Number of cells in @dvfs_opp_khz and @dvfs_opp_mv
+ * @initial_opp: Initial operating point
  * @dvfs_opp_khz: Operating point frequencies in Hertz
  * @dvfs_opp_mv: Operating point voltage levels in millivolts
  * @clk: Clock used by the DVFS service
@@ -63,6 +64,7 @@ struct scmi_voltd {
 struct scmi_perfd {
 	const char *name;
 	size_t dvfs_opp_count;
+	size_t initial_opp;
 	unsigned int *dvfs_opp_khz;
 	unsigned int *dvfs_opp_mv;
 	struct clk *clk;
@@ -134,7 +136,8 @@ TEE_Result scmi_scpfw_cfg_add_dvfs(unsigned int agent, unsigned int channel,
 				   unsigned int domain_id,
 				   struct regulator *regulator, struct clk *clk,
 				   unsigned int *dvfs_khz,
-				   unsigned int *dvfs_mv, size_t dvfs_count);
+				   unsigned int *dvfs_mv, size_t dvfs_count,
+				   size_t initial_index);
 
 /* Add a voltage domains/regulators service to an SCMI channel */
 TEE_Result scmi_scpfw_cfg_add_regu(unsigned int agent, unsigned int channel,
