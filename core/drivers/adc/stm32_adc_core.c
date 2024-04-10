@@ -263,6 +263,10 @@ static TEE_Result stm32_adc_core_probe(const void *fdt, int node,
 	if (res)
 		goto err;
 
+	res = regulator_set_min_voltage(priv->vref);
+	if (res && res != TEE_ERROR_NOT_IMPLEMENTED)
+		goto err;
+
 	priv->common.vref_uv = regulator_get_voltage(priv->vref);
 
 	res = clk_dt_get_by_name(fdt, node, "bus", &priv->bclk);
