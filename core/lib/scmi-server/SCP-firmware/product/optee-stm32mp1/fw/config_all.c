@@ -737,6 +737,7 @@ static void set_resources(struct scpfw_config *cfg)
                     dvfs_data[dvfs_index].clock_id =
                         (fwk_id_t)FWK_ID_ELEMENT_INIT(FWK_MODULE_IDX_CLOCK, clock_index);
                     dvfs_data[dvfs_index].latency = 0; /* not set, used for async access */
+                    dvfs_data[dvfs_index].sustained_idx = perfd_cfg->initial_opp;
                     dvfs_data[dvfs_index].opps =
                         fwk_mm_calloc(perfd_cfg->dvfs_opp_count,
                                       sizeof(struct mod_dvfs_opp));
