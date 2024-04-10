@@ -1024,6 +1024,7 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 			ranges;
+			status = "disabled";
 
 			nvram: nvram@46010100 {
 				compatible = "st,stm32mp25-tamp-nvram";
