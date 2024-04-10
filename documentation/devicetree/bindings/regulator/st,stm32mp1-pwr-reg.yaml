@@ -11,7 +11,7 @@ maintainers:
 
 properties:
   compatible:
-    const: st,stm32mp1,pwr-reg
+    const: st,stm32mp1-pwr-reg
 
   reg:
     maxItems: 1
@@ -67,7 +67,7 @@ examples:
   - |
     //At SOC level:
     pwr_regulators: pwr@50001000 {
-      compatible = "st,stm32mp1,pwr-reg";
+      compatible = "st,stm32mp1-pwr-reg";
       reg = <0x50001000 0x10>;
       st,tzcr = <&rcc 0x0 0x1>;
 
