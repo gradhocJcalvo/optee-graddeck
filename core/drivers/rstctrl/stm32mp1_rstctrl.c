@@ -79,6 +79,9 @@ static TEE_Result reset_assert(struct rstctrl *rstctrl, unsigned int to_us)
 
 		if (!(io_read32(rcc_base + offset) & bit_mask))
 			return TEE_ERROR_SECURITY;
+	} else {
+		/* Make sure the above write is performed */
+		dsb();
 	}
 
 	return TEE_SUCCESS;
@@ -123,6 +126,9 @@ static TEE_Result reset_deassert(struct rstctrl *rstctrl, unsigned int to_us)
 
 		if (io_read32(rcc_base + offset) & bit_mask)
 			return TEE_ERROR_SECURITY;
+	} else {
+		/* Make sure the above write is performed */
+		dsb();
 	}
 
 	return TEE_SUCCESS;
