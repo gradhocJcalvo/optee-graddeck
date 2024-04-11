@@ -179,7 +179,7 @@ static TEE_Result stm32_hash_allocate(struct crypto_hash_ctx **ctx,
 		return res;
 	}
 
-	DMSG("Using HASH %d", stm32_algo);
+	FMSG("Using HASH %d", stm32_algo);
 	c->ch_ctx.ops = &hash_ops;
 	*ctx = &c->ch_ctx;
 

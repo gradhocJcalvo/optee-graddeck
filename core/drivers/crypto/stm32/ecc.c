@@ -77,7 +77,7 @@ static TEE_Result stm32_gen_keypair(struct ecc_keypair *key, size_t size_bits)
 	if (!key)
 		return TEE_ERROR_BAD_PARAMETERS;
 
-	DMSG("Using PKA");
+	FMSG("Using PKA");
 	res = curve_to_pka_cid(key->curve, &cid);
 	if (res)
 		return res;
@@ -209,7 +209,7 @@ static TEE_Result stm32_sign(struct drvcrypt_sign_data *sdata)
 	if (!sdata)
 		return TEE_ERROR_BAD_PARAMETERS;
 
-	DMSG("Using PKA");
+	FMSG("Using PKA");
 	return sign(sdata->algo,
 		    sdata->key,
 		    sdata->message.data,
@@ -279,7 +279,7 @@ static TEE_Result stm32_verify(struct drvcrypt_sign_data *sdata)
 	if (!sdata)
 		return TEE_ERROR_BAD_PARAMETERS;
 
-	DMSG("Using PKA");
+	FMSG("Using PKA");
 	return verify(sdata->algo,
 		      sdata->key,
 		      sdata->message.data,
@@ -299,7 +299,7 @@ static TEE_Result stm32_alloc_keypair(struct ecc_keypair *s, uint32_t type,
 	    type != TEE_TYPE_ECDH_KEYPAIR)
 		return TEE_ERROR_NOT_IMPLEMENTED;
 
-	DMSG("Using PKA");
+	FMSG("Using PKA");
 	memset(s, 0, sizeof(*s));
 
 	s->d = crypto_bignum_allocate(PKA_MAX_ECC_LEN);
@@ -333,7 +333,7 @@ static TEE_Result stm32_alloc_publickey(struct ecc_public_key *s, uint32_t type,
 	    type != TEE_TYPE_ECDH_KEYPAIR)
 		return TEE_ERROR_NOT_IMPLEMENTED;
 
-	DMSG("Using PKA");
+	FMSG("Using PKA");
 	memset(s, 0, sizeof(*s));
 
 	s->x = crypto_bignum_allocate(PKA_MAX_ECC_LEN);
@@ -354,7 +354,7 @@ static void stm32_free_publickey(struct ecc_public_key *s)
 	if (!s)
 		return;
 
-	DMSG("Using PKA");
+	FMSG("Using PKA");
 	crypto_bignum_free(&s->x);
 	crypto_bignum_free(&s->y);
 }
@@ -485,7 +485,7 @@ static TEE_Result stm32_shared_secret(struct drvcrypt_secret_data *sdata)
 	if (!sdata)
 		return TEE_ERROR_BAD_PARAMETERS;
 
-	DMSG("Using PKA");
+	FMSG("Using PKA");
 	return shared_secret(sdata->key_priv,
 			     sdata->key_pub,
 			     sdata->secret.data,

@@ -207,7 +207,7 @@ static TEE_Result stm32_hmac_allocate(struct crypto_mac_ctx **ctx,
 		return res;
 	}
 
-	DMSG("Using HMAC %d", stm32_algo);
+	FMSG("Using HMAC %d", stm32_algo);
 	c->mac_ctx.ops = &hmac_ops;
 	*ctx = &c->mac_ctx;
 
