@@ -6,7 +6,9 @@
 #ifndef __DRIVERS_STPMIC2_H
 #define __DRIVERS_STPMIC2_H
 
+#include <kernel/interrupt.h>
 #include <drivers/stm32_i2c.h>
+#include <dt-bindings/mfd/st,stpmic2.h>
 #include <util.h>
 
 enum {
@@ -244,26 +246,6 @@ enum {
 #define FS_OCP_LDO7		BIT(6)
 #define FS_OCP_LDO8		BIT(7)
 
-/* IRQ definitions */
-#define IT_PONKEY_F		U(0)
-#define IT_PONKEY_R		U(1)
-#define IT_BUCK1_OCP		U(16)
-#define IT_BUCK2_OCP		U(17)
-#define IT_BUCK3_OCP		U(18)
-#define IT_BUCK4_OCP		U(19)
-#define IT_BUCK5_OCP		U(20)
-#define IT_BUCK6_OCP		U(21)
-#define IT_BUCK7_OCP		U(22)
-#define IT_REFDDR_OCP		U(23)
-#define IT_LDO1_OCP		U(24)
-#define IT_LDO2_OCP		U(25)
-#define IT_LDO3_OCP		U(26)
-#define IT_LDO4_OCP		U(27)
-#define IT_LDO5_OCP		U(28)
-#define IT_LDO6_OCP		U(29)
-#define IT_LDO7_OCP		U(30)
-#define IT_LDO8_OCP		U(31)
-
 enum stpmic2_prop_id {
 	STPMIC2_MASK_RESET = 0,
 	STPMIC2_PULL_DOWN,
@@ -281,6 +263,15 @@ enum stpmic2_prop_id {
 #define PROP_BYPASS_RESET	U(0)
 #define PROP_BYPASS_SET		U(1)
 
+#ifdef CFG_STM32_PWR_IRQ
+struct pmic_it_handle_s {
+	uint8_t pmic_it;
+	uint8_t notif_id;
+
+	SLIST_ENTRY(pmic_it_handle_s) link;
+};
+#endif
+
 /*
  * struct stpmic2 - STPMIC2 device instance
  */
@@ -288,6 +279,9 @@ struct stpmic2 {
 	struct i2c_handle_s *pmic_i2c_handle;
 	uint16_t pmic_i2c_addr;
 	uint16_t irq_count;
+#ifdef CFG_STM32_PWR_IRQ
+	SLIST_HEAD(, pmic_it_handle_s) it_list;
+#endif
 };
 
 TEE_Result stpmic2_register_read(struct stpmic2 *pmic, uint8_t register_id,
@@ -325,6 +319,7 @@ TEE_Result stpmic2_lp_set_voltage(struct stpmic2 *pmic, uint8_t id,
 				  uint16_t mv);
 
 /* Interrupt Handling */
+enum itr_return stpmic2_irq_callback(struct stpmic2 *pmic, uint8_t it_id);
 TEE_Result stpmic2_set_irq_mask(struct stpmic2 *pmic, uint8_t num, bool state);
 TEE_Result stpmic2_irq_gen(struct stpmic2 *pmic, uint8_t num);
 int stpmic2_handle_irq(struct stpmic2 *pmic);

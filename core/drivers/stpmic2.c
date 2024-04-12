@@ -603,6 +603,7 @@ TEE_Result stpmic2_lp_set_voltage(struct stpmic2 *pmic, uint8_t id, uint16_t mv)
  * Interrupt handling
  *
  */
+ #ifdef CFG_STM32_PWR_IRQ
 TEE_Result stpmic2_set_irq_mask(struct stpmic2 *pmic, uint8_t num, bool state)
 {
 	uint8_t reg = INT_MASK_R1 + num / 8;
@@ -620,49 +621,60 @@ TEE_Result stpmic2_irq_gen(struct stpmic2 *pmic, uint8_t num)
 	return stpmic2_register_update(pmic, reg, mask, mask);
 }
 
-static void stpmic2_handle_ocp(struct stpmic2 *pmic, uint8_t reg_index,
-			       uint8_t val)
+static void stpmic2_handle_irq_reg(struct stpmic2 *pmic,
+				   uint8_t reg_index, uint8_t val)
 {
-	unsigned int i = 0;
+	int i = 0;
 
 	for (i = 0; i < 7; i++) {
 		if (val & BIT(i)) {
-			uint8_t id = (reg_index - 2) * 8 + i;
+			uint8_t it_id = reg_index * U(8) + i;
+			enum itr_return res;
 
-			EMSG("Overcurrent detected on %s, disable regulator",
-			     regul_table[id].name);
+			res = stpmic2_irq_callback(pmic, it_id);
 
-			stpmic2_regulator_set_state(pmic, id, false);
-			panic();
+			/* handle over-current protection */
+			if (res != ITRR_HANDLED && it_id >= IT_BUCK1_OCP) {
+				uint8_t regu_id = (reg_index - U(2)) * U(8) + i;
+
+				EMSG("Overcurrent on %s, disable regulator",
+				     regul_table[regu_id].name);
+
+				stpmic2_regulator_set_state(pmic, regu_id,
+							    false);
+				panic();
+			}
 		}
 	}
 }
 
 int stpmic2_handle_irq(struct stpmic2 *pmic)
 {
-	uint8_t read_val = 0;
+	uint8_t read_val = U(0);
 	int i = 0;
 
 	FMSG("Stpmic2 irq handler");
 
 	for (i = 0; i < 4; i++) {
-		if (stpmic2_register_read(pmic, INT_PENDING_R1 + i, &read_val))
+		if (stpmic2_register_read(pmic, INT_PENDING_R1 + i,
+					  &read_val))
 			panic();
 
 		if (read_val) {
-			FMSG("Stpmic2 irq pending reg=%d %#"PRIx8, i, read_val);
+			FMSG("Stpmic2 irq pending reg=%u irq=0x%x", i,
+			     read_val);
 
 			pmic->irq_count++;
 
-			/* over-current detection */
-			if (i >= 2)
-				stpmic2_handle_ocp(pmic, i, read_val);
+			stpmic2_handle_irq_reg(pmic, i, read_val);
 
 			if (stpmic2_register_write(pmic,  INT_CLEAR_R1 + i,
-						   read_val))
+						   read_val)) {
 				panic();
+			}
 		}
 	}
 
 	return 0;
 }
+#endif
