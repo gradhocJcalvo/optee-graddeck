@@ -1553,7 +1553,7 @@ static int scmi_clock_round_rate_get_handler(fwk_id_t service_id,
     };
     const struct mod_scmi_clock_device *clock_device;
     unsigned long input_rate;
-    unsigned long output_rate;
+    uint64_t output_rate;
     size_t response_size;
     int status;
 
