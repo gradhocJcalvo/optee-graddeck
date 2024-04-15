@@ -444,6 +444,19 @@ struct mod_clock_drv_api {
      */
     int (*get_duty_cycle)(fwk_id_t clock_id, uint32_t *num, uint32_t *den);
 
+    /*!
+     * \brief Get the rounded rate the clock supports for requested input @rate
+     *
+     * \param clock_id Clock device identifier.
+     *
+     * \param[int] rate Requested rate in Hertz.
+     *
+     * \param[out] rounded_rate Output rounded rate supported.
+     *
+     * \retval ::FWK_SUCCESS The operation succeeded.
+     * \return One of the standard framework error codes.
+     */
+    int (*round_rate)(fwk_id_t clock_id, uint64_t rate, uint64_t *rounded_rate);
 };
 
 /*!
@@ -573,6 +586,19 @@ struct mod_clock_api {
      */
     int (*get_duty_cycle)(fwk_id_t clock_id, uint32_t *num, uint32_t *den);
 
+    /*!
+     * \brief Get the rounded rate the clock supports for requested input @rate
+     *
+     * \param clock_id Clock device identifier.
+     *
+     * \param[int] rate Requested rate in Hertz.
+     *
+     * \param[out] rounded_rate Output rounded rate supported.
+     *
+     * \retval ::FWK_SUCCESS The operation succeeded.
+     * \return One of the standard framework error codes.
+     */
+    int (*round_rate)(fwk_id_t clock_id, uint64_t rate, uint64_t *rounded_rate);
 };
 
 /*!

@@ -344,6 +344,24 @@ static int get_duty_cycle(fwk_id_t dev_id, uint32_t *num, uint32_t *den)
     return FWK_SUCCESS;
 }
 
+static int get_rounded_rate(fwk_id_t dev_id, uint64_t rate,
+			    uint64_t *rounded_rate)
+{
+    struct optee_clock_dev_ctx *ctx = elt_id_to_ctx(dev_id);
+
+    if (ctx == NULL) {
+        return FWK_E_PARAM;
+    }
+
+    if (!is_exposed(ctx)) {
+        return FWK_E_SUPPORT;
+    }
+
+    *rounded_rate = (uint64_t)clk_round_rate(ctx->clk, (unsigned long)rate);
+
+    return FWK_SUCCESS;
+}
+
 static int stub_process_power_transition(fwk_id_t dev_id, unsigned int state)
 {
     return FWK_E_SUPPORT;
@@ -364,6 +382,7 @@ static const struct mod_clock_drv_api api_optee_clock = {
     .get_rate_from_index = get_rate_from_index,
     .set_rate = set_rate,
     .get_duty_cycle = get_duty_cycle,
+    .round_rate = get_rounded_rate,
     /* Not supported */
     .process_power_transition = stub_process_power_transition,
     .process_pending_power_transition = stub_pending_power_transition,

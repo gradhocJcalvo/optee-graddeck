@@ -300,4 +300,19 @@ struct scmi_clock_duty_cycle_get_p2a {
     uint32_t denominator;
 };
 
+/*
+ * Clock get round rate
+ */
+
+struct scmi_clock_round_rate_get_a2p {
+    uint32_t flags;
+    uint32_t clock_id;
+    uint32_t rate[2];
+};
+
+struct scmi_clock_round_rate_get_p2a {
+    int32_t status;
+    uint32_t rate[2];
+};
+
 #endif /* INTERNAL_SCMI_CLOCK_H */

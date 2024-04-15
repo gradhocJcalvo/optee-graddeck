@@ -136,6 +136,8 @@ static int scmi_clock_rate_change_request_notify_handler(fwk_id_t service_id,
     const uint32_t *payload);
 static int scmi_clock_duty_cycle_get_handler(fwk_id_t service_id,
     const uint32_t *payload);
+static int scmi_clock_round_rate_get_handler(fwk_id_t service_id,
+    const uint32_t *payload);
 
 /*
  * Internal variables.
@@ -158,6 +160,7 @@ static int (*const handler_table[MOD_SCMI_CLOCK_COMMAND_COUNT])(
     [MOD_SCMI_CLOCK_RATE_NOTIFY] = scmi_clock_rate_notify_handler,
     [MOD_SCMI_CLOCK_RATE_CHANGE_REQUESTED_NOTIFY] = scmi_clock_rate_change_request_notify_handler,
     [MOD_SCMI_CLOCK_DUTY_CYCLE_GET] = scmi_clock_duty_cycle_get_handler,
+    [MOD_SCMI_CLOCK_ROUND_RATE_GET] = scmi_clock_round_rate_get_handler,
 };
 
 static const unsigned int payload_size_table[MOD_SCMI_CLOCK_COMMAND_COUNT] = {
@@ -183,6 +186,8 @@ static const unsigned int payload_size_table[MOD_SCMI_CLOCK_COMMAND_COUNT] = {
         (unsigned int)sizeof(struct scmi_clock_rate_change_request_notify_a2p),
     [MOD_SCMI_CLOCK_DUTY_CYCLE_GET] =
         (unsigned int)sizeof(struct scmi_clock_duty_cycle_get_a2p),
+    [MOD_SCMI_CLOCK_ROUND_RATE_GET] =
+        (unsigned int)sizeof(struct scmi_clock_round_rate_get_a2p),
 };
 
 /*
@@ -1529,6 +1534,79 @@ static int scmi_clock_duty_cycle_get_handler(fwk_id_t service_id,
     }
 
 exit:
+    response_size = (return_values.status == SCMI_SUCCESS) ?
+        sizeof(return_values) : sizeof(return_values.status);
+    return scmi_clock_ctx.scmi_api->respond(
+        service_id, &return_values, response_size);
+}
+
+/*
+ * Use clock set rate with round nearest flag support to
+ * get rounded value.
+ */
+static int scmi_clock_round_rate_get_handler(fwk_id_t service_id,
+    const uint32_t *payload)
+{
+    const struct scmi_clock_round_rate_get_a2p *parameters;
+    struct scmi_clock_round_rate_get_p2a return_values = {
+        .status = (int32_t)SCMI_SUCCESS,
+    };
+    const struct mod_scmi_clock_device *clock_device;
+    unsigned long input_rate;
+    unsigned long output_rate;
+    size_t response_size;
+    int status;
+
+    parameters = (const struct scmi_clock_round_rate_get_a2p*)payload;
+
+    status = scmi_clock_get_clock_device_entry(
+        service_id,
+        parameters->clock_id,
+        &clock_device);
+
+    if (status != FWK_SUCCESS) {
+        return_values.status = (int32_t)SCMI_NOT_FOUND;
+        goto exit;
+    }
+
+#ifdef BUILD_HAS_MOD_RESOURCE_PERMS
+    status = scmi_clock_permissions_handler(
+        parameters->clock_id,
+        service_id,
+        (unsigned int)MOD_SCMI_CLOCK_RATE_SET);
+    if (status != FWK_SUCCESS) {
+        return_values.status = (int32_t)SCMI_DENIED;
+        goto exit;
+    }
+#endif
+
+    if ((parameters->flags & SCMI_CLOCK_RATE_SET_ASYNC_MASK) != 0) {
+        /* Support for async clock set commands not yet implemented */
+        return_values.status = (int32_t)SCMI_NOT_SUPPORTED;
+        goto exit;
+    }
+
+    input_rate = parameters->rate[0];
+    if (parameters->rate[1]) {
+        return_values.status = (int32_t)SCMI_INVALID_PARAMETERS;
+        goto exit;
+    }
+
+    status = scmi_clock_ctx.clock_api->round_rate(clock_device->element_id,
+                                                  input_rate, &output_rate);
+    if (status == FWK_E_SUPPORT) {
+        return_values.status = (int32_t)SCMI_NOT_SUPPORTED;
+    } else if (status != FWK_SUCCESS) {
+        return_values.status = (int32_t)SCMI_GENERIC_ERROR;
+    } else {
+        return_values.rate[0] = (uint32_t)output_rate;
+        return_values.rate[1] = 0;
+        return_values.status = (int32_t)SCMI_SUCCESS;
+    }
+
+exit:
+
+
     response_size = (return_values.status == SCMI_SUCCESS) ?
         sizeof(return_values) : sizeof(return_values.status);
     return scmi_clock_ctx.scmi_api->respond(
