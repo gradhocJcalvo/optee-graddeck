@@ -286,4 +286,18 @@ struct scmi_clock_rate_change_request_notify_p2a {
     int32_t status;
 };
 
+/*
+ * Clock get duty cycle
+ */
+
+struct scmi_clock_duty_cycle_get_a2p {
+    uint32_t clock_id;
+};
+
+struct scmi_clock_duty_cycle_get_p2a {
+    int32_t status;
+    uint32_t numerator;
+    uint32_t denominator;
+};
+
 #endif /* INTERNAL_SCMI_CLOCK_H */
