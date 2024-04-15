@@ -102,15 +102,15 @@ static const struct regu_dt_property prop_table[] = {
 		.prop = STPMIC2_BYPASS,
 	},
 	{
-		.name = "st,pwrctrl_enable",
+		.name = "st,pwrctrl-enable",
 		.prop = STPMIC2_PWRCTRL_EN,
 	},
 	{
-		.name = "st,pwrctrl_reset",
+		.name = "st,pwrctrl-reset",
 		.prop = STPMIC2_PWRCTRL_RS,
 	},
 	{
-		.name = "st,pwrctrl_sel",
+		.name = "st,pwrctrl-sel",
 		.prop = STPMIC2_PWRCTRL_SEL,
 	},
 	{

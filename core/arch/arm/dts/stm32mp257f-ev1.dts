@@ -90,8 +90,8 @@
 				regulator-min-microvolt = <800000>;
 				regulator-max-microvolt = <910000>;
 				regulator-always-on;
-				st,pwrctrl_sel = <2>;
-				st,pwrctrl_enable;
+				st,pwrctrl-sel = <2>;
+				st,pwrctrl-enable;
 
 				default {
 					regulator-off-in-suspend;
@@ -111,8 +111,8 @@
 				regulator-min-microvolt = <820000>;
 				regulator-max-microvolt = <820000>;
 				regulator-always-on;
-				st,pwrctrl_sel = <1>;
-				st,pwrctrl_enable;
+				st,pwrctrl-sel = <1>;
+				st,pwrctrl-enable;
 
 				default {
 					regulator-on-in-suspend;
@@ -141,8 +141,8 @@
 				regulator-max-microvolt = <3300000>;
 				regulator-always-on;
 				st,mask-reset;
-				st,pwrctrl_sel = <1>;
-				st,pwrctrl_enable;
+				st,pwrctrl-sel = <1>;
+				st,pwrctrl-enable;
 
 				default {
 					regulator-on-in-suspend;
@@ -167,8 +167,8 @@
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <1800000>;
 				regulator-always-on;
-				st,pwrctrl_sel = <1>;
-				st,pwrctrl_enable;
+				st,pwrctrl-sel = <1>;
+				st,pwrctrl-enable;
 
 				default {
 					regulator-on-in-suspend;
@@ -191,8 +191,8 @@
 				regulator-max-microvolt = <1200000>;
 				regulator-always-on;
 				regulator-pull-down;
-				st,pwrctrl_sel = <1>;
-				st,pwrctrl_enable;
+				st,pwrctrl-sel = <1>;
+				st,pwrctrl-enable;
 
 				default {
 					regulator-on-in-suspend;
@@ -216,8 +216,8 @@
 				regulator-max-microvolt = <3300000>;
 				regulator-always-on;
 				regulator-over-current-protection;
-				st,pwrctrl_sel = <1>;
-				st,pwrctrl_enable;
+				st,pwrctrl-sel = <1>;
+				st,pwrctrl-enable;
 
 				default {
 					regulator-on-in-suspend;
@@ -247,14 +247,14 @@
 				regulator-min-microvolt = <3300000>;
 				regulator-max-microvolt = <3300000>;
 				regulator-over-current-protection;
-				st,pwrctrl_sel = <3>;
-				st,pwrctrl_reset;
+				st,pwrctrl-sel = <3>;
+				st,pwrctrl-reset;
 			};
 			vtt_ddr: ldo3 {
 				regulator-name = "vtt_ddr";
 				regulator-always-on;
-				st,pwrctrl_sel = <1>;
-				st,pwrctrl_enable;
+				st,pwrctrl-sel = <1>;
+				st,pwrctrl-enable;
 
 				default {
 					regulator-off-in-suspend;
@@ -281,8 +281,8 @@
 				regulator-min-microvolt = <2500000>;
 				regulator-max-microvolt = <2500000>;
 				regulator-always-on;
-				st,pwrctrl_sel = <1>;
-				st,pwrctrl_enable;
+				st,pwrctrl-sel = <1>;
+				st,pwrctrl-enable;
 
 				default {
 					regulator-on-in-suspend;
@@ -306,8 +306,8 @@
 				regulator-max-microvolt = <3300000>;
 				regulator-over-current-protection;
 				st,regulator-bypass-microvolt = <3300000>;
-				st,pwrctrl_sel = <3>;
-				st,pwrctrl_reset;
+				st,pwrctrl-sel = <3>;
+				st,pwrctrl-reset;
 			};
 			vddio_sdcard: ldo8 {
 				regulator-name = "vddio_sdcard";
@@ -315,14 +315,14 @@
 				regulator-max-microvolt = <3300000>;
 				regulator-over-current-protection;
 				st,regulator-bypass-microvolt = <3300000>;
-				st,pwrctrl_sel = <3>;
-				st,pwrctrl_reset;
+				st,pwrctrl-sel = <3>;
+				st,pwrctrl-reset;
 			};
 			vref_ddr: refddr {
 				regulator-name = "vref_ddr";
 				regulator-always-on;
-				st,pwrctrl_sel = <1>;
-				st,pwrctrl_enable;
+				st,pwrctrl-sel = <1>;
+				st,pwrctrl-enable;
 
 				default {
 					regulator-on-in-suspend;
