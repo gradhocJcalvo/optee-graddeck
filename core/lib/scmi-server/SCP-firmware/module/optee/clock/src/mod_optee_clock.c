@@ -126,7 +126,10 @@ static int set_state(fwk_id_t dev_id, enum mod_clock_state state)
                 fwk_id_get_element_idx(dev_id),
                 clk_get_name(ctx->clk));
 
-            clk_enable(ctx->clk);
+            if (clk_enable(ctx->clk)) {
+                return FWK_E_DEVICE;
+            }
+
             ctx->enabled = true;
         } else {
             FWK_LOG_DEBUG(
@@ -201,6 +204,8 @@ static int get_range(fwk_id_t dev_id, struct mod_clock_range *range)
             range->min = clk_get_rate(ctx->clk);
             range->max = range->min;
             range->rate_count = 1;
+        } else if (res != TEE_SUCCESS) {
+            return FWK_E_DEVICE;
         }
 
         range->rate_type = MOD_CLOCK_RATE_TYPE_CONTINUOUS;
@@ -209,6 +214,8 @@ static int get_range(fwk_id_t dev_id, struct mod_clock_range *range)
 	range->step = step;
 
         return FWK_SUCCESS;
+    } else if (res != TEE_SUCCESS) {
+        return FWK_E_DEVICE;
     }
 
     range->rate_type = MOD_CLOCK_RATE_TYPE_DISCRETE;
@@ -249,6 +256,8 @@ static int set_rate(fwk_id_t dev_id, uint64_t rate,
     res = clk_set_rate(ctx->clk, rate);
     if (res == TEE_ERROR_NOT_SUPPORTED) {
         return FWK_E_SUPPORT;
+    } else if (res != TEE_SUCCESS) {
+        return FWK_E_DEVICE;
     }
 
     FWK_LOG_DEBUG(
@@ -285,6 +294,8 @@ static int get_rate_from_index(fwk_id_t dev_id,
 
         *rate = clk_get_rate(ctx->clk);
         return FWK_SUCCESS;
+    } else if (res != TEE_SUCCESS) {
+        return FWK_E_DEVICE;
     }
 
     if (rate_index > rate_count) {
@@ -293,7 +304,8 @@ static int get_rate_from_index(fwk_id_t dev_id,
 
     rate_count = 1;
     res = clk_get_rates_array(ctx->clk, rate_index, &rate_ul, &rate_count);
-        fwk_assert(!res && rate_count == 1);
+    fwk_assert(!res && rate_count == 1);
+
     *rate = rate_ul;
 
     FWK_LOG_DEBUG(
