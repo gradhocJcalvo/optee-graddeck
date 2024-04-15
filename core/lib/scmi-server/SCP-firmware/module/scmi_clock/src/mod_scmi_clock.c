@@ -128,6 +128,12 @@ static int scmi_clock_config_set_handler(fwk_id_t service_id,
     const uint32_t *payload);
 static int scmi_clock_describe_rates_handler(fwk_id_t service_id,
     const uint32_t *payload);
+static int scmi_clock_name_get_handler(fwk_id_t service_id,
+    const uint32_t *payload);
+static int scmi_clock_rate_notify_handler(fwk_id_t service_id,
+    const uint32_t *payload);
+static int scmi_clock_rate_change_request_notify_handler(fwk_id_t service_id,
+    const uint32_t *payload);
 
 /*
  * Internal variables.
@@ -146,6 +152,9 @@ static int (*const handler_table[MOD_SCMI_CLOCK_COMMAND_COUNT])(
     [MOD_SCMI_CLOCK_RATE_SET] = scmi_clock_rate_set_handler,
     [MOD_SCMI_CLOCK_CONFIG_SET] = scmi_clock_config_set_handler,
     [MOD_SCMI_CLOCK_DESCRIBE_RATES] = scmi_clock_describe_rates_handler,
+    [MOD_SCMI_CLOCK_NAME_GET] = scmi_clock_name_get_handler,
+    [MOD_SCMI_CLOCK_RATE_NOTIFY] = scmi_clock_rate_notify_handler,
+    [MOD_SCMI_CLOCK_RATE_CHANGE_REQUESTED_NOTIFY] = scmi_clock_rate_change_request_notify_handler,
 };
 
 static const unsigned int payload_size_table[MOD_SCMI_CLOCK_COMMAND_COUNT] = {
@@ -163,6 +172,12 @@ static const unsigned int payload_size_table[MOD_SCMI_CLOCK_COMMAND_COUNT] = {
         (unsigned int)sizeof(struct scmi_clock_config_set_a2p),
     [MOD_SCMI_CLOCK_DESCRIBE_RATES] =
         (unsigned int)sizeof(struct scmi_clock_describe_rates_a2p),
+    [MOD_SCMI_CLOCK_NAME_GET] =
+        (unsigned int)sizeof(struct scmi_clock_describe_rates_a2p),
+    [MOD_SCMI_CLOCK_RATE_NOTIFY] =
+        (unsigned int)sizeof(struct scmi_clock_rate_notify_a2p),
+    [MOD_SCMI_CLOCK_RATE_CHANGE_REQUESTED_NOTIFY] =
+        (unsigned int)sizeof(struct scmi_clock_rate_change_request_notify_a2p),
 };
 
 /*
@@ -1366,6 +1381,97 @@ exit:
     }
 
     return status;
+}
+
+static int scmi_clock_name_get_handler(fwk_id_t service_id,
+    const uint32_t *payload)
+{
+    int status, respond_status;
+    const struct mod_scmi_clock_device *clock_device;
+    size_t response_size;
+    const struct scmi_clock_name_get_a2p *parameters;
+    struct scmi_clock_name_get_p2a return_values = {
+        .status = (int32_t)SCMI_GENERIC_ERROR
+    };
+
+    parameters = (const struct scmi_clock_name_get_a2p*)payload;
+
+    status = scmi_clock_get_clock_device_entry(
+        service_id, parameters->clock_id, &clock_device);
+    if (status != FWK_SUCCESS) {
+        return_values.status = (int32_t)SCMI_NOT_FOUND;
+        goto exit;
+    }
+
+#ifdef BUILD_HAS_MOD_RESOURCE_PERMS
+    status = scmi_clock_permissions_handler(
+        parameters->clock_id,
+        service_id,
+        (unsigned int)MOD_SCMI_CLOCK_NAME_GET);
+    if (status != FWK_SUCCESS) {
+        return_values.status = (int32_t)SCMI_DENIED;
+        goto exit;
+    }
+#endif
+
+    fwk_str_strncpy(
+        return_values.clock_name,
+        fwk_module_get_element_name(clock_device->element_id),
+        sizeof(return_values.clock_name) - 1);
+
+    return_values.status = (int32_t)SCMI_SUCCESS;
+    response_size = sizeof(return_values);
+    return FWK_SUCCESS;
+
+exit:
+    response_size = sizeof(return_values.status);
+    respond_status = scmi_clock_ctx.scmi_api->respond(
+        service_id, &return_values, response_size);
+    if (respond_status != FWK_SUCCESS) {
+        FWK_LOG_DEBUG("[SCMI-CLK] %s @%d", __func__, __LINE__);
+    }
+
+    return status;
+}
+
+static int scmi_clock_rate_notify_handler(fwk_id_t service_id,
+    const uint32_t *payload)
+{
+    struct scmi_clock_rate_notify_p2a return_values = {
+        .status = (int32_t)SCMI_NOT_SUPPORTED,
+    };
+    int respond_status;
+
+    respond_status = scmi_clock_ctx.scmi_api->respond(
+        service_id,
+        &return_values,
+        sizeof(return_values.status));
+
+    if (respond_status != FWK_SUCCESS) {
+        FWK_LOG_DEBUG("[SCMI-CLK] %s @%d", __func__, __LINE__);
+    }
+
+    return FWK_SUCCESS;
+}
+
+static int scmi_clock_rate_change_request_notify_handler(fwk_id_t service_id,
+    const uint32_t *payload)
+{
+    struct scmi_clock_rate_change_request_notify_p2a return_values = {
+        .status = (int32_t)SCMI_NOT_SUPPORTED,
+    };
+    int respond_status;
+
+    respond_status = scmi_clock_ctx.scmi_api->respond(
+        service_id,
+        &return_values,
+        sizeof(return_values.status));
+
+    if (respond_status != FWK_SUCCESS) {
+        FWK_LOG_DEBUG("[SCMI-CLK] %s @%d", __func__, __LINE__);
+    }
+
+    return FWK_SUCCESS;
 }
 
 /*

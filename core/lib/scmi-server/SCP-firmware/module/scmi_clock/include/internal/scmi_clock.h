@@ -244,4 +244,46 @@ struct scmi_clock_describe_rates_p2a {
     struct scmi_clock_rate rates[];
 };
 
+/*
+ * Clock get name (extended 64byte name)
+ */
+
+struct scmi_clock_name_get_a2p {
+    uint32_t clock_id;
+};
+
+#define SCMI_CLOCK_EXTTENDED_NAME_LENGTH_MAX 64
+
+struct scmi_clock_name_get_p2a {
+    int32_t status;
+    uint32_t flags;
+    char clock_name[SCMI_CLOCK_EXTTENDED_NAME_LENGTH_MAX];
+};
+
+/*
+ * Clock notify on clock rate change
+ */
+
+struct scmi_clock_rate_notify_a2p {
+    uint32_t clock_id;
+    uint32_t notify_enable;
+};
+
+struct scmi_clock_rate_notify_p2a {
+    int32_t status;
+};
+
+/*
+ * Clock notify on clock rate change requests
+ */
+
+struct scmi_clock_rate_change_request_notify_a2p {
+    uint32_t clock_id;
+    uint32_t notify_enable;
+};
+
+struct scmi_clock_rate_change_request_notify_p2a {
+    int32_t status;
+};
+
 #endif /* INTERNAL_SCMI_CLOCK_H */
