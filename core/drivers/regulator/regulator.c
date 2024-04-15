@@ -260,6 +260,20 @@ TEE_Result regulator_supported_voltages(struct regulator *regulator,
 	return TEE_SUCCESS;
 }
 
+struct regulator *regulator_get_by_name(const char *name)
+{
+	struct regulator *regulator = NULL;
+
+	assert(name);
+
+	SLIST_FOREACH(regulator, &regulator_device_list, link)
+		if (!strcmp(regulator->name, name))
+			return regulator;
+
+	EMSG("%s not found", name);
+	return NULL;
+}
+
 TEE_Result regulator_register(struct regulator *regulator)
 {
 	TEE_Result res = TEE_SUCCESS;
