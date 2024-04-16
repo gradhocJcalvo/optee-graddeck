@@ -15,6 +15,8 @@ struct mem_region {
 	size_t size;
 };
 
+void stm32_risab_clear_illegal_access_flags(void);
+
 #ifdef CFG_TEE_CORE_DEBUG
 void stm32_risab_dump_erroneous_data(void);
 #else /* CFG_TEE_CORE_DEBUG */

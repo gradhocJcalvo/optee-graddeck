@@ -42,6 +42,10 @@
 /* RISAB_CR bitfields */
 #define _RISAB_CR_SRWIAD			BIT(31)
 
+/* RISAB_IACR bitfields */
+#define _RISAB_IACR_CAEF			BIT(0)
+#define _RISAB_IACR_IAEF			BIT(1)
+
 /* Define RISAB_PG_SECCFGR bitfields */
 #define _RISAB_PG_SECCFGR_MASK			GENMASK_32(7, 0)
 
@@ -90,6 +94,26 @@ static SLIST_HEAD(, stm32_risab_pdata) risab_list =
 		SLIST_HEAD_INITIALIZER(risab_list);
 
 static bool is_tdcid;
+
+void stm32_risab_clear_illegal_access_flags(void)
+{
+	struct stm32_risab_pdata *risab = NULL;
+
+	SLIST_FOREACH(risab, &risab_list, link) {
+		if (clk_enable(risab->clock))
+			panic("Can't enable RISAB clock");
+
+		if (!io_read32(risab->base + _RISAB_IASR)) {
+			clk_disable(risab->clock);
+			continue;
+		}
+
+		io_write32(risab->base + _RISAB_IACR, _RISAB_IACR_CAEF |
+			   _RISAB_IACR_IAEF);
+
+		clk_disable(risab->clock);
+	}
+}
 
 #ifdef CFG_TEE_CORE_DEBUG
 void stm32_risab_dump_erroneous_data(void)
