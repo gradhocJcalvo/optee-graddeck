@@ -23,6 +23,7 @@
 #define _RISAF_CR			U(0x00)
 #define _RISAF_SR			U(0x04)
 #define _RISAF_IASR			U(0x08)
+#define _RISAF_IACR			U(0xC)
 #define _RISAF_IAESR0			U(0x20)
 #define _RISAF_IADDR0			U(0x24)
 #define _RISAF_IAESR1			U(0x28)
@@ -40,6 +41,10 @@
 #define _RISAF_SR_KEYVALID		BIT(0)
 #define _RISAF_SR_KEYRDY		BIT(1)
 #define _RISAF_SR_ENCDIS		BIT(2)
+/* _RISAF_IACR register fields */
+#define _RISAF_IACR_CAEF		BIT(0)
+#define _RISAF_IACR_IAEF0		BIT(1)
+#define _RISAF_IACR_IAEF1		BIT(2)
 /* _RISAF_HWCFGR register fields */
 #define _RISAF_HWCFGR_CFG1_SHIFT	U(0)
 #define _RISAF_HWCFGR_CFG1_MASK		GENMASK_32(7, 0)
@@ -188,13 +193,32 @@ static vaddr_t risaf_base(struct stm32_risaf_instance *risaf)
 	return io_pa_or_va_secure(&risaf->pdata.base, 1);
 }
 
+void stm32_risaf_clear_illegal_access_flags(void)
+{
+	struct stm32_risaf_instance *risaf = NULL;
+
+	SLIST_FOREACH(risaf, &risaf_list, link) {
+		vaddr_t base = io_pa_or_va_secure(&risaf->pdata.base, 1);
+
+		if (clk_enable(risaf->pdata.clock))
+			panic("Can't enable RISAF clock");
+
+		if (!io_read32(base + _RISAF_IASR)) {
+			clk_disable(risaf->pdata.clock);
+			continue;
+		}
+
+		io_write32(base + _RISAF_IACR, _RISAF_IACR_CAEF |
+			   _RISAF_IACR_IAEF0 | _RISAF_IACR_IAEF1);
+
+		clk_disable(risaf->pdata.clock);
+	}
+}
+
 #ifdef CFG_TEE_CORE_DEBUG
 void stm32_risaf_dump_erroneous_data(void)
 {
 	struct stm32_risaf_instance *risaf = NULL;
-
-	if (TRACE_LEVEL < TRACE_INFO)
-		return;
 
 	SLIST_FOREACH(risaf, &risaf_list, link) {
 		vaddr_t base = io_pa_or_va_secure(&risaf->pdata.base, 1);

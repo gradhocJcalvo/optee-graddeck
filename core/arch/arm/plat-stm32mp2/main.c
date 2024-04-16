@@ -172,6 +172,7 @@ void stm32_rif_access_violation_action(void)
 {
 #ifdef CFG_STM32_RISAF
 	stm32_risaf_dump_erroneous_data();
+	stm32_risaf_clear_illegal_access_flags();
 #endif
 #ifdef CFG_STM32_RISAB
 	stm32_risab_dump_erroneous_data();
