@@ -8,6 +8,7 @@
 #include <libfdt.h>
 #include <drivers/clk.h>
 #include <drivers/clk_dt.h>
+#include <drivers/stm32_bsec.h>
 #include <drivers/stm32_rif.h>
 #include <drivers/stm32mp21_rcc.h>
 #include <dt-bindings/clock/st,stm32mp21-rcc.h>
@@ -2881,6 +2882,21 @@ static const struct clk_ops clk_stm32_rif_gate_ops = {
 	.restore_context = clk_stm32_rif_gate_pm_restore,
 };
 
+static TEE_Result clk_stm32_rif_gate_dbg_enable(struct clk *clk)
+{
+	if (!stm32_bsec_self_hosted_debug_is_enabled())
+		return TEE_ERROR_ACCESS_DENIED;
+
+	return clk_stm32_rif_gate_enable(clk);
+}
+
+static const struct clk_ops  clk_stm32_rif_gate_dbg_ops = {
+	.enable		= clk_stm32_rif_gate_dbg_enable,
+	.disable	= clk_stm32_rif_gate_disable,
+	.is_enabled	= clk_stm32_rif_gate_is_enabled,
+	.restore_context = clk_stm32_rif_gate_pm_restore,
+};
+
 struct clk_stm32_rif_composite_cfg {
 	int sec_id;
 	int gate_id;
@@ -3105,6 +3121,19 @@ static const struct clk_ops ck_timer_ops = {
 		.parents = { (_parent) },\
 	}
 
+#define RIF_GATE_DBG(_name, _parent, _flags, _gate_id, _sec_id)\
+	struct clk _name = {\
+		.ops = &clk_stm32_rif_gate_dbg_ops,\
+		.priv = &(struct clk_stm32_rif_gate_cfg) {\
+			.sec_id	= (_sec_id),\
+			.gate_id = (_gate_id),\
+		},\
+		.name = #_name,\
+		.flags = (_flags),\
+		.num_parents = 1,\
+		.parents = { (_parent) },\
+	}
+
 #define RIF_COMPOSITE(_name, _nb_parents, _parents, _flags,\
 			_gate_id, _div_id, _mux_id, _sec_id)\
 	struct clk _name = {\
@@ -3243,7 +3272,8 @@ static STM32_DIVIDER(ck_icn_apb2, &ck_icn_ls_mcu, 0, DIV_APB2);
 static STM32_DIVIDER(ck_icn_apb3, &ck_icn_ls_mcu, 0, DIV_APB3);
 static STM32_DIVIDER(ck_icn_apb4, &ck_icn_ls_mcu, 0, DIV_APB4);
 static STM32_DIVIDER(ck_icn_apb5, &ck_icn_ls_mcu, 0, DIV_APB5);
-static STM32_DIVIDER(ck_icn_apbdbg, &ck_icn_ls_mcu, 0, DIV_APBDBG);
+static RIF_COMPOSITE(ck_icn_apbdbg, 1, { &ck_icn_ls_mcu }, 0,
+		     GATE_DBG, DIV_APBDBG, NO_MUX, RCC_RIF_DEBUG_TRACE);
 
 #define STM32_TIMER(_name, _parent, _flags, _apbdiv, _timpre)\
 	struct clk _name = {\
@@ -3267,14 +3297,22 @@ static RIF_GATE(ck_icn_p_dbgmcu, &ck_icn_apb3, 0,
 		GATE_DBGMCU, RCC_RIF_DEBUG_TRACE);
 static RIF_GATE(ck_dap, &ck_hsi, 0, GATE_DBGMCU, RCC_RIF_DEBUG_TRACE);
 
-static RIF_GATE(ck_sys_dbg, &ck_icn_apbdbg, 0, GATE_DBG, RCC_RIF_DEBUG_TRACE);
-static RIF_GATE(ck_icn_s_stm, &ck_icn_ls_mcu, 0, GATE_STM,
-		RCC_RIF_DEBUG_TRACE);
+static RIF_GATE_DBG(ck_sys_dbg, &ck_icn_apbdbg, 0, GATE_DBG,
+		    RCC_RIF_DEBUG_TRACE);
+static RIF_GATE_DBG(ck_icn_p_stm, &ck_icn_apbdbg, 0, GATE_STM,
+		    RCC_RIF_DEBUG_TRACE);
+static RIF_GATE_DBG(ck_icn_s_stm, &ck_icn_ls_mcu, 0, GATE_STM,
+		    RCC_RIF_DEBUG_TRACE);
 static RIF_GATE(ck_ker_tsdbg, &ck_flexgen_43, 0, GATE_DBG, RCC_RIF_DEBUG_TRACE);
 static RIF_GATE(ck_ker_tpiu, &ck_flexgen_44, 0, GATE_TRACE,
 		RCC_RIF_DEBUG_TRACE);
-static RIF_GATE(ck_icn_m_etr, &ck_flexgen_45, 0, GATE_ETR, RCC_RIF_DEBUG_TRACE);
-static RIF_GATE(ck_sys_atb, &ck_flexgen_45, 0, GATE_DBG, RCC_RIF_DEBUG_TRACE);
+static RIF_GATE_DBG(ck_icn_p_etr, &ck_icn_apbdbg, 0, GATE_ETR,
+		    RCC_RIF_DEBUG_TRACE);
+static RIF_GATE_DBG(ck_icn_m_etr, &ck_flexgen_45, 0, GATE_ETR,
+		    RCC_RIF_DEBUG_TRACE);
+static RIF_GATE_DBG(ck_sys_atb, &ck_flexgen_45, 0, GATE_DBG,
+		    RCC_RIF_DEBUG_TRACE);
+
 static RIF_GATE(ck_icn_s_sysram, &ck_icn_hs_mcu, 0, GATE_SYSRAM,
 		RCC_RIF_SYSRAM);
 static RIF_GATE(ck_icn_s_retram, &ck_icn_hs_mcu, 0, GATE_RETRAM,
@@ -3644,7 +3682,8 @@ static struct clk *stm32mp21_clk_provided[STM32MP21_ALL_CLK_NB] = {
 	[CK_BUS_GPIOI]		= &ck_icn_p_gpioi,
 	[CK_BUS_GPIOZ]		= &ck_icn_p_gpioz,
 	[CK_BUS_RTC]		= &ck_icn_p_rtc,
-	[CK_BUS_STM]		= &ck_icn_s_stm,
+	[CK_BUS_STM]		= &ck_icn_p_stm,
+	[CK_KER_STM]		= &ck_icn_s_stm,
 	[CK_BUS_FMC]		= &ck_icn_p_fmc,
 	[CK_BUS_ETH1]		= &ck_icn_p_eth1,
 	[CK_BUS_ETH2]		= &ck_icn_p_eth2,
@@ -3780,7 +3819,8 @@ static struct clk *stm32mp21_clk_provided[STM32MP21_ALL_CLK_NB] = {
 	[CK_KER_LPTIM5]		= &ck_ker_lptim5,
 	[CK_KER_TSDBG]		= &ck_ker_tsdbg,
 	[CK_KER_TPIU]		= &ck_ker_tpiu,
-	[CK_BUS_ETR]		= &ck_icn_m_etr,
+	[CK_BUS_ETR]		= &ck_icn_p_etr,
+	[CK_KER_ETR]		= &ck_icn_m_etr,
 	[CK_BUS_SYSATB]		= &ck_sys_atb,
 	[CK_KER_OSPI1]		= &ck_ker_ospi1,
 	[CK_KER_FMC]		= &ck_ker_fmc,

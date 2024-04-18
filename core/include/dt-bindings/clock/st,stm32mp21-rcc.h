@@ -308,8 +308,10 @@
 #define HSE_DIV2_CK		285
 #define CK_DBGMCU		286
 #define CK_DAP			287
+#define CK_KER_ETR		288
+#define CK_KER_STM		289
 
-#define STM32MP21_LAST_CLK	288
+#define STM32MP21_LAST_CLK	290
 
 #define CK_SCMI_ICN_HS_MCU	0
 #define CK_SCMI_ICN_SDMMC	1
@@ -397,7 +399,7 @@
 #define CK_SCMI_TIMG2		83
 #define CK_SCMI_BKPSRAM		84
 #define CK_SCMI_BSEC		85
-#define CK_SCMI_ETR		86
+#define CK_SCMI_BUS_ETR		86
 #define CK_SCMI_FMC		87
 #define CK_SCMI_GPIOA		88
 #define CK_SCMI_GPIOB		89
@@ -421,6 +423,8 @@
 #define CK_SCMI_SYSDBG		107
 #define CK_SCMI_SYSATB		108
 #define CK_SCMI_TSDBG		109
-#define CK_SCMI_STM		110
+#define CK_SCMI_BUS_STM		110
+#define CK_SCMI_KER_STM		111
+#define CK_SCMI_KER_ETR		112
 
 #endif /* _DT_BINDINGS_STM32MP21_CLKS_H_ */
