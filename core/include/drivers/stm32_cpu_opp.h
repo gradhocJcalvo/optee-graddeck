@@ -6,6 +6,8 @@
 #ifndef DRIVERS_STM32_CPU_OPP_H
 #define DRIVERS_STM32_CPU_OPP_H
 
+#include <tee_api_types.h>
+
 struct regulator;
 struct clk;
 
