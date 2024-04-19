@@ -136,6 +136,30 @@ TEE_Result stm32_rifsc_reconfigure_rimu(unsigned int id,
 					bool cid_sel, bool sec, bool priv);
 
 /*
+ * Verify if CID filtering is enabled
+ *
+ * @risup_id:	ID of the RISUP to verify
+ *
+ * Returns True if CID filtering is enabled in case of success.
+ * Returns False if CID filtering is disabled
+ */
+bool stm32_rifsc_cid_is_enabled(unsigned int risup_id);
+
+/*
+ * Enable  CID filtering
+ *
+ * @risup_id:	ID of the RISUP to enable
+ */
+void stm32_rifsc_cid_enable(unsigned int risup_id);
+
+/*
+ * Disable CID filtering
+ *
+ * @risup_id:	ID of the RISUP to disable
+ */
+void stm32_rifsc_cid_disable(unsigned int risup_id);
+
+/*
  * Check every possible configuration where accessing RIF
  * is possible :
  * -When no CID filtering is enabled on a controller
