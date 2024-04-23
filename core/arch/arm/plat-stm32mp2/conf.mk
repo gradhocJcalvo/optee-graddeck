@@ -34,6 +34,11 @@ CFG_EMBED_DTB_SOURCE_FILE ?= $(flavor_dts_file-$(PLATFORM_FLAVOR))
 endif
 CFG_EMBED_DTB_SOURCE_FILE ?= stm32mp257f-ev1.dts
 
+# CFG_STM32MP2x switches are exclusive.
+# - CFG_STM32MP25 is enabled for STM32MP25x-* targets (default)
+# - CFG_STM32MP23 is enabled for STM32MP23x-* targets
+# - CFG_STM32MP21 is enabled for STM32MP21x-* targets
+# We try to guess the variant from the embedded DT source file name
 ifneq ($(filter $(CFG_EMBED_DTB_SOURCE_FILE),$(flavorlist-MP25)),)
 $(call force,CFG_STM32MP25,y)
 endif
@@ -58,6 +63,17 @@ else
 $(call force,CFG_STM32MP21,n)
 $(call force,CFG_STM32MP23,n)
 $(call force,CFG_STM32MP25,y)
+endif
+
+# CFG_STM32MP_PROFILE selects the profile of the services embedded in OP-TEE
+CFG_STM32MP_PROFILE ?= secure_and_system_services
+
+ifeq ($(filter $(CFG_STM32MP_PROFILE),system_services secure_and_system_services),)
+$(error CFG_STM32MP_PROFILE shall be one of system_services or secure_and_system_services)
+endif
+
+ifeq ($(CFG_STM32MP_PROFILE),system_services)
+include $(platform-dir)/conf.disable-secure-services.mk
 endif
 
 include core/arch/arm/cpu/cortex-armv8-0.mk
@@ -87,7 +103,7 @@ $(call force,CFG_STM32_HSE_MONITORING,y)
 $(call force,CFG_STM32_PWR,y)
 $(call force,CFG_STM32_PWR_REGUL,y)
 $(call force,CFG_STM32MP_CLK_CORE,y)
-$(call force,CFG_STM32MP_REMOTEPROC,y)
+CFG_STM32MP_REMOTEPROC ?= y
 $(call force,CFG_WITH_ARM_TRUSTED_FW,y)
 $(call force,CFG_WITH_LPAE,y)
 
@@ -201,7 +217,7 @@ RPROC_SIGN_KEY ?= keys/default.pem
 endif
 
 # Default enable HWRNG PTA support
-CFG_HWRNG_PTA ?= y
+CFG_HWRNG_PTA ?= $(CFG_STM32_RNG)
 ifeq ($(CFG_HWRNG_PTA),y)
 $(call force,CFG_STM32_RNG,y,Mandated by CFG_HWRNG_PTA)
 $(call force,CFG_WITH_SOFTWARE_PRNG,n,Mandated by CFG_HWRNG_PTA)
