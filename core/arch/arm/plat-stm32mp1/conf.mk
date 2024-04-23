@@ -104,6 +104,37 @@ CFG_EMBED_DTB_SOURCE_FILE ?= $(flavor_dts_file-$(PLATFORM_FLAVOR))
 endif
 CFG_EMBED_DTB_SOURCE_FILE ?= stm32mp157c-dk2.dts
 
+# CFG_STM32MP1x switches are exclusive.
+# - CFG_STM32MP15 is enabled for STM32MP15x-* targets (default)
+# - CFG_STM32MP13 is enabled for STM32MP13x-* targets
+# We try to guess the variant from the embedded DT source file name
+ifneq ($(filter $(CFG_EMBED_DTB_SOURCE_FILE),$(flavorlist-MP13)),)
+$(call force,CFG_STM32MP13,y)
+endif
+ifneq ($(filter $(CFG_EMBED_DTB_SOURCE_FILE),$(flavorlist-MP15)),)
+$(call force,CFG_STM32MP15,y)
+endif
+
+ifeq ($(CFG_STM32MP13),y)
+$(call force,CFG_STM32MP15,n)
+else
+$(call force,CFG_STM32MP15,y)
+$(call force,CFG_STM32MP13,n)
+endif
+
+ifeq ($(call cfg-one-enabled,CFG_STM32MP15 CFG_STM32MP13),n)
+$(error One of CFG_STM32MP15 CFG_STM32MP13 must be enabled)
+endif
+ifeq ($(call cfg-all-enabled,CFG_STM32MP15 CFG_STM32MP13),y)
+$(error Only one of CFG_STM32MP15 CFG_STM32MP13 must be enabled)
+endif
+
+# Some platform do not support some resources
+ifneq ($(filter $(CFG_EMBED_DTB_SOURCE_FILE),$(flavorlist-MP15-HUK-DT)),)
+CFG_STM32MP15_HUK ?= y
+CFG_STM32_HUK_FROM_DT ?= y
+endif
+
 ifneq ($(filter $(CFG_EMBED_DTB_SOURCE_FILE),$(flavorlist-no_cryp)),)
 $(call force,CFG_STM32_CRYP,n)
 $(call force,CFG_STM32_SAES,n)
@@ -111,40 +142,11 @@ endif
 
 ifneq ($(filter $(CFG_EMBED_DTB_SOURCE_FILE),$(flavorlist-no_rng)),)
 $(call force,CFG_HWRNG_PTA,n)
-$(call force,CFG_WITH_SOFTWARE_PRNG,y)
-endif
-
-ifneq ($(filter $(CFG_EMBED_DTB_SOURCE_FILE),$(flavorlist-MP15-HUK-DT)),)
-CFG_STM32MP15_HUK ?= y
-CFG_STM32_HUK_FROM_DT ?= y
-endif
-
-ifneq ($(filter $(CFG_EMBED_DTB_SOURCE_FILE),$(flavorlist-MP13)),)
-$(call force,CFG_STM32MP13,y)
-endif
-
-ifneq ($(filter $(CFG_EMBED_DTB_SOURCE_FILE),$(flavorlist-MP15)),)
-$(call force,CFG_STM32MP15,y)
+CFG_WITH_SOFTWARE_PRNG ?= y
 endif
 
 # Default do not access external DT passed to non-secure boot stage
 CFG_EXTERNAL_DT ?= n
-
-# CFG_STM32MP1x switches are exclusive.
-# - CFG_STM32MP15 is enabled for STM32MP15x-* targets (default)
-# - CFG_STM32MP13 is enabled for STM32MP13x-* targets
-ifeq ($(CFG_STM32MP13),y)
-$(call force,CFG_STM32MP15,n)
-else
-$(call force,CFG_STM32MP15,y)
-$(call force,CFG_STM32MP13,n)
-endif
-ifeq ($(call cfg-one-enabled,CFG_STM32MP15 CFG_STM32MP13),n)
-$(error One of CFG_STM32MP15 CFG_STM32MP13 must be enabled)
-endif
-ifeq ($(call cfg-all-enabled,CFG_STM32MP15 CFG_STM32MP13),y)
-$(error Only one of CFG_STM32MP15 CFG_STM32MP13 must be enabled)
-endif
 
 include core/arch/arm/cpu/cortex-a7.mk
 
