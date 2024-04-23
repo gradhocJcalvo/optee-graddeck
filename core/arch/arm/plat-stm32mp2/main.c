@@ -330,14 +330,38 @@ TEE_Result stm32_activate_internal_tamper(int id)
 			res = TEE_SUCCESS;
 		break;
 
-	case INT_TAMP7: /* VDDCORE monitoring under/over voltage */
-		stm32mp_pwr_monitoring_enable(PWR_MON_VCORE);
-		res = TEE_SUCCESS;
+	case INT_TAMP7:
+		if (IS_ENABLED(CFG_STM32MP21)) {
+			/* ADC2 (adc2_awd1) analog watchdog monitoring 1 */
+			res = TEE_SUCCESS;
+			break;
+		} else if (IS_ENABLED(CFG_STM32MP23) ||
+			   IS_ENABLED(CFG_STM32MP25)) {
+			/* VDDCORE monitoring under/over voltage */
+			stm32mp_pwr_monitoring_enable(PWR_MON_VCORE);
+			res = TEE_SUCCESS;
+			break;
+		}
 		break;
 
-	case INT_TAMP12: /* VDDCPU (Cortex A35) monitoring under/over voltage */
-		stm32mp_pwr_monitoring_enable(PWR_MON_VCPU);
-		res = TEE_SUCCESS;
+	case INT_TAMP12:
+		if (IS_ENABLED(CFG_STM32MP21)) {
+			/* ADC2 (adc2_awd2) analog watchdog monitoring 2 */
+			res = TEE_SUCCESS;
+			break;
+		} else if (IS_ENABLED(CFG_STM32MP23) ||
+			   IS_ENABLED(CFG_STM32MP25)) {
+			/* VDDCPU (Cortex A35) monitoring under/over voltage */
+			stm32mp_pwr_monitoring_enable(PWR_MON_VCPU);
+			res = TEE_SUCCESS;
+			break;
+		}
+		break;
+
+	case INT_TAMP13:
+	case INT_TAMP16:
+		if (IS_ENABLED(CFG_STM32MP21))
+			res = TEE_SUCCESS;
 		break;
 
 	case INT_TAMP5:
@@ -346,7 +370,6 @@ TEE_Result stm32_activate_internal_tamper(int id)
 	case INT_TAMP9:
 	case INT_TAMP10:
 	case INT_TAMP11:
-	case INT_TAMP13:
 	case INT_TAMP14:
 	case INT_TAMP15:
 		res = TEE_SUCCESS;
