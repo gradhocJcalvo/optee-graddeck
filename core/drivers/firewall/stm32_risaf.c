@@ -82,8 +82,13 @@
 #define _RISAF_REG_CFGR_BREN		BIT(_RISAF_REG_CFGR_BREN_SHIFT)
 #define _RISAF_REG_CFGR_SEC_SHIFT	U(8)
 #define _RISAF_REG_CFGR_SEC		BIT(_RISAF_REG_CFGR_SEC_SHIFT)
+#if defined(CFG_STM32MP21)
+#define _RISAF_REG_CFGR_ENC_SHIFT	U(14)
+#define _RISAF_REG_CFGR_ENC		GENMASK_32(15, 14)
+#else /* defined(CFG_STM32MP21) */
 #define _RISAF_REG_CFGR_ENC_SHIFT	U(15)
 #define _RISAF_REG_CFGR_ENC		BIT(_RISAF_REG_CFGR_ENC_SHIFT)
+#endif /* defined(CFG_STM32MP21) */
 #define _RISAF_REG_CFGR_PRIVC_SHIFT	U(16)
 #define _RISAF_REG_CFGR_PRIVC_MASK	GENMASK_32(23, 16)
 #define _RISAF_REG_CFGR_ALL_MASK	(_RISAF_REG_CFGR_BREN | \
@@ -109,6 +114,17 @@
 #define DT_RISAF_WRITE_MASK		GENMASK_32(31, 24)
 
 #define _RISAF_GET_REGION_ID(cfg)	((cfg) & DT_RISAF_REG_ID_MASK)
+#if defined(CFG_STM32MP21)
+#define _RISAF_GET_REGION_CFG(cfg) \
+	(((((cfg) & DT_RISAF_EN_MASK) >> DT_RISAF_EN_SHIFT) << \
+	  _RISAF_REG_CFGR_BREN_SHIFT) | \
+	 ((((cfg) & DT_RISAF_SEC_MASK) >> DT_RISAF_SEC_SHIFT) << \
+	  _RISAF_REG_CFGR_SEC_SHIFT) | \
+	 ((((cfg) & DT_RISAF_ENC_MASK) >> DT_RISAF_ENC_SHIFT) << \
+	  _RISAF_REG_CFGR_ENC_SHIFT) | \
+	 ((((cfg) & DT_RISAF_PRIV_MASK) >> DT_RISAF_PRIV_SHIFT) << \
+	  _RISAF_REG_CFGR_PRIVC_SHIFT))
+#else /* defined(CFG_STM32MP21) */
 #define _RISAF_GET_REGION_CFG(cfg) \
 	(((((cfg) & DT_RISAF_EN_MASK) >> DT_RISAF_EN_SHIFT) << \
 	  _RISAF_REG_CFGR_BREN_SHIFT) | \
@@ -118,6 +134,7 @@
 	  _RISAF_REG_CFGR_ENC_SHIFT) | \
 	 ((((cfg) & DT_RISAF_PRIV_MASK) >> DT_RISAF_PRIV_SHIFT) << \
 	  _RISAF_REG_CFGR_PRIVC_SHIFT))
+#endif /* defined(CFG_STM32MP21) */
 #define _RISAF_GET_REGION_CID_CFG(cfg) \
 	(((((cfg) & DT_RISAF_WRITE_MASK) >> DT_RISAF_WRITE_SHIFT) << \
 	  _RISAF_REG_CIDCFGR_WRENC_SHIFT) | \
@@ -357,7 +374,7 @@ static TEE_Result risaf_configure_region(struct stm32_risaf_instance *risaf,
 			_RISAF_REG_CFGR_ALL_MASK,
 			cfg & _RISAF_REG_CFGR_ALL_MASK);
 
-	if ((cfg & _RISAF_REG_CFGR_ENC) == _RISAF_REG_CFGR_ENC) {
+	if (cfg & _RISAF_REG_CFGR_ENC) {
 		if (!risaf->pdata.enc_supported) {
 			EMSG("RISAF %#"PRIxPTR": encryption feature error",
 			     risaf->pdata.base.pa);
@@ -549,9 +566,14 @@ static TEE_Result stm32_risaf_pm_suspend(struct stm32_risaf_instance *risaf)
 		risaf_en = (cfg & _RISAF_REG_CFGR_BREN) << DT_RISAF_EN_SHIFT;
 		risaf_sec = ((cfg & _RISAF_REG_CFGR_SEC) >>
 			     _RISAF_REG_CFGR_SEC_SHIFT) << DT_RISAF_SEC_SHIFT;
+#if defined(CFG_STM32MP21)
+		risaf_enc = ((cfg & _RISAF_REG_CFGR_ENC) >>
+			     _RISAF_REG_CFGR_ENC_SHIFT) << DT_RISAF_ENC_SHIFT;
+#else /* defined(CFG_STM32MP21) */
 		risaf_enc = ((cfg & _RISAF_REG_CFGR_ENC) >>
 			     _RISAF_REG_CFGR_ENC_SHIFT) <<
 			    (DT_RISAF_ENC_SHIFT + 1);
+#endif /* defined(CFG_STM32MP21) */
 		risaf_priv = ((cfg & _RISAF_REG_CFGR_PRIVC_MASK) >>
 			      _RISAF_REG_CFGR_PRIVC_SHIFT) <<
 			     DT_RISAF_PRIV_SHIFT;
