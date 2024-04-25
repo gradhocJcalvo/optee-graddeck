@@ -142,6 +142,8 @@ TEE_Result sa2ul_rng_init(void)
 
 	io_write32(rng + RNG_CONTROL, ENABLE_TRNG);
 
+	hw_register_get_random_bytes();
+
 	IMSG("SA2UL TRNG initialized");
 
 	return TEE_SUCCESS;
