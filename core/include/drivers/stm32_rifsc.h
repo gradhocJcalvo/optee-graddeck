@@ -30,4 +30,12 @@ struct rimu_cfg {
 	uint32_t attr;
 };
 
+#if defined(CFG_STM32MP25)
+struct risal_cfg {
+	uint32_t id;
+	uint32_t blockid;
+	uint32_t attr;
+};
+#endif /* defined(CFG_STM32MP25) */
+
 #endif /* __DRIVERS_STM32_RIFSC_H */

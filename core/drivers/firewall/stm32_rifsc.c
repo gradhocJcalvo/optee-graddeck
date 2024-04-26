@@ -28,7 +28,12 @@
 #define _RIFSC_RISC_PER0_SEMCR		U(0x104)
 #define _RIFSC_RIMC_CR			U(0xC00)
 #define _RIFSC_RIMC_ATTR0		U(0xC10)
-
+#if defined(CFG_STM32MP25)
+#define _RIFSC_RISAL_CFGR0_A(y)		(U(0x900) + (0x10 * ((y) - 1)))
+#define _RIFSC_RISAL_CFGR0_B(y)		(U(0x908) + (0x10 * ((y) - 1)))
+#define _RIFSC_RISAL_ADDR_A		U(0x924)
+#define _RIFSC_RISAL_ADDR_B		U(0x92C)
+#endif /* defined(CFG_STM32MP25) */
 #define _RIFSC_HWCFGR3			U(0xFE8)
 #define _RIFSC_HWCFGR2			U(0xFEC)
 #define _RIFSC_HWCFGR1			U(0xFF0)
@@ -100,15 +105,13 @@
 #define RIFSC_RIMC_MSEC_MASK		BIT(8)
 #define RIFSC_RIMC_MPRIV_MASK		BIT(9)
 
-/* max entries */
-#define MAX_RIMU			U(16)
-#define MAX_RISUP			U(128)
-
 struct rifsc_driver_data {
 	uint32_t version;
 	uint8_t nb_rimu;
 	uint8_t nb_risup;
+#if defined(CFG_STM32MP25)
 	uint8_t nb_risal;
+#endif /* defined(CFG_STM32MP25) */
 	bool rif_en;
 	bool sec_en;
 	bool priv_en;
@@ -122,6 +125,10 @@ struct rifsc_platdata {
 	struct rimu_cfg *rimu;
 	int nrimu;
 	bool is_tdcid;
+#if defined(CFG_STM32MP25)
+	struct risal_cfg *risal;
+	int nrisal;
+#endif /* defined(CFG_STM32MP25) */
 	bool errata_ahbrisab;
 };
 
@@ -262,7 +269,9 @@ static void stm32_rifsc_get_driverdata(struct rifsc_platdata *pdata)
 	regval = io_read32(pdata->base + _RIFSC_HWCFGR2);
 	rifsc_drvdata.nb_risup = _RIF_FLD_GET(_RIFSC_HWCFGR2_CFG1, regval);
 	rifsc_drvdata.nb_rimu = _RIF_FLD_GET(_RIFSC_HWCFGR2_CFG2, regval);
+#if defined(CFG_STM32MP25)
 	rifsc_drvdata.nb_risal = _RIF_FLD_GET(_RIFSC_HWCFGR2_CFG3, regval);
+#endif /* defined(CFG_STM32MP25) */
 
 	pdata->drv_data = &rifsc_drvdata;
 
@@ -272,6 +281,7 @@ static void stm32_rifsc_get_driverdata(struct rifsc_platdata *pdata)
 	     _RIF_FLD_GET(_RIFSC_VERR_MAJREV, regval),
 	     _RIF_FLD_GET(_RIFSC_VERR_MINREV, regval));
 
+#if defined(CFG_STM32MP25)
 	DMSG("HW cap: enabled[rif:sec:priv]:[%s:%s:%s] nb[risup|rimu|risal]:[%"PRIu8",%"PRIu8",%"PRIu8"]",
 	     rifsc_drvdata.rif_en ? "true" : "false",
 	     rifsc_drvdata.sec_en ? "true" : "false",
@@ -279,6 +289,14 @@ static void stm32_rifsc_get_driverdata(struct rifsc_platdata *pdata)
 	     rifsc_drvdata.nb_risup,
 	     rifsc_drvdata.nb_rimu,
 	     rifsc_drvdata.nb_risal);
+#else /* defined(CFG_STM32MP25) */
+	DMSG("HW cap: enabled[rif:sec:priv]:[%s:%s:%s] nb[risup|rimu]:[%"PRIu8",%"PRIu8"]",
+	     rifsc_drvdata.rif_en ? "true" : "false",
+	     rifsc_drvdata.sec_en ? "true" : "false",
+	     rifsc_drvdata.priv_en ? "true" : "false",
+	     rifsc_drvdata.nb_risup,
+	     rifsc_drvdata.nb_rimu);
+#endif
 }
 
 static TEE_Result stm32_rifsc_glock_config(const void *fdt, int node,
@@ -386,6 +404,41 @@ static TEE_Result stm32_rifsc_dt_conf_rimu(const void *fdt, int node,
 	return TEE_SUCCESS;
 }
 
+#if defined(CFG_STM32MP25)
+static TEE_Result stm32_rifsc_dt_conf_risal(const void *fdt, int node,
+					    struct rifsc_platdata *pdata)
+{
+	const fdt32_t *cuint = NULL;
+	int i = 0;
+	int len = 0;
+
+	cuint = fdt_getprop(fdt, node, "st,risal", &len);
+	if (!cuint) {
+		DMSG("No RISAL configuration in DT");
+		pdata->nrisal = 0;
+		return TEE_ERROR_ITEM_NOT_FOUND;
+	}
+
+	len = len / sizeof(uint32_t);
+
+	pdata->nrisal = len;
+	pdata->risal = calloc(len, sizeof(*pdata->risal));
+	if (!pdata->risal)
+		return TEE_ERROR_OUT_OF_MEMORY;
+
+	for (i = 0; i < len; i++) {
+		uint32_t value = fdt32_to_cpu(cuint[i]);
+		struct risal_cfg *risal = pdata->risal + i;
+
+		risal->id = _RIF_FLD_GET(RIFSC_RISAL_REG_ID, value);
+		risal->blockid = _RIF_FLD_GET(RIFSC_RISAL_BLOCK_ID, value);
+		risal->attr = _RIF_FLD_GET(RIFSC_RISAL_REGx_CFGR, value);
+	}
+
+	return TEE_SUCCESS;
+}
+#endif /* defined(CFG_STM32MP25) */
+
 static TEE_Result stm32_rifsc_parse_fdt(const void *fdt, int node,
 					struct rifsc_platdata *pdata)
 {
@@ -416,6 +469,12 @@ static TEE_Result stm32_rifsc_parse_fdt(const void *fdt, int node,
 		res = stm32_rifsc_dt_conf_rimu(fdt, node, pdata);
 		if (res && res != TEE_ERROR_ITEM_NOT_FOUND)
 			return res;
+
+#if defined(CFG_STM32MP25)
+		res = stm32_rifsc_dt_conf_risal(fdt, node, pdata);
+		if (res && res != TEE_ERROR_ITEM_NOT_FOUND)
+			return res;
+#endif /* defined(CFG_STM32MP25) */
 	}
 
 	rifsc_pdata.errata_ahbrisab = fdt_getprop(fdt, node,
@@ -615,6 +674,46 @@ static TEE_Result stm32_rimu_setup(struct rifsc_platdata *pdata)
 
 	return 0;
 }
+
+#if defined(CFG_STM32MP25)
+static TEE_Result stm32_risal_cfg(struct rifsc_platdata *pdata,
+				  struct risal_cfg *risal)
+{
+	struct rifsc_driver_data *drv_data = pdata->drv_data;
+	uintptr_t offset_a = _RIFSC_RISAL_CFGR0_A(risal->id);
+	uintptr_t offset_b = _RIFSC_RISAL_CFGR0_B(risal->id);
+
+	if (!risal || risal->id > drv_data->nb_risal)
+		return TEE_ERROR_BAD_PARAMETERS;
+
+	if (drv_data->rif_en) {
+		if (risal->blockid == RIFSC_RISAL_BLOCK_A)
+			io_write32(pdata->base + offset_a, risal->attr);
+		if (risal->blockid == RIFSC_RISAL_BLOCK_B)
+			io_write32(pdata->base + offset_b, risal->attr);
+	}
+
+	return TEE_SUCCESS;
+}
+
+static TEE_Result stm32_risal_setup(struct rifsc_platdata *pdata)
+{
+	int i = 0;
+	TEE_Result res = TEE_ERROR_GENERIC;
+
+	for (i = 0; i < pdata->nrisal; i++) {
+		struct risal_cfg *risal = pdata->risal + i;
+
+		res = stm32_risal_cfg(pdata, risal);
+		if (res) {
+			EMSG("risal cfg(%d/%d) error", i + 1, pdata->nrisal);
+			return res;
+		}
+	}
+
+	return TEE_SUCCESS;
+}
+#endif /* defined(CFG_STM32MP25) */
 
 TEE_Result stm32_rifsc_reconfigure_risup(unsigned int risup_id,
 					 unsigned int cid,
@@ -984,12 +1083,18 @@ static TEE_Result stm32_rifsc_probe(const void *fdt, int node,
 
 	res = stm32_risup_setup(&rifsc_pdata);
 	if (res)
-		return res;
+		panic();
 
 	if (rifsc_pdata.is_tdcid) {
 		res = stm32_rimu_setup(&rifsc_pdata);
 		if (res)
-			return res;
+			panic();
+
+#if defined(CFG_STM32MP25)
+		res = stm32_risal_setup(&rifsc_pdata);
+		if (res)
+			panic();
+#endif /* defined(CFG_STM32MP25) */
 	}
 
 	stm32_rifsc_glock_config(fdt, node, &rifsc_pdata);
