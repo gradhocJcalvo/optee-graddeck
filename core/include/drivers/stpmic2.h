@@ -13,6 +13,7 @@
 
 enum {
 	STPMIC2_BUCK1 = 0,
+	STPMIC2_BUCK1H,
 	STPMIC2_BUCK2,
 	STPMIC2_BUCK3,
 	STPMIC2_BUCK4,
@@ -28,6 +29,11 @@ enum {
 	STPMIC2_LDO6,
 	STPMIC2_LDO7,
 	STPMIC2_LDO8,
+	STPMIC2_GPO1,
+	STPMIC2_GPO2,
+	STPMIC2_GPO3,
+	STPMIC2_GPO4,
+	STPMIC2_GPO5,
 	STPMIC2_NB_REG,
 };
 
@@ -59,6 +65,7 @@ enum {
 #define BUCKS_PD_CR2		U(0x1A)
 #define LDOS_PD_CR1		U(0x1B)
 #define LDOS_PD_CR2		U(0x1C)
+#define GPO_MRST_CR		U(0x1C)
 #define BUCKS_MRST_CR		U(0x1D)
 #define LDOS_MRST_CR		U(0x1E)
 /* Buck CR */
@@ -97,6 +104,13 @@ enum {
 #define BUCK7_ALT_CR1		U(0x40)
 #define BUCK7_ALT_CR2		U(0x41)
 #define BUCK7_PWRCTRL_CR	U(0x42)
+/* GPO CR used only on PMIC1L and PMIC2L*/
+#define GPO1_MAIN_CR		U(0x43)
+#define GPO1_ALT_CR		U(0x44)
+#define GPO1_PWRCTRL_CR		U(0x45)
+#define GPO2_MAIN_CR		U(0x46)
+#define GPO2_ALT_CR		U(0x47)
+#define GPO2_PWRCTRL_CR		U(0x48)
 /* LDO CR */
 #define LDO1_MAIN_CR		U(0x4C)
 #define LDO1_ALT_CR		U(0x4D)
@@ -125,6 +139,16 @@ enum {
 #define REFDDR_MAIN_CR		U(0x64)
 #define REFDDR_ALT_CR		U(0x65)
 #define REFDDR_PWRCTRL_CR	U(0x66)
+/* GPO CR used only on PMIC1L and PMIC2L*/
+#define GPO3_MAIN_CR		U(0x67)
+#define GPO3_ALT_CR		U(0x68)
+#define GPO3_PWRCTRL_CR		U(0x69)
+#define GPO4_MAIN_CR		U(0x6A)
+#define GPO4_ALT_CR		U(0x6B)
+#define GPO4_PWRCTRL_CR		U(0x6C)
+#define GPO5_MAIN_CR		U(0x6D)
+#define GPO5_ALT_CR		U(0x6E)
+#define GPO5_PWRCTRL_CR		U(0x6F)
 /* INTERRUPT CR */
 #define INT_PENDING_R1		U(0x70)
 #define INT_PENDING_R2		U(0x71)
@@ -147,8 +171,16 @@ enum {
 #define INT_DBG_LATCH_R3	U(0x82)
 #define INT_DBG_LATCH_R4	U(0x83)
 
+/* NVMEM shadow registers */
+#define NVM_BUCK1_VOUT_SHR	U(0x9C)
+
 /* PRODUCT_ID bits definition */
 #define PMIC_NVM_ID_MASK	GENMASK_32(3, 0)
+#define PMIC_REF_ID_MASK	GENMASK_32(7, 4)
+#define PMIC_REF_ID_SHIFT	4
+#define PMIC_REF_ID_STPMIC1L	U(1)
+#define PMIC_REF_ID_STPMIC25	U(2)
+#define PMIC_REF_ID_STPMIC2L	U(3)
 
 /* VERSION_SR bits definition */
 #define MINOR_VERSION_MASK	GENMASK_32(3, 0)
@@ -174,6 +206,13 @@ enum {
 #define LDO6_MRST		BIT(5)
 #define LDO7_MRST		BIT(6)
 #define LDO8_MRST		BIT(7)
+
+/* GPO_MRST_CR bits definition */
+#define GPO1_MRST		BIT(1)
+#define GPO2_MRST		BIT(2)
+#define GPO3_MRST		BIT(3)
+#define GPO4_MRST		BIT(4)
+#define GPO5_MRST		BIT(5)
 
 /* LDOx_MAIN_CR */
 #define LDO_VOLT_SHIFT		1
@@ -246,6 +285,9 @@ enum {
 #define FS_OCP_LDO7		BIT(6)
 #define FS_OCP_LDO8		BIT(7)
 
+/* NVM_BUCK1_VOUT_SHR */
+#define BUCK1_VRAN_GE_CFG	BIT(7)
+
 enum stpmic2_prop_id {
 	STPMIC2_MASK_RESET = 0,
 	STPMIC2_PULL_DOWN,
@@ -277,12 +319,16 @@ struct pmic_it_handle_s {
  */
 struct stpmic2 {
 	struct i2c_handle_s *pmic_i2c_handle;
+	const void *compat_data;
 	uint16_t pmic_i2c_addr;
 	uint16_t irq_count;
 #ifdef CFG_STM32_PWR_IRQ
 	SLIST_HEAD(, pmic_it_handle_s) it_list;
 #endif
+	uint8_t ref_id;
 };
+
+TEE_Result stpmic2_regulator_get_id(const char *regu_name, uint8_t *id);
 
 TEE_Result stpmic2_register_read(struct stpmic2 *pmic, uint8_t register_id,
 				 uint8_t *value);
@@ -312,6 +358,7 @@ TEE_Result stpmic2_regulator_set_prop(struct stpmic2 *pmic, uint8_t id,
 void stpmic2_dump_regulators(struct stpmic2 *pmic);
 TEE_Result stpmic2_get_version(struct stpmic2 *pmic, uint8_t *val);
 TEE_Result stpmic2_get_product_id(struct stpmic2 *pmic, uint8_t *val);
+TEE_Result stpmic2_is_buck1_high_voltage(struct stpmic2 *pmic, bool *high);
 
 /* Low Power handling */
 TEE_Result stpmic2_lp_set_state(struct stpmic2 *pmic, uint8_t id, bool enable);

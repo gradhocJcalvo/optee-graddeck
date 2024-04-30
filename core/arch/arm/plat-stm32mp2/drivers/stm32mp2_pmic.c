@@ -64,6 +64,18 @@ static bool stm32_pmic2;
 #define STPMIC2_LP_STATE_SET_VOLT	BIT(3)
 
 /*
+ * struct pmic_compat_data - pmic specificity helper
+ * @desc_table: description table of each regulator
+ * @desc_len: len of the description table
+ * @ref_id: value of PMIC_REF_ID in PRODUCT_ID_SR
+ */
+struct pmic_compat_data {
+	const struct regu_dt_desc *desc_table;
+	size_t desc_len;
+	uint8_t ref_id;
+};
+
+/*
  * struct pmic_regu - STPMIC2 regulator instance
  *
  * @pmic: Handle to PMIC device
@@ -398,7 +410,8 @@ static TEE_Result apply_pm_state(struct regulator *regulator, uint8_t mode)
 		if (res)
 			return res;
 
-		if (state & STPMIC2_LP_STATE_SET_VOLT) {
+		if (state & STPMIC2_LP_STATE_SET_VOLT &&
+		    regulator->ops->set_voltage)  {
 			res = stpmic2_lp_set_voltage(regu->pmic, regu->id,
 						     lp_level_uv / 1000);
 			if (res)
@@ -512,39 +525,82 @@ static const struct regulator_ops pmic_regu_ops = {
 	.supplied_init = pmic_supplied_init,
 };
 
+static const struct regulator_ops pmic_switch_ops = {
+	.set_state = pmic_set_state,
+	.get_state = pmic_get_state,
+	.init = pmic_init,
+	.supplied_init = pmic_supplied_init,
+};
+
 #define DEFINE_REGU(_name) { \
 		.name = (_name), \
 		.ops = &pmic_regu_ops, \
 	}
 
-static const struct regu_dt_desc pmic_reguls[STPMIC2_NB_REG] = {
-	[STPMIC2_BUCK1] = DEFINE_REGU("buck1"),
-	[STPMIC2_BUCK2] = DEFINE_REGU("buck2"),
-	[STPMIC2_BUCK3] = DEFINE_REGU("buck3"),
-	[STPMIC2_BUCK4] = DEFINE_REGU("buck4"),
-	[STPMIC2_BUCK5] = DEFINE_REGU("buck5"),
-	[STPMIC2_BUCK6] = DEFINE_REGU("buck6"),
-	[STPMIC2_BUCK7] = DEFINE_REGU("buck7"),
+#define DEFINE_SWITCH(_name) { \
+		.name = (_name), \
+		.ops = &pmic_switch_ops, \
+	}
 
-	[STPMIC2_LDO1] = DEFINE_REGU("ldo1"),
-	[STPMIC2_LDO2] = DEFINE_REGU("ldo2"),
-	[STPMIC2_LDO3] = DEFINE_REGU("ldo3"),
-	[STPMIC2_LDO4] = DEFINE_REGU("ldo4"),
-	[STPMIC2_LDO5] = DEFINE_REGU("ldo5"),
-	[STPMIC2_LDO6] = DEFINE_REGU("ldo6"),
-	[STPMIC2_LDO7] = DEFINE_REGU("ldo7"),
-	[STPMIC2_LDO8] = DEFINE_REGU("ldo8"),
-
-	[STPMIC2_REFDDR] = DEFINE_REGU("refddr"),
+static const struct regu_dt_desc pmic25_reguls[] = {
+	DEFINE_REGU("buck1"),
+	DEFINE_REGU("buck2"),
+	DEFINE_REGU("buck3"),
+	DEFINE_REGU("buck4"),
+	DEFINE_REGU("buck5"),
+	DEFINE_REGU("buck6"),
+	DEFINE_REGU("buck7"),
+	DEFINE_REGU("ldo1"),
+	DEFINE_REGU("ldo2"),
+	DEFINE_REGU("ldo3"),
+	DEFINE_REGU("ldo4"),
+	DEFINE_REGU("ldo5"),
+	DEFINE_REGU("ldo6"),
+	DEFINE_REGU("ldo7"),
+	DEFINE_REGU("ldo8"),
+	DEFINE_SWITCH("refddr"),
 };
-DECLARE_KEEP_PAGER(pmic_reguls);
+DECLARE_KEEP_PAGER(pmic25_reguls);
+
+static const struct regu_dt_desc pmic1l_reguls[] = {
+	DEFINE_REGU("buck1"),
+	DEFINE_REGU("buck1h"),
+	DEFINE_REGU("buck2"),
+	DEFINE_REGU("ldo2"),
+	DEFINE_REGU("ldo3"),
+	DEFINE_REGU("ldo4"),
+	DEFINE_REGU("ldo5"),
+	DEFINE_SWITCH("gpo1"),
+	DEFINE_SWITCH("gpo2"),
+};
+DECLARE_KEEP_PAGER(pmic1l_reguls);
+
+static const struct regu_dt_desc pmic2l_reguls[] = {
+	DEFINE_REGU("buck1"),
+	DEFINE_REGU("buck1h"),
+	DEFINE_REGU("buck2"),
+	DEFINE_REGU("buck3"),
+	DEFINE_REGU("ldo1"),
+	DEFINE_REGU("ldo2"),
+	DEFINE_REGU("ldo3"),
+	DEFINE_REGU("ldo4"),
+	DEFINE_REGU("ldo5"),
+	DEFINE_REGU("ldo6"),
+	DEFINE_REGU("ldo7"),
+	DEFINE_SWITCH("gpo1"),
+	DEFINE_SWITCH("gpo2"),
+	DEFINE_SWITCH("gpo3"),
+	DEFINE_SWITCH("gpo4"),
+	DEFINE_SWITCH("gpo5"),
+};
+DECLARE_KEEP_PAGER(pmic2l_reguls);
 
 static void pmic_parse_regu_node(struct regu_dt_desc *regu_desc,
 				 const void *fdt, int node)
 {
 	struct pmic_regu *regu = regu_desc->priv;
 	const fdt32_t *cuint = NULL;
-	const char __maybe_unused *regu_name = pmic_reguls[regu->id].name;
+	const char __maybe_unused *regu_name = regu_desc->name;
 
 	cuint = fdt_getprop(fdt, node, "st,regulator-bypass-microvolt", NULL);
 	if (!cuint)
@@ -555,10 +611,11 @@ static void pmic_parse_regu_node(struct regu_dt_desc *regu_desc,
 }
 
 static void parse_low_power_mode(const void *fdt, int node,
-				 struct pmic_regu *regu, int mode)
+				 struct regu_dt_desc *regu_desc, int mode)
 {
+	struct pmic_regu *regu = regu_desc->priv;
 	const fdt32_t *cuint = NULL;
-	const char __maybe_unused *regu_name = pmic_reguls[regu->id].name;
+	const char __maybe_unused *regu_name = regu_desc->name;
 
 	regu->lp_state[mode] = 0;
 
@@ -584,7 +641,7 @@ static void parse_low_power_mode(const void *fdt, int node,
 }
 
 static void parse_low_power_modes(const void *fdt, int node,
-				  struct pmic_regu *regu)
+				  struct regu_dt_desc *regu_desc)
 {
 	const size_t lp_mode_count = plat_get_lp_mode_count();
 	unsigned int mode = 0;
@@ -598,7 +655,7 @@ static void parse_low_power_modes(const void *fdt, int node,
 			/* Get the configs from regulator_state_node subnode */
 			n = fdt_subnode_offset(fdt, node, lp_mode_name);
 			if (n >= 0)
-				parse_low_power_mode(fdt, n, regu, mode);
+				parse_low_power_mode(fdt, n, regu_desc, mode);
 		}
 	}
 }
@@ -608,16 +665,45 @@ static TEE_Result register_pmic_regulator(const void *fdt, struct stpmic2 *pmic,
 					  int parent_node)
 {
 	TEE_Result res = TEE_ERROR_GENERIC;
+	const struct pmic_compat_data *cdata = pmic->compat_data;
 	struct regu_dt_desc desc = { };
 	struct pmic_regu *regu = NULL;
-	size_t id = 0;
+	uint32_t index = 0;
+	uint8_t id = 0;
+	const char *desc_name = regu_name;
 
-	FMSG("Stpmic2 register %s", regu_name);
+	FMSG("Stpmic2 register %s", desc_name);
 
-	for (id = 0; id < STPMIC2_NB_REG; id++)
-		if (!strcmp(pmic_reguls[id].name, regu_name))
+	/* In case of PMIC1L PMIC2L */
+	if (!strcmp(desc_name, "buck1")) {
+		bool high = false;
+
+		res = stpmic2_is_buck1_high_voltage(pmic, &high);
+		if (res) {
+			EMSG("Failed to get %s id", desc_name);
+			return res;
+		}
+
+		if (high) {
+			FMSG("Buck1 in high voltage range");
+			desc_name = "buck1h";
+		}
+	}
+
+	/* Find the regulator platform description */
+	for (index = 0; index < cdata->desc_len; index++)
+		if (!strcmp(cdata->desc_table[index].name, desc_name))
 			break;
-	assert(id < ARRAY_SIZE(pmic_reguls));
+	assert(index < cdata->desc_len);
+
+	desc = cdata->desc_table[index];
+
+	/* Find the pmic2 regulator id */
+	res = stpmic2_regulator_get_id(desc_name, &id);
+	if (res) {
+		EMSG("Failed to get %s id", desc_name);
+		return res;
+	}
 
 	regu = calloc(1, sizeof(*regu));
 	if (!regu)
@@ -625,8 +711,6 @@ static TEE_Result register_pmic_regulator(const void *fdt, struct stpmic2 *pmic,
 
 	regu->pmic = pmic;
 	regu->id = id;
-
-	desc = pmic_reguls[id];
 	desc.priv = regu;
 
 	pmic_parse_regu_node(&desc, fdt, node);
@@ -638,7 +722,7 @@ static TEE_Result register_pmic_regulator(const void *fdt, struct stpmic2 *pmic,
 		return res;
 	}
 
-	parse_low_power_modes(fdt, node, regu);
+	parse_low_power_modes(fdt, node, &desc);
 
 	return TEE_SUCCESS;
 }
@@ -828,6 +912,7 @@ static void initialize_pmic2_i2c(const void *fdt, int node,
 static void initialize_pmic2(const void *fdt, int node,
 			     struct stpmic2 *pmic, struct i2c_handle_s *i2c)
 {
+	const struct pmic_compat_data __maybe_unused *cdata = pmic->compat_data;
 	uint8_t ver = 0;
 	uint8_t pid = 0;
 
@@ -839,17 +924,22 @@ static void initialize_pmic2(const void *fdt, int node,
 	    stpmic2_get_version(pmic, &ver))
 		panic("Failed to access PMIC");
 
+	pmic->ref_id = ((pid & PMIC_REF_ID_MASK) >> PMIC_REF_ID_SHIFT);
+
 	/* NVM version A stands for NVM_ID=1 */
-	IMSG("PMIC STPMIC25%c V%"PRIu8".%"PRIu8,
+	IMSG("PMIC STPMIC REFID:%"PRIu8".%c V%"PRIu8".%"PRIu8,
+	     pmic->ref_id,
 	     'A' + (pid & PMIC_NVM_ID_MASK) - U(1),
 	     (ver & MAJOR_VERSION_MASK) >> MAJOR_VERSION_SHIFT,
 	     ver & MINOR_VERSION_MASK);
+
+	assert(pmic->ref_id == cdata->ref_id);
 
 	stpmic2_dump_regulators(pmic);
 }
 
 static TEE_Result stm32_pmic2_probe(const void *fdt, int node,
-				    const void *compat_data __unused)
+				    const void *compat_data)
 {
 	struct stm32_i2c_dev *stm32_i2c_dev = NULL;
 	struct i2c_dev *i2c_dev = NULL;
@@ -867,6 +957,8 @@ static TEE_Result stm32_pmic2_probe(const void *fdt, int node,
 	pmic = calloc(1, sizeof(*pmic));
 	if (!pmic)
 		panic();
+
+	pmic->compat_data = compat_data;
 
 	initialize_pmic2(fdt, node, pmic, stm32_i2c_dev->handle);
 
@@ -887,8 +979,37 @@ static TEE_Result stm32_pmic2_probe(const void *fdt, int node,
 	return TEE_SUCCESS;
 }
 
+static const struct pmic_compat_data stm32_pmic25_cdata = {
+	.desc_table = pmic25_reguls,
+	.desc_len = ARRAY_SIZE(pmic25_reguls),
+	.ref_id =  PMIC_REF_ID_STPMIC25,
+};
+
+static const struct pmic_compat_data stm32_pmic1l_cdata = {
+	.desc_table = pmic1l_reguls,
+	.desc_len = ARRAY_SIZE(pmic1l_reguls),
+	.ref_id =  PMIC_REF_ID_STPMIC1L,
+};
+
+static const struct pmic_compat_data stm32_pmic2l_cdata = {
+	.desc_table = pmic2l_reguls,
+	.desc_len = ARRAY_SIZE(pmic2l_reguls),
+	.ref_id =  PMIC_REF_ID_STPMIC2L,
+};
+
 static const struct dt_device_match stm32_pmic2_match_table[] = {
-	{ .compatible = "st,stpmic2" },
+	{
+		.compatible = "st,stpmic2",
+		.compat_data = &stm32_pmic25_cdata,
+	},
+	{
+		.compatible = "st,stpmic1l",
+		.compat_data = &stm32_pmic1l_cdata,
+	},
+	{
+		.compatible = "st,stpmic2l",
+		.compat_data = &stm32_pmic2l_cdata,
+	},
 	{ }
 };
 

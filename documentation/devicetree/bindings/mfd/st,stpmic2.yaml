@@ -13,8 +13,18 @@ maintainers:
 
 properties:
   compatible:
-    const: st,stpmic2
+    enum:
+      - st,stpmic1l
+      - st,stpmic2
+      - st,stpmic2l
 
+    description: |
+      The STPMIC25 uses "st,stpmic2" compatible string and can provide
+      BUCK1..7, LDO1..7, REFDDR regulators
+      The STPMIC1L uses "st,stpmic1l" compatible string and can provide
+      BUCK1, BUCK2, LDO2..5, GPO1..2 regulators
+      The STPMIC2L uses "st,stpmic2l" compatible string and can provide
+      BUCK1..4, LDO1..LDO7, GPO1..5 regulators
   reg:
     const: 0x33
 
@@ -66,22 +76,10 @@ properties:
     type: object
 
     description: |
-      Available regulators in STPMIC2 device are:
-        - buck1 for BUCK1
-        - buck2 for BUCK2
-        - buck3 for BUCK3
-        - buck4 for BUCK4
-        - buck5 for BUCK5
-        - buck6 for BUCK6
-        - buck7 for BUCK7
-        - ldo1 for LDO1
-        - ldo2 for LDO2
-        - ldo3 for LDO3
-        - ldo4 for LDO4
-        - ldo5 for LDO5
-        - ldo6 for LDO6
-        - ldo7 for LDO7
-        - ldo8 for LDO8
+      Available regulators in STPMIC2 devices are:
+        - buck1..7 for BUCK1..7
+        - ldo1..8 for LDO1..8
+        - gpo1..5 for GDO1..5
         - refddr for REFDDR
 
     properties:
@@ -89,7 +87,7 @@ properties:
         const: st,stpmic2-regulators
 
     patternProperties:
-      "^(buck[1-7]|ldo[1-8]|refddr)$":
+      "^(buck[1-7]|ldo[1-8]|gdo[1-5]|refddr)$":
         type: object
         $ref: ../regulator/regulator.yaml
 

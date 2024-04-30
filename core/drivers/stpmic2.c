@@ -38,7 +38,7 @@ struct regul_struct {
 #define LDO_SINGLE_VOLT_TABLE_SIZE 1
 
 /* Voltage tables in mV */
-static const uint16_t buck1236_volt_table[BUCK_VOLT_TABLE_SIZE] = {
+static const uint16_t buck_low_volt_table[BUCK_VOLT_TABLE_SIZE] = {
 	U(500), U(510), U(520), U(530), U(540),
 	U(550), U(560), U(570), U(580), U(590),
 	U(600), U(610), U(620), U(630), U(640),
@@ -67,7 +67,7 @@ static const uint16_t buck1236_volt_table[BUCK_VOLT_TABLE_SIZE] = {
 	U(1500), U(1500), U(1500)
 };
 
-static const uint16_t buck457_volt_table[BUCK_VOLT_TABLE_SIZE] = {
+static const uint16_t buck_high_volt_table[BUCK_VOLT_TABLE_SIZE] = {
 	U(1500), U(1500), U(1500), U(1500), U(1500),
 	U(1500), U(1500), U(1500), U(1500), U(1500),
 	U(1500), U(1500), U(1500), U(1500), U(1500),
@@ -173,22 +173,33 @@ static const uint16_t refddr_volt_table[LDO_SINGLE_VOLT_TABLE_SIZE] = {
 	.ocp_mask		= FS_OCP_ ## ID, \
 }
 
+#define DEFINE_GPOx(regu_name, ID) { \
+	.name			= regu_name, \
+	.en_cr			= ID ## _MAIN_CR, \
+	.alt_en_cr		= ID ## _ALT_CR, \
+	.pwrctrl_cr		= ID ## _PWRCTRL_CR, \
+	.msrt_reg		= GPO_MRST_CR, \
+	.msrt_mask		= ID ## _MRST, \
+}
+
 /* Table of Regulators in PMIC SoC */
 static const struct regul_struct regul_table[] = {
 	[STPMIC2_BUCK1] = DEFINE_BUCK("buck1", BUCK1, BUCKS_PD_CR1,
-				      buck1236_volt_table),
+				      buck_low_volt_table),
+	[STPMIC2_BUCK1H] = DEFINE_BUCK("buck1h", BUCK1, BUCKS_PD_CR1,
+				      buck_high_volt_table),
 	[STPMIC2_BUCK2] = DEFINE_BUCK("buck2", BUCK2, BUCKS_PD_CR1,
-				      buck1236_volt_table),
+				      buck_low_volt_table),
 	[STPMIC2_BUCK3] = DEFINE_BUCK("buck3", BUCK3, BUCKS_PD_CR1,
-				      buck1236_volt_table),
+				      buck_low_volt_table),
 	[STPMIC2_BUCK4] = DEFINE_BUCK("buck4", BUCK4, BUCKS_PD_CR1,
-				      buck457_volt_table),
+				      buck_high_volt_table),
 	[STPMIC2_BUCK5] = DEFINE_BUCK("buck5", BUCK5, BUCKS_PD_CR2,
-				      buck457_volt_table),
+				      buck_high_volt_table),
 	[STPMIC2_BUCK6] = DEFINE_BUCK("buck6", BUCK6, BUCKS_PD_CR2,
-				      buck1236_volt_table),
+				      buck_low_volt_table),
 	[STPMIC2_BUCK7] = DEFINE_BUCK("buck7", BUCK7, BUCKS_PD_CR2,
-				      buck457_volt_table),
+				      buck_high_volt_table),
 
 	[STPMIC2_REFDDR] = DEFINE_REFDDR("refddr", REFDDR, refddr_volt_table),
 
@@ -209,7 +220,27 @@ static const struct regul_struct regul_table[] = {
 	[STPMIC2_LDO8] = DEFINE_LDOx("ldo8", LDO8, ldo235678_volt_table,
 				     LDO235678_VOLT_TABLE_SIZE),
 
+	[STPMIC2_GPO1] = DEFINE_GPOx("gpo1", GPO1),
+	[STPMIC2_GPO2] = DEFINE_GPOx("gpo2", GPO2),
+	[STPMIC2_GPO3] = DEFINE_GPOx("gpo3", GPO3),
+	[STPMIC2_GPO4] = DEFINE_GPOx("gpo4", GPO4),
+	[STPMIC2_GPO5] = DEFINE_GPOx("gpo5", GPO5),
 };
+
+TEE_Result stpmic2_regulator_get_id(const char *regu_name, uint8_t *id)
+{
+	uint8_t i = 0;
+
+	FMSG("Stpmic2 get id %s", regu_name);
+
+	for (i = 0; i < ARRAY_SIZE(regul_table); i++)
+		if (!strcmp(regul_table[i].name, regu_name)) {
+			*id = i;
+			return TEE_SUCCESS;
+		}
+
+	return TEE_ERROR_ITEM_NOT_FOUND;
+}
 
 TEE_Result stpmic2_register_read(struct stpmic2 *pmic,
 				 uint8_t register_id, uint8_t *value)
@@ -401,7 +432,8 @@ TEE_Result stpmic2_regulator_get_prop(struct stpmic2 *pmic, uint8_t id,
 		*arg = PROP_BYPASS_RESET;
 
 		if (id <= STPMIC2_BUCK7 || id == STPMIC2_LDO1 ||
-		    id == STPMIC2_LDO4 || id == STPMIC2_REFDDR)
+		    id == STPMIC2_LDO4 || id == STPMIC2_REFDDR ||
+		    pmic->ref_id != PMIC_REF_ID_STPMIC25)
 			return TEE_SUCCESS;
 
 		res = stpmic2_register_read(pmic, regul->en_cr, &val);
@@ -442,7 +474,8 @@ TEE_Result stpmic2_regulator_set_prop(struct stpmic2 *pmic, uint8_t id,
 					       regul->msrt_mask);
 	case STPMIC2_BYPASS:
 		if (id <= STPMIC2_BUCK7 || id == STPMIC2_LDO1 ||
-		    id == STPMIC2_LDO4 || id == STPMIC2_REFDDR)
+		    id == STPMIC2_LDO4 || id == STPMIC2_REFDDR ||
+		    pmic->ref_id != PMIC_REF_ID_STPMIC25)
 			return TEE_ERROR_BAD_PARAMETERS;
 
 		/* clear sink source mode */
@@ -468,6 +501,8 @@ TEE_Result stpmic2_regulator_set_prop(struct stpmic2 *pmic, uint8_t id,
 		return stpmic2_update_en_crs(pmic, id, LDO3_SNK_SRC,
 					     LDO3_SNK_SRC);
 	case STPMIC2_OCP:
+		if (!regul->ocp_reg)
+			return TEE_ERROR_BAD_PARAMETERS;
 		/* enable mask reset */
 		return stpmic2_register_update(pmic, regul->ocp_reg,
 					       U(0), regul->ocp_mask);
@@ -561,6 +596,23 @@ TEE_Result stpmic2_get_version(struct stpmic2 *pmic, uint8_t *val)
 TEE_Result stpmic2_get_product_id(struct stpmic2 *pmic, uint8_t *val)
 {
 	return stpmic2_register_read(pmic, PRODUCT_ID, val);
+}
+
+TEE_Result stpmic2_is_buck1_high_voltage(struct stpmic2 *pmic, bool *high)
+{
+	TEE_Result res = TEE_ERROR_GENERIC;
+	uint8_t val = 0;
+
+	if (pmic->ref_id == PMIC_REF_ID_STPMIC25) {
+		*high = false;
+		return TEE_SUCCESS;
+	}
+
+	res = stpmic2_register_read(pmic,  NVM_BUCK1_VOUT_SHR, &val);
+
+	*high = val & BUCK1_VRAN_GE_CFG;
+
+	return res;
 }
 
 /*
