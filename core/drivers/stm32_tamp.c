@@ -924,7 +924,7 @@ static void parse_bkpregs_dt_conf(struct stm32_tamp_platdata *pdata,
 
 	cuint = fdt_getprop(fdt, node, "st,backup-zones", &lenp);
 	if (!cuint) {
-		DMSG("Default configuration for backup registers");
+		panic("Missing backup registers configuration");
 		return;
 	}
 
