@@ -1051,6 +1051,7 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 			ranges;
+			st,backup-zones = <24 24 24 24 12 12 8>;
 			status = "disabled";
 
 			nvram: nvram@46010100 {
