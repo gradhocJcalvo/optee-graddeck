@@ -570,10 +570,6 @@
 	status = "disabled";
 };
 
-&tamp {
-	st,backup-zones = <10 5 17>;
-};
-
 &timers6 {
 	status = "disabled";
 	/* spare dmas for other usage */

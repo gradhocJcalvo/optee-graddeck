@@ -1644,6 +1644,7 @@
 			interrupts = <GIC_SPI 197 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc RTCAPB>;
 			ranges;
+			st,backup-zones = <10 5 17>;
 
 			nvram: nvram@5c00a100 {
 				compatible = "st,stm32mp15-tamp-nvram";
