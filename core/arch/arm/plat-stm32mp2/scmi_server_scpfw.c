@@ -23,6 +23,7 @@
 #include <platform_config.h>
 #include <scmi_agent_configuration.h>
 #include <scmi_regulator_consumer.h>
+#include <scmi/scmi_server.h>
 #include <stdint.h>
 #include <speculation_barrier.h>
 #include <stm32_util.h>
@@ -662,9 +663,38 @@ struct scpfw_config *scmi_scpfw_get_configuration(void)
 	return &scpfw_cfg;
 }
 
+TEE_Result scmi_scpfw_attach_notif(unsigned int agent_id,
+				   unsigned int channel_id,
+				   struct shared_mem *shm,
+				   TEE_Result (**process)(unsigned int chan_id),
+				   unsigned int *process_arg)
+{
+	if (agent_id < scpfw_cfg.agent_count) {
+		struct scpfw_agent_config *agent_cfg =
+			scpfw_cfg.agent_config + agent_id;
+
+		if (channel_id < agent_cfg->channel_count) {
+			struct scpfw_channel_config *channel_cfg =
+				agent_cfg->channel_config + channel_id;
+
+			*process = &scmi_server_smt_process_thread;
+			*process_arg = channel_cfg->mailbox_idx;
+
+			channel_cfg->shm = *shm;
+
+			return TEE_SUCCESS;
+		}
+	}
+
+	return TEE_ERROR_BAD_PARAMETERS;
+}
+
 static TEE_Result scmi_scpfw_cfg_early_init(void)
 {
+	unsigned int mailbox_idx = 0;
 	unsigned int index = 0;
+	unsigned int i = 0;
+	unsigned int j = 0;
 
 	scpfw_cfg.agent_count = 1;
 	scpfw_cfg.agent_config = calloc(scpfw_cfg.agent_count,
@@ -679,6 +709,12 @@ static TEE_Result scmi_scpfw_cfg_early_init(void)
 	index++;
 
 	assert(scpfw_cfg.agent_count == index);
+
+	for (i = 0; i < scpfw_cfg.agent_count; i++)
+		for (j = 0; j < scpfw_cfg.agent_config[i].channel_count; j++)
+			scpfw_cfg.agent_config[i]
+				 .channel_config[j]
+				 .mailbox_idx = mailbox_idx++;
 
 	return TEE_SUCCESS;
 }

@@ -71,6 +71,12 @@ struct scmi_perfd {
 	struct regulator *regulator;
 };
 
+struct shared_mem {
+	paddr_t pa;
+	vaddr_t va;
+	size_t size;
+};
+
 /*
  * struct scmi_pd - Description of a power domain resource
  * @name: Domain name
@@ -87,6 +93,8 @@ struct scmi_pd {
  * struct scpfw_channel_config - SCMI channel resources
  * @name: Channel name
  * @channel_id: ID for the channel in OP-TEE SCMI bindings
+ * @mailbox_idx: Unique ID for the channel related to mailbox index.
+ * @shm: Shared memory required by mailbox
  * @clock: Description of the clocks exposed on the channel
  * @clock_count: Number of cells of @clock
  * @reset: Description of the reset conntrollers exposed on the channel
@@ -101,6 +109,8 @@ struct scmi_pd {
 struct scpfw_channel_config {
 	const char *name;
 	unsigned int channel_id;
+	unsigned int mailbox_idx;
+	struct shared_mem shm;
 	struct scmi_clock *clock;
 	size_t clock_count;
 	struct scmi_reset *reset;
@@ -140,6 +150,13 @@ struct scpfw_config {
 	struct scpfw_agent_config *agent_config;
 	size_t agent_count;
 };
+
+/* Link a mailbox notification to an existing scmi channel */
+TEE_Result scmi_scpfw_attach_notif(unsigned int agent_id,
+				   unsigned int channel_id,
+				   struct shared_mem *shm,
+				   TEE_Result (**process)(unsigned int chan_id),
+				   unsigned int *process_arg);
 
 /* Get the platform configuration data for the SCP firmware */
 struct scpfw_config *scmi_scpfw_get_configuration(void);
