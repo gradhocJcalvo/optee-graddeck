@@ -157,10 +157,6 @@
 			reg = <VOLTD_SCMI_VDDIO4>;
 			voltd-supply = <&vddio4>;
 		};
-		voltd-vdd33ucpd {
-			reg = <VOLTD_SCMI_UCPD>;
-			voltd-supply = <&vdd33ucpd>;
-		};
 		voltd-vdda18adc {
 			reg = <VOLTD_SCMI_ADC>;
 			voltd-supply = <&vdda18adc>;
@@ -168,6 +164,25 @@
 		voltd-vddgpu {
 			reg = <VOLTD_SCMI_GPU>;
 			voltd-supply = <&vddgpu>;
+		};
+	};
+
+	scmi_cm33_agent: scmi-cm-agent@0 {
+		compatible = "st,scmi-cortexm-agent";
+		mbox-names = "scmi_cm33";
+		mboxes = <&ipcc1 RIF_IPCC_CPU1_CHANNEL(16)>;
+		scmi-agent-id = <1>;
+		scmi-channel-id = <0>;
+
+		scmi_regu_cm33: scmi-regu-cm33 {
+			compatible = "st,scmi-regulator-consumer";
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			voltd-vdd33ucpd {
+				reg = <VOLTD_SCMI_UCPD>;
+				voltd-supply = <&vdd33ucpd>;
+			};
 		};
 	};
 
