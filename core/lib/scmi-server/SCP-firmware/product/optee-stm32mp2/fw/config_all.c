@@ -27,6 +27,9 @@
 #ifdef CFG_SCPFW_MOD_OPTEE_RESET
 #include <mod_optee_reset.h>
 #endif
+#ifdef CFG_SCPFW_MOD_OPTEE_SMT
+#include <mod_optee_smt.h>
+#endif
 #ifdef CFG_SCPFW_MOD_OPTEE_VOLTD_REGULATOR
 #include <mod_optee_voltd_regulator.h>
 #endif
@@ -79,8 +82,14 @@ static struct mod_scmi_config scmi_data;
 static struct fwk_element *scmi_service_elt;
 
 /* SCMI channel mailbox/shmem */
+#ifdef CFG_SCPFW_MOD_MSG_SMT
 static struct fwk_element *msg_smt_elt;
 static struct mod_msg_smt_channel_config *msg_smt_data;
+#endif
+#ifdef CFG_SCPFW_MOD_OPTEE_SMT
+static struct fwk_element *optee_smt_elt;
+static struct mod_optee_smt_channel_config *optee_smt_data;
+#endif
 static struct fwk_element *optee_mbx_elt;
 static struct mod_optee_mbx_channel_config *optee_mbx_data;
 
@@ -156,6 +165,7 @@ struct fwk_module_config config_optee_mbx = {
     .elements = FWK_MODULE_DYNAMIC_ELEMENTS(optee_mbx_get_element_table),
 };
 
+#ifdef CFG_SCPFW_MOD_MSG_SMT
 /* Config data for msg_smt module */
 static const struct fwk_element *msg_smt_get_element_table(fwk_id_t module_id)
 {
@@ -166,6 +176,20 @@ static const struct fwk_element *msg_smt_get_element_table(fwk_id_t module_id)
 struct fwk_module_config config_msg_smt = {
     .elements = FWK_MODULE_DYNAMIC_ELEMENTS(msg_smt_get_element_table),
 };
+#endif
+
+#ifdef CFG_SCPFW_MOD_OPTEE_SMT
+/* Config data for optee_smt module */
+static const struct fwk_element *optee_smt_get_element_table(fwk_id_t module_id)
+{
+    fwk_assert(fwk_id_get_module_idx(module_id) == FWK_MODULE_IDX_OPTEE_SMT);
+    return (const struct fwk_element *)optee_smt_elt;
+};
+
+struct fwk_module_config config_optee_smt = {
+    .elements = FWK_MODULE_DYNAMIC_ELEMENTS(optee_smt_get_element_table),
+};
+#endif
 
 /* Config data for scmi_clock, clock and optee_clock modules */
 #ifdef CFG_SCPFW_MOD_SCMI_CLOCK
@@ -527,9 +551,29 @@ static void allocate_global_resources(struct scpfw_config *cfg)
 #endif
 }
 
+enum mailbox_type {
+    MAILBOX_TYPE_MSG_SMT,
+    MAILBOX_TYPE_OPTEE_SMT,
+    MAILBOX_TYPE_COUNT,
+};
+
+static enum mailbox_type module_idx_smt_table[SCMI_AGENT_ID_COUNT] = {
+    /*
+     * Agent NSEC0 is Cortex-A that communicates over OP-TEE's SCMI PTA
+     * and OP-TEE shared memory hence using MSG_SMT module.
+     */
+    [SCMI_AGENT_ID_NSEC0] = MAILBOX_TYPE_MSG_SMT,
+    /*
+     * Agent NSEC1 is Cortex-M33 that communicates over STM32 IPCC and a piece
+     * of memory outside OP-TEE shared memory hence using OPTEE_SMT module.
+     */
+    [SCMI_AGENT_ID_NSEC1] = MAILBOX_TYPE_OPTEE_SMT,
+};
+
 static void set_scmi_comm_resources(struct scpfw_config *cfg)
 {
     unsigned int channel_index = 0;
+    unsigned int __maybe_unused msg_smt_index = 0, optee_smt_index = 0;
     size_t i, j;
     /* @cfg does not consider agent #0 this the reserved platform/server agent */
     size_t scmi_agent_count = cfg->agent_count + 1;
@@ -540,10 +584,19 @@ static void set_scmi_comm_resources(struct scpfw_config *cfg)
     scmi_service_elt = fwk_mm_calloc(scpfw_resource_counter.channel_count + 1,
                                      sizeof(*scmi_service_elt));
 
+#ifdef CFG_SCPFW_MOD_MSG_SMT
     msg_smt_elt = fwk_mm_calloc(scpfw_resource_counter.channel_count + 1,
                                 sizeof(*msg_smt_elt));
     msg_smt_data = fwk_mm_calloc(scpfw_resource_counter.channel_count,
                                  sizeof(*msg_smt_data));
+#endif
+
+#ifdef CFG_SCPFW_MOD_OPTEE_SMT
+    optee_smt_elt = fwk_mm_calloc(scpfw_resource_counter.channel_count + 1,
+                                  sizeof(*optee_smt_elt));
+    optee_smt_data = fwk_mm_calloc(scpfw_resource_counter.channel_count,
+                                   sizeof(*optee_smt_data));
+#endif
 
     optee_mbx_elt = fwk_mm_calloc(scpfw_resource_counter.channel_count + 1,
                                   sizeof(*optee_mbx_elt));
@@ -561,7 +614,7 @@ static void set_scmi_comm_resources(struct scpfw_config *cfg)
 
     for (i = 0; i < cfg->agent_count; i++) {
         struct scpfw_agent_config *agent_cfg = cfg->agent_config + i;
-        size_t agent_index = i + 1;
+        size_t agent_index = agent_cfg->agent_id;
 
         scmi_agent_table[agent_index].type = SCMI_AGENT_TYPE_OSPM;
         scmi_agent_table[agent_index].name = agent_cfg->name;
@@ -571,40 +624,109 @@ static void set_scmi_comm_resources(struct scpfw_config *cfg)
             struct mod_scmi_service_config *service_data;
 
             service_data = fwk_mm_calloc(1, sizeof(*service_data));
-            *service_data = (struct mod_scmi_service_config){
-                .transport_id = (fwk_id_t)FWK_ID_ELEMENT_INIT(FWK_MODULE_IDX_MSG_SMT,
-                                                              channel_index),
-                .transport_api_id = (fwk_id_t)FWK_ID_API_INIT(FWK_MODULE_IDX_MSG_SMT,
-                                                              MOD_MSG_SMT_API_IDX_SCMI_TRANSPORT),
-                .scmi_agent_id = agent_cfg->agent_id,
-                .scmi_p2a_id = FWK_ID_NONE_INIT,
-            };
-
-            /* Currently expect 1 agent with ID SCMI_AGENT_ID_NSEC0 (1) */
-            fwk_assert(service_data->scmi_agent_id == SCMI_AGENT_ID_NSEC0);
 
             scmi_service_elt[channel_index].name = channel_cfg->name;
             scmi_service_elt[channel_index].data = service_data;
 
-            msg_smt_elt[channel_index].name = channel_cfg->name;
-            msg_smt_elt[channel_index].data = (void *)(msg_smt_data + channel_index);
-
-            msg_smt_data[channel_index] = (struct mod_msg_smt_channel_config){
-                .type = MOD_MSG_SMT_CHANNEL_TYPE_REQUESTER,
-                .mailbox_size = 128,
-                .driver_id = (fwk_id_t)FWK_ID_ELEMENT_INIT(FWK_MODULE_IDX_OPTEE_MBX,
-                                                           channel_index),
-                .driver_api_id = (fwk_id_t)FWK_ID_API_INIT(FWK_MODULE_IDX_OPTEE_MBX, 0),
-            };
-
             optee_mbx_elt[channel_index].name = channel_cfg->name;
-            optee_mbx_elt[channel_index].data = (void *)(optee_mbx_data + channel_index);
+            optee_mbx_elt[channel_index].data =
+                (void *)(optee_mbx_data + channel_index);
 
-            optee_mbx_data[channel_index] = (struct mod_optee_mbx_channel_config){
-                .driver_id = (fwk_id_t)FWK_ID_ELEMENT_INIT(FWK_MODULE_IDX_MSG_SMT, channel_index),
-                .driver_api_id = (fwk_id_t)FWK_ID_API_INIT(FWK_MODULE_IDX_MSG_SMT,
-                                                           MOD_MSG_SMT_API_IDX_DRIVER_INPUT),
-            };
+            assert(agent_index < SCMI_AGENT_ID_COUNT);
+
+            /* Make sure mailbox_idx stored in OPTEE is the same than SCP */
+            assert(channel_index == channel_cfg->mailbox_idx);
+
+            switch (module_idx_smt_table[agent_index])
+            {
+#if defined(CFG_SCPFW_MOD_MSG_SMT)
+            case MAILBOX_TYPE_MSG_SMT:
+               *service_data = (struct mod_scmi_service_config){
+                    .transport_id = (fwk_id_t)
+                        FWK_ID_ELEMENT_INIT(FWK_MODULE_IDX_MSG_SMT,
+                                            msg_smt_index),
+                    .transport_api_id = (fwk_id_t)
+                        FWK_ID_API_INIT(FWK_MODULE_IDX_MSG_SMT,
+                                        MOD_MSG_SMT_API_IDX_SCMI_TRANSPORT),
+                    .scmi_agent_id = agent_cfg->agent_id,
+                    .scmi_p2a_id = FWK_ID_NONE_INIT,
+                };
+
+                msg_smt_elt[msg_smt_index].name = channel_cfg->name;
+                msg_smt_elt[msg_smt_index].data =
+                    (void *)(msg_smt_data + msg_smt_index);
+
+                msg_smt_data[msg_smt_index] =
+                    (struct mod_msg_smt_channel_config){
+                    .type = MOD_MSG_SMT_CHANNEL_TYPE_REQUESTER,
+                    .mailbox_size = 128,
+                    .driver_id = (fwk_id_t)
+                        FWK_ID_ELEMENT_INIT(FWK_MODULE_IDX_OPTEE_MBX,
+                                            channel_index),
+                    .driver_api_id = (fwk_id_t)
+                        FWK_ID_API_INIT(FWK_MODULE_IDX_OPTEE_MBX, 0),
+                };
+
+                optee_mbx_data[channel_index] =
+                    (struct mod_optee_mbx_channel_config){
+                    .driver_id = (fwk_id_t)
+                        FWK_ID_ELEMENT_INIT(FWK_MODULE_IDX_MSG_SMT,
+                                            msg_smt_index),
+                    .driver_api_id = (fwk_id_t)
+                        FWK_ID_API_INIT(FWK_MODULE_IDX_MSG_SMT,
+                                        MOD_MSG_SMT_API_IDX_DRIVER_INPUT),
+                };
+                msg_smt_index++;
+                break;
+#endif
+#if defined(CFG_SCPFW_MOD_OPTEE_SMT)
+            case MAILBOX_TYPE_OPTEE_SMT:
+                *service_data = (struct mod_scmi_service_config){
+                    .transport_id = (fwk_id_t)
+                        FWK_ID_ELEMENT_INIT(FWK_MODULE_IDX_OPTEE_SMT,
+                                            optee_smt_index),
+                    .transport_api_id = (fwk_id_t)
+                        FWK_ID_API_INIT(FWK_MODULE_IDX_OPTEE_SMT,
+                                        MOD_OPTEE_SMT_API_IDX_SCMI_TRANSPORT),
+                    .scmi_agent_id = agent_cfg->agent_id,
+                    .scmi_p2a_id = FWK_ID_NONE_INIT,
+                };
+
+                optee_smt_elt[optee_smt_index].name = channel_cfg->name;
+                optee_smt_elt[optee_smt_index].data =
+                    (void *)(optee_smt_data + optee_smt_index);
+
+                assert(channel_cfg->shm.pa != 0);
+                assert(channel_cfg->shm.size != 0);
+
+                optee_smt_data[optee_smt_index] =
+                    (struct mod_optee_smt_channel_config){
+                    .type = MOD_OPTEE_SMT_CHANNEL_TYPE_REQUESTER,
+                    .policies = MOD_SMT_POLICY_NONE,
+                    .mailbox_address = channel_cfg->shm.pa,
+                    .mailbox_size = 128,
+                    .driver_id = (fwk_id_t)
+                        FWK_ID_ELEMENT_INIT(FWK_MODULE_IDX_OPTEE_MBX,
+                                            channel_index),
+                    .driver_api_id = (fwk_id_t)
+                        FWK_ID_API_INIT(FWK_MODULE_IDX_OPTEE_MBX, 0),
+                };
+
+                optee_mbx_data[channel_index] =
+                    (struct mod_optee_mbx_channel_config){
+                    .driver_id =
+                        (fwk_id_t)FWK_ID_ELEMENT_INIT(FWK_MODULE_IDX_OPTEE_SMT,
+                                                      optee_smt_index),
+                    .driver_api_id =
+                        (fwk_id_t)FWK_ID_API_INIT(FWK_MODULE_IDX_OPTEE_SMT,
+                            MOD_OPTEE_SMT_API_IDX_DRIVER_INPUT),
+                };
+                optee_smt_index++;
+                break;
+#endif
+            default:
+                panic("Incorrect SMT module_idx");
+            }
 
             channel_index++;
         }

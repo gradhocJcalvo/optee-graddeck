@@ -44,7 +44,15 @@ endif(CFG_SCPFW_MOD_STM32_PD)
 # any change in the order will cause firmware initialization errors.
 
 list(APPEND SCP_MODULES "optee-mbx")
+
+if(CFG_SCPFW_MOD_OPTEE_SMT)
+list(APPEND SCP_MODULES "optee-smt")
+endif(CFG_SCPFW_MOD_OPTEE_SMT)
+
+if(CFG_SCPFW_MOD_MSG_SMT)
 list(APPEND SCP_MODULES "msg-smt")
+endif(CFG_SCPFW_MOD_MSG_SMT)
+
 list(APPEND SCP_MODULES "scmi")
 
 if(CFG_SCPFW_MOD_OPTEE_CLOCK)
