@@ -3348,7 +3348,7 @@ static TEE_Result stm32_clock_pm(enum pm_op op, unsigned int pm_hint,
 	static int standby_prepared;
 
 	if (op == PM_OP_SUSPEND) {
-		if (pm_hint == STM32_PM_CSTOP_ALLOW_STANDBY_DDR_SR) {
+		if (PM_HINT_IS_STATE(pm_hint, CONTEXT)) {
 			stm32_clock_suspend();
 			standby_prepared = 1;
 		} else {

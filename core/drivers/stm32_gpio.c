@@ -1294,8 +1294,7 @@ stm32_gpio_sec_config_pm(enum pm_op op, unsigned int pm_hint,
 {
 	TEE_Result ret = TEE_ERROR_GENERIC;
 
-	if (!IS_ENABLED(CFG_STM32MP13) && !IS_ENABLED(CFG_STM32MP15) &&
-	    pm_hint != PM_HINT_CONTEXT_STATE)
+	if (!PM_HINT_IS_STATE(pm_hint, CONTEXT))
 		return TEE_SUCCESS;
 
 	if (op == PM_OP_RESUME)
