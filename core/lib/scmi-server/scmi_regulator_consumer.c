@@ -22,13 +22,30 @@ static TEE_Result init_channel(void *fdt, int node)
 	struct scmi_server_regu_channel voltd_channel = { };
 	size_t voltd_domain_count = 0;
 	const fdt32_t *cuint = NULL;
+	int parent_node = 0;
 	int subnode = 0;
 	size_t n = 0;
 
-	cuint = fdt_getprop(fdt, node, "scmi-channel-id", NULL);
-	if (!cuint)
-		panic("Can't read property scmi-channel-id");
+	parent_node = fdt_parent_offset(fdt, node);
 
+	/*
+	 * First try to get agent-id and channel-id from node,
+	 * and then from the parent node.
+	 */
+	cuint = fdt_getprop(fdt, node, "scmi-agent-id", NULL);
+	if (!cuint) {
+		cuint = fdt_getprop(fdt, parent_node, "scmi-agent-id", NULL);
+		if (!cuint)
+			return TEE_ERROR_BAD_PARAMETERS;
+	}
+	voltd_channel.agent_id = fdt32_to_cpu(*cuint);
+
+	cuint = fdt_getprop(fdt, node, "scmi-channel-id", NULL);
+	if (!cuint) {
+		cuint = fdt_getprop(fdt, parent_node, "scmi-channel-id", NULL);
+		if (!cuint)
+			return TEE_ERROR_BAD_PARAMETERS;
+	}
 	voltd_channel.channel_id = fdt32_to_cpu(*cuint);
 
 	/* Compute the number of domains to allocate */
@@ -103,7 +120,8 @@ static TEE_Result init_channel(void *fdt, int node)
 			voltd_channel.regu[n].domain_id = n;
 	}
 
-	res = scmi_scpfw_cfg_add_regu(0/*agent*/, voltd_channel.channel_id,
+	res = scmi_scpfw_cfg_add_regu(voltd_channel.agent_id,
+				      voltd_channel.channel_id,
 				      voltd_channel.regu,
 				      voltd_channel.regu_count);
 	/*

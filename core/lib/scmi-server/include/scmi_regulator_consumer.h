@@ -18,6 +18,7 @@ struct scmi_server_regu {
 };
 
 struct scmi_server_regu_channel {
+	unsigned int agent_id;
 	unsigned int channel_id;
 	struct scmi_server_regu *regu;
 	size_t regu_count;
