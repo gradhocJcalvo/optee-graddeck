@@ -469,7 +469,7 @@ static struct stm32_scmi_pd stm32_scmi_pd[] = {
 };
 #endif
 
-static const struct channel_resources scmi_channel[] = {
+static const struct channel_resources scmi_channel_a35_ns[] = {
 	[0] = {
 		.clock = stm32_scmi_clock,
 		.clock_count = ARRAY_SIZE(stm32_scmi_clock),
@@ -479,6 +479,15 @@ static const struct channel_resources scmi_channel[] = {
 		.pd = stm32_scmi_pd,
 		.pd_count = ARRAY_SIZE(stm32_scmi_pd),
 #endif
+	},
+};
+
+static const struct channel_resources scmi_channel_m33_ns[] = {
+	[0] = {
+		.clock = stm32_scmi_clock,
+		.clock_count = ARRAY_SIZE(stm32_scmi_clock),
+		.rd = stm32_scmi_reset,
+		.rd_count = ARRAY_SIZE(stm32_scmi_reset),
 	},
 };
 
@@ -697,16 +706,33 @@ static TEE_Result scmi_scpfw_cfg_early_init(void)
 	unsigned int j = 0;
 
 	scpfw_cfg.agent_count = 1;
+
+	if (IS_ENABLED(CFG_SCMI_CORTEXM_AGENT))
+		scpfw_cfg.agent_count += 1;
+
 	scpfw_cfg.agent_config = calloc(scpfw_cfg.agent_count,
 					sizeof(*scpfw_cfg.agent_config));
 
-	scpfw_cfg.agent_config[index].name = "agent";
+	scpfw_cfg.agent_config[index].name = "agent_a35";
 	scpfw_cfg.agent_config[index].agent_id = index + 1;
-	scpfw_cfg.agent_config[index].channel_count = ARRAY_SIZE(scmi_channel);
+	scpfw_cfg.agent_config[index].channel_count =
+		ARRAY_SIZE(scmi_channel_a35_ns);
 	scpfw_cfg.agent_config[index].channel_config =
 		calloc(scpfw_cfg.agent_config[index].channel_count,
 		       sizeof(*scpfw_cfg.agent_config[index].channel_config));
 	index++;
+
+	if (IS_ENABLED(CFG_SCMI_CORTEXM_AGENT)) {
+		scpfw_cfg.agent_config[index].name = "agent_m33";
+		scpfw_cfg.agent_config[index].agent_id = index + 1;
+		scpfw_cfg.agent_config[index].channel_count =
+			ARRAY_SIZE(scmi_channel_m33_ns);
+		scpfw_cfg.agent_config[index].channel_config =
+			calloc(scpfw_cfg.agent_config[index].channel_count,
+			       sizeof(*scpfw_cfg.agent_config[index]
+						.channel_config));
+		index++;
+	}
 
 	assert(scpfw_cfg.agent_count == index);
 
@@ -803,9 +829,15 @@ static TEE_Result scmi_scpfw_cfg_init(void)
 	get_scmi_clocks();
 	get_scmi_resets();
 
-	scmi_scpfw_cfg_init_channel("channel",
+	scmi_scpfw_cfg_init_channel("channel_a35_ns",
 				    &scpfw_cfg.agent_config[0],
-				    scmi_channel);
+				    scmi_channel_a35_ns);
+
+	if (IS_ENABLED(CFG_SCMI_CORTEXM_AGENT)) {
+		scmi_scpfw_cfg_init_channel("channel_m33_ns",
+					    &scpfw_cfg.agent_config[1],
+					    scmi_channel_m33_ns);
+	}
 
 	/* DVFS will be populated from cpu_opp driver */
 
