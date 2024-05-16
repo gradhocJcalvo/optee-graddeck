@@ -135,19 +135,16 @@ TEE_Result scmi_regulator_consumer_init(void)
 
 	node = fdt_node_offset_by_compatible(fdt, node,
 					     "st,scmi-regulator-consumer");
-	if (node == -FDT_ERR_NOTFOUND)
-		return TEE_SUCCESS;
-	if (node < 0)
-		return TEE_ERROR_GENERIC;
+	while (node >= 0) {
+		res = init_channel(fdt, node);
+		if (res)
+			return res;
+		node = fdt_node_offset_by_compatible(fdt, node,
+						"st,scmi-regulator-consumer");
+	}
 
-	res = init_channel(fdt, node);
-	if (res)
-		return res;
-
-	node = fdt_node_offset_by_compatible(fdt, node,
-					     "st,scmi-regulator-consumer");
 	if (node != -FDT_ERR_NOTFOUND)
-		panic("Too many st,scmi-regulator-consumer compatible nodes");
+		return TEE_ERROR_GENERIC;
 
 	return TEE_SUCCESS;
 }
