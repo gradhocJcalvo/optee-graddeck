@@ -703,6 +703,8 @@ static TEE_Result scmi_scpfw_cfg_init(void)
 
 		res = scmi_regulator_consumer_init();
 		if (res) {
+			free(channel_cfg->reset);
+			free(channel_cfg->clock);
 			EMSG("SCMI regulator consumer init: %#"PRIx32, res);
 			return res;
 		}
