@@ -49,6 +49,10 @@
 	cpu-supply = <&vddcpu>;
 };
 
+&hash1 {
+	status = "okay";
+};
+
 &rcc {
 	st,c1msrd = <2>;
 	st,clk_opp {
