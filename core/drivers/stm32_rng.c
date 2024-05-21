@@ -7,6 +7,7 @@
 #include <drivers/clk.h>
 #include <drivers/clk_dt.h>
 #include <drivers/rstctrl.h>
+#include <drivers/stm32_firewall.h>
 #include <drivers/stm32_rng.h>
 #include <io.h>
 #include <kernel/delay.h>
@@ -668,10 +669,22 @@ static TEE_Result stm32_rng_probe(const void *fdt, int offs,
 	if (res)
 		goto err;
 
-	if (IS_ENABLED(CFG_WITH_SOFTWARE_PRNG))
-		stm32mp_register_non_secure_periph_iomem(stm32_rng->base.pa);
-	else
-		stm32mp_register_secure_periph_iomem(stm32_rng->base.pa);
+	if (IS_ENABLED(CFG_STM32MP15)) {
+		/*
+		 * Only STM32MP15 requires a software registering of RNG
+		 * secure state
+		 */
+		const struct stm32_firewall_cfg nsec_cfg[] = {
+			{ FWLL_NSEC_RW | FWLL_MASTER(0) },
+			{ }, /* Null terminated */
+		};
+		paddr_t pa = stm32_rng->base.pa;
+
+		if (stm32_firewall_check_access(pa, 0, nsec_cfg) == TEE_SUCCESS)
+			stm32mp_register_non_secure_periph_iomem(pa);
+		else
+			stm32mp_register_secure_periph_iomem(pa);
+	}
 
 	/* Power management implementation expects both or none are set */
 	assert(stm32_rng->ddata->has_power_optim ==
