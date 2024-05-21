@@ -53,6 +53,10 @@
 	status = "okay";
 };
 
+&pka {
+	status = "okay";
+};
+
 &rcc {
 	st,c1msrd = <2>;
 	st,clk_opp {
