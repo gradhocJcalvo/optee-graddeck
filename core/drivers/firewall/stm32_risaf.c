@@ -6,6 +6,7 @@
 #include <assert.h>
 #include <drivers/clk.h>
 #include <drivers/clk_dt.h>
+#include <drivers/firewall.h>
 #include <drivers/stm32_rif.h>
 #include <drivers/stm32_risaf.h>
 #include <dt-bindings/soc/stm32mp25-risaf.h>
@@ -13,6 +14,7 @@
 #include <kernel/boot.h>
 #include <kernel/dt.h>
 #include <kernel/pm.h>
+#include <kernel/spinlock.h>
 #include <kernel/tee_misc.h>
 #include <libfdt.h>
 #include <mm/core_memprot.h>
@@ -103,6 +105,12 @@
 #define _RISAF_REG_CIDCFGR_WRENC_MASK	GENMASK_32(23, 16)
 #define _RISAF_REG_CIDCFGR_ALL_MASK	(_RISAF_REG_CIDCFGR_RDENC_MASK | \
 					 _RISAF_REG_CIDCFGR_WRENC_MASK)
+#define _RISAF_REG_READ_OK(reg, cid)	((reg) & \
+					 (BIT((cid)) << \
+					  _RISAF_REG_CIDCFGR_RDENC_SHIFT))
+#define _RISAF_REG_WRITE_OK(reg, cid)	((reg) & \
+					 (BIT((cid)) << \
+					  _RISAF_REG_CIDCFGR_WRENC_SHIFT))
 
 /* Device Tree related definitions */
 #define DT_RISAF_REG_ID_MASK		U(0xF)
@@ -147,6 +155,8 @@
 #define TZDRAM_RESERVED_SIZE		TZDRAM_SIZE
 #endif
 
+#define _RISAF_NB_CID_SUPPORTED		U(8)
+
 struct stm32_risaf_region {
 	uint32_t cfg;
 	uintptr_t addr;
@@ -159,6 +169,7 @@ struct stm32_risaf_pdata {
 	struct stm32_risaf_region *regions;
 	char risaf_name[20];
 	unsigned int nregions;
+	unsigned int conf_lock;
 	uintptr_t mem_base;
 	size_t mem_size;
 	bool enc_supported;
@@ -193,6 +204,8 @@ struct stm32_risaf_version {
 struct stm32_risaf_compat_data {
 	bool supported_encryption;
 };
+
+static bool is_tdcid;
 
 static const struct stm32_risaf_compat_data stm32_risaf_compat = {
 	.supported_encryption = false,
@@ -619,6 +632,198 @@ stm32_risaf_pm(enum pm_op op, unsigned int pm_hint __unused,
 	return res;
 }
 
+static TEE_Result stm32_risaf_acquire_access(struct firewall_query *fw,
+					     paddr_t paddr __unused,
+					     size_t size __unused, bool read,
+					     bool write)
+{
+	struct stm32_risaf_instance *risaf = NULL;
+	TEE_Result res = TEE_ERROR_ACCESS_DENIED;
+	uint32_t cidcfgr = 0;
+	uint32_t cfgr = 0;
+	vaddr_t base = 0;
+	uint32_t id = 0;
+
+	assert(fw->ctrl->priv);
+
+	risaf = fw->ctrl->priv;
+	base = risaf_base(risaf);
+
+	if (fw->arg_count != 1)
+		return TEE_ERROR_BAD_PARAMETERS;
+
+	/*
+	 * RISAF region configuration, we assume the query is as
+	 * follows:
+	 * firewall->args[0]: Region configuration
+	 */
+	id = _RISAF_GET_REGION_ID(fw->args[0]);
+
+	if (!id || id >= risaf->pdata.nregions)
+		return TEE_ERROR_BAD_PARAMETERS;
+
+	res = clk_enable(risaf->pdata.clock);
+	if (res)
+		return res;
+
+	cfgr = io_read32(base + _RISAF_REG_CFGR(id));
+	cidcfgr = io_read32(base + _RISAF_REG_CIDCFGR(id));
+
+	/*
+	 * Access is denied if the region is disabled and OP-TEE does not run as
+	 * TDCID, or the region is not secure, or if it is not accessible in
+	 * read and/or write mode, if requested, by OP-TEE CID.
+	 */
+	if ((!(cfgr & _RISAF_REG_CFGR_BREN) && !is_tdcid) ||
+	    !(cfgr & _RISAF_REG_CFGR_SEC) ||
+	    (cidcfgr &&
+	     ((read && !_RISAF_REG_READ_OK(cidcfgr, RIF_CID1)) ||
+	      (write && !_RISAF_REG_WRITE_OK(cidcfgr, RIF_CID1)))))
+		return TEE_ERROR_ACCESS_DENIED;
+
+	clk_disable(risaf->pdata.clock);
+
+	return TEE_SUCCESS;
+}
+
+static TEE_Result stm32_risaf_check_access(struct firewall_query *fw,
+					   paddr_t paddr __unused,
+					   size_t size __unused,
+					   bool read __unused,
+					   bool write __unused)
+{
+	struct stm32_risaf_instance *risaf = NULL;
+	TEE_Result res = TEE_ERROR_ACCESS_DENIED;
+	uint32_t q_config = 0;
+	uint32_t cid_list = 0;
+	uint32_t cidcfgr = 0;
+	uint32_t cfgr = 0;
+	vaddr_t base = 0;
+	uint32_t id = 0;
+
+	assert(fw->ctrl->priv);
+
+	risaf = fw->ctrl->priv;
+	base = risaf_base(risaf);
+
+	if (fw->arg_count != 1)
+		return TEE_ERROR_BAD_PARAMETERS;
+
+	/*
+	 * RISAF region configuration, we assume the query is as
+	 * follows:
+	 * firewall->args[0]: Region configuration
+	 */
+	q_config = fw->args[0];
+	id = _RISAF_GET_REGION_ID(q_config);
+
+	if (!id || id >= risaf->pdata.nregions)
+		return TEE_ERROR_BAD_PARAMETERS;
+
+	res = clk_enable(risaf->pdata.clock);
+	if (res)
+		return res;
+
+	cfgr = io_read32(base + _RISAF_REG_CFGR(id));
+	cidcfgr = io_read32(base + _RISAF_REG_CIDCFGR(id));
+
+	/*
+	 * Access is denied if the region is disabled and OP-TEE does not run as
+	 * TDCID, or the region is not secure, or if it is not accessible in
+	 * read and/or write mode, if requested, by OP-TEE CID.
+	 */
+	if ((!(cfgr & _RISAF_REG_CFGR_BREN) && !is_tdcid) ||
+	    ((_RISAF_GET_REGION_CFG(q_config) & _RISAF_REG_CFGR_SEC) &&
+	     !(cfgr & _RISAF_REG_CFGR_SEC)))
+		return TEE_ERROR_ACCESS_DENIED;
+
+	cid_list = _RISAF_GET_REGION_CFG(q_config) &
+		   _RISAF_REG_CFGR_PRIVC_MASK;
+	if (!(cid_list == (cfgr & cid_list)))
+		return TEE_ERROR_ACCESS_DENIED;
+
+	cid_list = _RISAF_GET_REGION_CID_CFG(q_config) &
+		   _RISAF_REG_CIDCFGR_RDENC_MASK;
+	if (cid_list != (cidcfgr & cid_list))
+		return TEE_ERROR_ACCESS_DENIED;
+
+	cid_list = _RISAF_GET_REGION_CID_CFG(q_config) &
+		   _RISAF_REG_CIDCFGR_WRENC_MASK;
+	if (cid_list != (cidcfgr & cid_list))
+		return TEE_ERROR_ACCESS_DENIED;
+
+	clk_disable(risaf->pdata.clock);
+
+	return TEE_SUCCESS;
+}
+
+static TEE_Result stm32_risaf_reconfigure_region(struct firewall_query *fw,
+						 paddr_t paddr, size_t size)
+{
+	struct stm32_risaf_instance *risaf = NULL;
+	struct stm32_risaf_region *region = NULL;
+	TEE_Result res = TEE_ERROR_GENERIC;
+	uint32_t exceptions = 0;
+	uint32_t q_config = 0;
+	unsigned int i = 0;
+	uint32_t id = 0;
+
+	assert(fw->ctrl->priv);
+
+	risaf = fw->ctrl->priv;
+
+	if (fw->arg_count != 1)
+		return TEE_ERROR_BAD_PARAMETERS;
+
+	/*
+	 * RISAF region configuration, we assume the query is as
+	 * follows:
+	 * firewall->args[0]: Region configuration
+	 */
+	q_config = fw->args[0];
+	id = _RISAF_GET_REGION_ID(q_config);
+
+	if (!id || id >= risaf->pdata.nregions)
+		return TEE_ERROR_BAD_PARAMETERS;
+
+	for (i = 0; i < risaf->pdata.nregions; i++) {
+		if (id == _RISAF_GET_REGION_ID(risaf->pdata.regions[i].cfg)) {
+			region = &risaf->pdata.regions[i];
+			if (region->addr != paddr || region->len != size)
+				return TEE_ERROR_GENERIC;
+			break;
+		}
+	}
+	if (!region)
+		return TEE_ERROR_ITEM_NOT_FOUND;
+
+	res = clk_enable(risaf->pdata.clock);
+	if (res)
+		return res;
+
+	DMSG("Reconfiguring %s region ID: %"PRIu32, risaf->pdata.risaf_name,
+	     id);
+
+	exceptions = cpu_spin_lock_xsave(&risaf->pdata.conf_lock);
+	res = risaf_configure_region(risaf, id,
+				     _RISAF_GET_REGION_CFG(q_config),
+				     _RISAF_GET_REGION_CID_CFG(q_config),
+				     region->addr,
+				     region->addr + region->len - 1);
+
+	cpu_spin_unlock_xrestore(&risaf->pdata.conf_lock, exceptions);
+
+	clk_disable(risaf->pdata.clock);
+
+	return res;
+}
+
+static const struct firewall_controller_ops firewall_ops = {
+	.acquire_memory_access = stm32_risaf_acquire_access,
+	.check_memory_access = stm32_risaf_check_access,
+	.set_memory_conf = stm32_risaf_reconfigure_region,
+};
+
 static TEE_Result stm32_risaf_probe(const void *fdt, int node,
 				    const void *compat_data)
 {
@@ -626,13 +831,13 @@ static TEE_Result stm32_risaf_probe(const void *fdt, int node,
 	struct dt_node_info dt_info = { };
 	struct stm32_risaf_instance *risaf = NULL;
 	struct stm32_risaf_region *regions = NULL;
+	struct firewall_controller *controller = NULL;
 	unsigned int nregions = 0;
 	int len = 0;
 	unsigned int i = 0;
 	const fdt64_t *cuint = NULL;
 	const fdt32_t *conf_list = NULL;
 	const struct stm32_risaf_compat_data *compat = compat_data;
-	bool is_tdcid = false;
 
 	res = stm32_rifsc_check_tdcid(&is_tdcid);
 	if (res)
@@ -754,14 +959,28 @@ static TEE_Result stm32_risaf_probe(const void *fdt, int node,
 
 	clk_disable(risaf->pdata.clock);
 
+	controller = calloc(1, sizeof(*controller));
+	if (!controller)
+		panic();
+
+	controller->base = &risaf->pdata.base;
+	controller->name = risaf->pdata.risaf_name;
+	controller->priv = risaf;
+	controller->ops = &firewall_ops;
+
 	risaf->pdata.regions = regions;
 	risaf->pdata.nregions = nregions;
 
 	SLIST_INSERT_HEAD(&risaf_list, risaf, link);
 
+	res = firewall_dt_controller_register(fdt, node, controller);
+	if (res)
+		panic();
+
 	register_pm_core_service_cb(stm32_risaf_pm, risaf, "stm32-risaf");
 
 	return TEE_SUCCESS;
+
 err_ddata:
 	free(risaf->ddata);
 err_clk:
