@@ -570,6 +570,7 @@ static TEE_Result stm32_cpu_opp_get_dt_subnode(const void *fdt, int node)
 {
 	const fdt64_t *cuint64 = NULL;
 	const fdt32_t *cuint32 = NULL;
+	uint64_t freq_hz = 0;
 	uint64_t freq_khz = 0;
 	uint64_t freq_khz_opp_def = 0;
 	uint32_t volt_uv = 0;
@@ -598,8 +599,8 @@ static TEE_Result stm32_cpu_opp_get_dt_subnode(const void *fdt, int node)
 			EMSG("Missing opp-hz");
 			return TEE_ERROR_GENERIC;
 		}
-
-		freq_khz = fdt64_to_cpu(*cuint64) / 1000ULL;
+		freq_hz = fdt64_to_cpu(*cuint64);
+		freq_khz = freq_hz / 1000ULL;
 		if (freq_khz > (uint64_t)UINT32_MAX) {
 			EMSG("Invalid opp-hz %"PRIu64, freq_khz);
 			return TEE_ERROR_GENERIC;
@@ -612,6 +613,14 @@ static TEE_Result stm32_cpu_opp_get_dt_subnode(const void *fdt, int node)
 		}
 
 		volt_uv = fdt32_to_cpu(*cuint32);
+
+		/* skip OPP when frequency is not supported */
+		if (freq_hz != clk_round_rate(cpu_opp.clock, freq_hz)) {
+			DMSG("Skip OPP %"PRIu64"kHz/%"PRIu32"uV",
+			     freq_khz, volt_uv);
+			cpu_opp.opp_count--;
+			continue;
+		}
 
 		/* skip OPP when voltage is not supported */
 		if (!opp_voltage_is_supported(cpu_opp.regul, volt_uv)) {
