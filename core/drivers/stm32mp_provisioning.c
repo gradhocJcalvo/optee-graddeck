@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: BSD-2-Clause
 /*
- * Copyright (c) 2022, STMicroelectronics
+ * Copyright (c) 2022-2024, STMicroelectronics
+ *
+ * This driver is intended for development support only. It allows
+ * to provision BSEC/BSEC3 shadow cells with data read from OP-TEE OS
+ * DTB but without any insurance that the OP-TEE driver are initialized
+ * after this provisioning sequence. Therefore the driver initialization
+ * prints a warning trace or panics upon CFG_WARN_INSECURE value.
  */
 
 #include <arm.h>
@@ -179,7 +185,7 @@ static void provisioning_init(void)
 	int node = -1;
 
 	if (!fdt)
-		panic();
+		return;
 
 	node = fdt_node_offset_by_compatible(fdt, 0, "st,provisioning");
 	if (node < 0)
@@ -187,7 +193,7 @@ static void provisioning_init(void)
 
 	if (fdt_first_subnode(fdt, node) == -FDT_ERR_NOTFOUND) {
 		name = fdt_get_name(fdt, node, NULL);
-		DMSG("Warning : no subnode in %s\n", name);
+		DMSG("no subnode in %s", name);
 		return;
 	}
 
@@ -209,8 +215,14 @@ static TEE_Result provisioning_probe(void)
 {
 	provisioning_init();
 
-	if (!SLIST_EMPTY(&shadow_otp_head))
+	if (!SLIST_EMPTY(&shadow_otp_head)) {
+		if (IS_ENABLED(CFG_WARN_INSECURE))
+			IMSG("WARNING: Embeds insecure stm32mp_provisioning driver");
+		else
+			panic("Embeds insecure stm32mp_provisioning data");
+
 		register_pm_driver_cb(provisioning_pm, NULL, "provisioning");
+	}
 
 	return TEE_SUCCESS;
 }
