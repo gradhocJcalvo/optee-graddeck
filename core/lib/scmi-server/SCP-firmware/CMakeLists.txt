@@ -639,7 +639,7 @@ endforeach()
 # Configure cmake-format.
 #
 
-find_package(CMakeFormat OPTIONAL_COMPONENTS Format Lint)
+find_package(CMakeFormat QUIET OPTIONAL_COMPONENTS Format Lint)
 
 if(TARGET CMakeFormat::Format)
     add_custom_target(
@@ -676,7 +676,7 @@ endif()
 # Configure markdownlint.
 #
 
-find_package(Markdownlint)
+find_package(Markdownlint QUIET)
 
 if(Markdownlint_FOUND)
     add_custom_target(
@@ -721,7 +721,7 @@ endif()
 # Configure yamllint.
 #
 
-find_package(Yamllint)
+find_package(Yamllint QUIET)
 
 if(Yamllint_FOUND)
     add_custom_target(
@@ -738,7 +738,7 @@ endif()
 # Configure Clang-Format.
 #
 
-find_package(Clang OPTIONAL_COMPONENTS Format FormatGit)
+find_package(Clang QUIET OPTIONAL_COMPONENTS Format FormatGit)
 
 if(Clang_FormatGit_FOUND)
     add_custom_target(
