@@ -2570,7 +2570,7 @@ static TEE_Result clk_stm32_pll1_set_rate(struct clk *clk __unused,
 
 	opp = clk_stm32_get_opp_config(pdata->opp->cpu1_opp, rate);
 	if (!opp)
-		return TEE_ERROR_GENERIC;
+		return TEE_ERROR_ITEM_NOT_FOUND;
 
 	pll_conf = &opp->pll_cfg;
 
@@ -2999,7 +2999,7 @@ static TEE_Result clk_cpu1_determine_rate(struct clk *clk,
 
 	opp = clk_stm32_get_opp_config(pdata->opp->cpu1_opp, rate);
 	if (!opp)
-		return TEE_SUCCESS;
+		return TEE_ERROR_ITEM_NOT_FOUND;
 
 	index = (opp->src & MUX_SEL_MASK) >> MUX_SEL_SHIFT;
 
