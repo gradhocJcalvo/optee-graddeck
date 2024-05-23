@@ -2017,7 +2017,7 @@ static TEE_Result clk_stm32_pll1_set_rate(struct clk *clk __maybe_unused,
 
 	opp = clk_stm32_get_opp_config(pdata->opp->mpu_opp, rate);
 	if (!opp)
-		return TEE_ERROR_GENERIC;
+		return TEE_ERROR_ITEM_NOT_FOUND;
 
 	pll_conf = &opp->pll_cfg;
 
@@ -2081,7 +2081,7 @@ static TEE_Result clk_stm32_mpu_determine_rate(struct clk *clk,
 
 	opp = clk_stm32_get_opp_config(pdata->opp->mpu_opp, rate);
 	if (!opp)
-		return TEE_SUCCESS;
+		return TEE_ERROR_ITEM_NOT_FOUND;
 
 	index = (opp->src & MUX_SEL_MASK) >> MUX_SEL_SHIFT;
 
@@ -2111,7 +2111,7 @@ static TEE_Result clk_stm32_axi_determine_rate(struct clk *clk,
 
 	opp = clk_stm32_get_opp_config(pdata->opp->axi_opp, rate);
 	if (!opp)
-		return TEE_SUCCESS;
+		return TEE_ERROR_ITEM_NOT_FOUND;
 
 	index = (opp->src & MUX_SEL_MASK) >> MUX_SEL_SHIFT;
 	parent = clk_get_parent_by_index(clk, index);
@@ -2142,7 +2142,7 @@ static TEE_Result clk_stm32_mlahb_determine_rate(struct clk *clk,
 
 	opp = clk_stm32_get_opp_config(pdata->opp->mlahbs_opp, rate);
 	if (!opp)
-		return TEE_SUCCESS;
+		return TEE_ERROR_ITEM_NOT_FOUND;
 
 	index = (opp->src & MUX_SEL_MASK) >> MUX_SEL_SHIFT;
 	parent = clk_get_parent_by_index(clk, index);
