@@ -32,6 +32,7 @@
 #include <stm32_util.h>
 #include <stm32mp_pm.h>
 #include <trace.h>
+#include <util.h>
 
 /* DBGMCU registers */
 #define DBGMCU_CR			U(0x4)
@@ -67,6 +68,8 @@ static TEE_Result platform_banner(void)
 {
 	IMSG("Platform stm32mp2: flavor %s - DT %s", ID2STR(PLATFORM_FLAVOR),
 	     ID2STR(CFG_EMBED_DTB_SOURCE_FILE));
+
+	IMSG("OP-TEE ST profile: %s", TO_STR(CFG_STM32MP_PROFILE));
 
 	return TEE_SUCCESS;
 }
