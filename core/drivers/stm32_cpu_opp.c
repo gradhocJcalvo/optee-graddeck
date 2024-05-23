@@ -102,15 +102,54 @@ static TEE_Result opp_set_voltage(struct regulator *regul, int volt_uv)
 	return regulator_set_voltage(regul, volt_uv);
 }
 
-static bool opp_voltage_is_supported(struct regulator *regul, int volt_uv)
+/*
+ * This function returns true if the given OPP voltage can be managed.
+ * If the exact voltage value is not supported by the regulator,
+ * the function may adjust the input parameter volt_uv to a higher
+ * supported value and still return true.
+ */
+static bool opp_voltage_is_supported(struct regulator *regul, uint32_t *volt_uv)
 {
+	const int target_volt_uv = *volt_uv;
+	int new_volt_uv = 0;
 	int min_uv = 0;
 	int max_uv = 0;
+	unsigned int i = 0;
+	struct regulator_voltages_desc *desc = NULL;
+	const int *levels = NULL;
+	TEE_Result res = TEE_ERROR_GENERIC;
 
-	regulator_get_range(regul, &min_uv, &max_uv);
+	res = regulator_supported_voltages(regul, &desc, &levels);
+	if (res) {
+		regulator_get_range(regul, &min_uv, &max_uv);
+		if (target_volt_uv > max_uv)
+			return false;
+		if (target_volt_uv < min_uv)
+			*volt_uv = min_uv;
+		return true;
+	}
 
-	if (volt_uv < min_uv || volt_uv > max_uv)
+	if (desc->type == VOLTAGE_TYPE_FULL_LIST) {
+		for (i = 0 ; i < desc->num_levels; i++) {
+			if (levels[i] >= target_volt_uv) {
+				new_volt_uv = levels[i];
+				break;
+			}
+		}
+		if (new_volt_uv == 0)
+			return false;
+
+	} else if (desc->type == VOLTAGE_TYPE_INCREMENT) {
+		new_volt_uv = levels[0]; /* min */
+		while (new_volt_uv < target_volt_uv)
+			new_volt_uv += levels[2]; /* increment */
+		if (new_volt_uv > levels[1]) /* max */
+			return false;
+	} else {
 		return false;
+	}
+
+	*volt_uv = new_volt_uv;
 
 	return true;
 }
@@ -623,7 +662,7 @@ static TEE_Result stm32_cpu_opp_get_dt_subnode(const void *fdt, int node)
 		}
 
 		/* skip OPP when voltage is not supported */
-		if (!opp_voltage_is_supported(cpu_opp.regul, volt_uv)) {
+		if (!opp_voltage_is_supported(cpu_opp.regul, &volt_uv)) {
 			DMSG("Skip OPP %"PRIu64"kHz/%"PRIu32"uV",
 			     freq_khz, volt_uv);
 			cpu_opp.opp_count--;
