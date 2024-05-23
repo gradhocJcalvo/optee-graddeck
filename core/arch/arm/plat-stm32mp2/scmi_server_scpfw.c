@@ -850,8 +850,11 @@ TEE_Result scmi_scpfw_cfg_add_regu(unsigned int agent_id,
 		return TEE_SUCCESS;
 
 	if (agent_id >= scpfw_cfg.agent_count ||
-	    channel_id >= agent_cfg->channel_count)
-		return TEE_ERROR_BAD_PARAMETERS;
+	    channel_id >= agent_cfg->channel_count) {
+		EMSG("SCMI agent %u channel %u not found, do not add regulator",
+		     agent_id, channel_id);
+		return TEE_ERROR_ITEM_NOT_FOUND;
+	}
 
 	if (channel_cfg->voltd) {
 		EMSG("Voltage domain already loaded: agent %u, channel %u",

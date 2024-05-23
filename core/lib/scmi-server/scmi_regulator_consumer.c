@@ -106,7 +106,12 @@ static TEE_Result init_channel(void *fdt, int node)
 	res = scmi_scpfw_cfg_add_regu(0/*agent*/, voltd_channel.channel_id,
 				      voltd_channel.regu,
 				      voltd_channel.regu_count);
-	if (res)
+	/*
+	 * TEE_ERROR_ITEM_NOT_FOUND means the agent or the channel haven't.
+	 * But regulators are described in the device-tree. This is not an
+	 * issue, just do nothing.
+	 */
+	if (res && res != TEE_ERROR_ITEM_NOT_FOUND)
 		panic();
 
 	/* We can free voltd_channel resources since SCMI server handles them */
