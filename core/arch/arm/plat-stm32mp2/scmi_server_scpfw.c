@@ -664,18 +664,21 @@ struct scpfw_config *scmi_scpfw_get_configuration(void)
 
 static TEE_Result scmi_scpfw_cfg_early_init(void)
 {
-	/* There is 1 agent with 1 channel */
+	unsigned int index = 0;
 
 	scpfw_cfg.agent_count = 1;
 	scpfw_cfg.agent_config = calloc(scpfw_cfg.agent_count,
 					sizeof(*scpfw_cfg.agent_config));
 
-	scpfw_cfg.agent_config[0].name = "agent";
-	scpfw_cfg.agent_config[0].agent_id = 1;
-	scpfw_cfg.agent_config[0].channel_count = ARRAY_SIZE(scmi_channel);
-	scpfw_cfg.agent_config[0].channel_config =
-		calloc(scpfw_cfg.agent_config[0].channel_count,
-		       sizeof(*scpfw_cfg.agent_config[0].channel_config));
+	scpfw_cfg.agent_config[index].name = "agent";
+	scpfw_cfg.agent_config[index].agent_id = index + 1;
+	scpfw_cfg.agent_config[index].channel_count = ARRAY_SIZE(scmi_channel);
+	scpfw_cfg.agent_config[index].channel_config =
+		calloc(scpfw_cfg.agent_config[index].channel_count,
+		       sizeof(*scpfw_cfg.agent_config[index].channel_config));
+	index++;
+
+	assert(scpfw_cfg.agent_count == index);
 
 	return TEE_SUCCESS;
 }
