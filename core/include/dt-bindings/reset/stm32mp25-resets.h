@@ -151,8 +151,12 @@
 #define DDRPHYCAPB_R	141
 #define DDRCFG_R	142
 #define DDR_R		143
+#define IWDG1_SYS_R	144
+#define IWDG2_SYS_R	145
+#define IWDG3_SYS_R	146
+#define IWDG4_SYS_R	147
 
-#define STM32MP25_LAST_RESET	144
+#define STM32MP25_LAST_RESET	148
 
 #define RST_SCMI_C1_R		0
 #define RST_SCMI_C2_R		1
