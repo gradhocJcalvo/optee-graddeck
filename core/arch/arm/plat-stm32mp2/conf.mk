@@ -280,3 +280,8 @@ endif
 ifeq ($(CFG_STM32_LPTIMER),y)
 $(call force,CFG_COUNTER_DRIVER,y)
 endif
+
+CFG_DRIVERS_FIREWALL ?= y
+ifeq ($(call cfg-one-enabled, CFG_STM32_RISAF CFG_STM32_RIFSC),y)
+$(call force,CFG_DRIVERS_FIREWALL,y)
+endif
