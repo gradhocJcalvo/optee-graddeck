@@ -10,7 +10,6 @@
 #include <dt-bindings/mfd/st,stpmic1.h>
 #include <dt-bindings/power/stm32mp1-power.h>
 #include <dt-bindings/soc/stm32mp-provisioning.h>
-#include <dt-bindings/soc/stm32mp15-etzpc.h>
 
 #include "stm32mp157.dtsi"
 #include "stm32mp15xc.dtsi"
