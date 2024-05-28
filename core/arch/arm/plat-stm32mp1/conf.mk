@@ -333,8 +333,9 @@ ifneq ($(CFG_WITH_SOFTWARE_PRNG),y)
 $(call force,CFG_STM32_RNG,y,Required by HW RNG when CFG_WITH_SOFTWARE_PRNG=n)
 endif
 
+CFG_DRIVERS_FIREWALL ?= y
 ifeq ($(CFG_STM32_ETZPC),y)
-$(call force,CFG_STM32_FIREWALL,y)
+$(call force,CFG_DRIVERS_FIREWALL,y)
 endif
 
 ifeq ($(CFG_STPMIC1),y)
