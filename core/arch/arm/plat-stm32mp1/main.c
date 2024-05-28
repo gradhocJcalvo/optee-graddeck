@@ -9,11 +9,10 @@
 #include <console.h>
 #include <drivers/clk_dt.h>
 #include <drivers/counter.h>
+#include <drivers/firewall_device.h>
 #include <drivers/gic.h>
 #include <drivers/pinctrl.h>
 #include <drivers/stm32_bsec.h>
-#include <drivers/stm32_etzpc.h>
-#include <drivers/stm32_firewall.h>
 #include <drivers/stm32_gpio.h>
 #include <drivers/stm32_tamp.h>
 #include <drivers/stm32_uart.h>
@@ -371,21 +370,27 @@ service_init_late(init_stm32mp15_secure_srams);
 
 static TEE_Result init_stm32mp1_drivers(void)
 {
+	struct dt_driver_provider *prov = NULL;
 	TEE_Result res = TEE_ERROR_GENERIC;
-	const struct stm32_firewall_cfg sec_cfg[] = {
-		{ FWLL_SEC_RW | FWLL_MASTER(0) },
-		{ }, /* Null terminated */
+	uint32_t firewall_query_args[2] = { ETZPC_TZMA1_ID, SYSRAM_SEC_SIZE };
+	struct firewall_query firewall = {
+		.args = firewall_query_args,
+		.arg_count = ARRAY_SIZE(firewall_query_args),
 	};
+	int node = 0;
 
-	/* Without secure DTB support, some drivers must be inited */
-	if (!IS_ENABLED(CFG_EMBED_DTB))
-		stm32_etzpc_init(ETZPC_BASE);
+	node = fdt_node_offset_by_compatible(get_embedded_dt(), -1,
+					     "st,stm32-etzpc");
+	if (node < 0)
+		panic("Could not get ETZPC node");
 
-	res = stm32_firewall_set_config(ROM_BASE, ROM_SIZE, sec_cfg);
-	if (res)
-		panic("Unable to secure ROM");
+	prov = dt_driver_get_provider_by_node(node, DT_DRIVER_FIREWALL);
+	assert(prov);
 
-	res = stm32_firewall_set_config(SYSRAM_BASE, SYSRAM_SEC_SIZE, sec_cfg);
+	firewall.ctrl = dt_driver_provider_priv_data(prov);
+
+	/* Secure SYSRAM */
+	res = firewall_set_configuration(&firewall);
 	if (res)
 		panic("Unable to secure SYSRAM");
 

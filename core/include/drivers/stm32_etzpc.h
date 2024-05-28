@@ -17,13 +17,4 @@ enum etzpc_decprot_attributes {
 	ETZPC_DECPROT_NS_RW = 3,
 	ETZPC_DECPROT_MAX = 4,
 };
-
-#define ETZPC_TZMA_ALL_SECURE		GENMASK_32(9, 0)
-#define ETZPC_TZMA_ALL_NO_SECURE	0x0
-
-#ifdef CFG_STM32_ETZPC
-void stm32_etzpc_init(paddr_t base);
-#else
-static inline void stm32_etzpc_init(paddr_t __unused base) {}
-#endif
 #endif /*__DRIVERS_STM32_ETZPC_H*/
