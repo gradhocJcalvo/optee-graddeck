@@ -12,6 +12,7 @@
 		interrupts = <GIC_SPI 80 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&rcc CRYP1>;
 		resets = <&rcc CRYP1_R>;
+		access-controllers = <&etzpc STM32MP1_ETZPC_CRYP_ID>;
 		status = "disabled";
 	};
 
@@ -22,6 +23,7 @@
 		clocks = <&rcc SAES_K>, <&rcc RNG1_K>;
 		clock-names = "bus", "rng";
 		resets = <&rcc SAES_R>;
+		access-controllers = <&etzpc STM32MP1_ETZPC_SAES_ID>;
 		status = "disabled";
 	};
 
@@ -32,6 +34,7 @@
 		clocks = <&rcc PKA>, <&rcc RNG1_K>;
 		clock-names = "bus", "rng";
 		resets = <&rcc PKA_R>;
+		access-controllers = <&etzpc STM32MP1_ETZPC_PKA_ID>;
 		status = "disabled";
 	};
 };
