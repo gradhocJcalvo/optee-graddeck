@@ -14,8 +14,6 @@
 #include <dt-bindings/regulator/st,stm32mp13-regulator.h>
 #include <dt-bindings/soc/stm32mp-provisioning.h>
 #include <dt-bindings/soc/stm32mp-tzc400-macro.h>
-#include <dt-bindings/soc/stm32mp13-etzpc.h>
-#include <dt-bindings/soc/stm32mp13-etzpc.h>
 #include <dt-bindings/soc/stm32mp13-tzc400.h>
 #include <dt-bindings/tamper/st,stm32mp13-tamp.h>
 #include "stm32mp135.dtsi"
