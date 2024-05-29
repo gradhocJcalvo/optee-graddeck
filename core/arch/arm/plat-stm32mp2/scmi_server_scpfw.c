@@ -685,52 +685,44 @@ static TEE_Result scmi_scpfw_cfg_early_init(void)
 
 early_init(scmi_scpfw_cfg_early_init);
 
-static TEE_Result scmi_scpfw_cfg_init(void)
+static void scmi_scpfw_cfg_init_channel(const char *name,
+					struct scpfw_agent_config *agent_config,
+					const struct channel_resources
+						channels_res[])
 {
-	struct scpfw_channel_config *channel_cfg = NULL;
 	size_t i = 0;
 	size_t j = 0;
 
-	get_scmi_clocks();
-	get_scmi_resets();
+	for (i = 0; i < agent_config->channel_count; i++) {
+		struct channel_resources chan_res = channels_res[i];
+		struct scpfw_channel_config *channel_cfg =
+			agent_config->channel_config + i;
 
-	for (i = 0; i < ARRAY_SIZE(scmi_channel); i++) {
-		/* Clock and reset are exposed to agent#0/channel#0 */
-		channel_cfg = scpfw_cfg.agent_config[0].channel_config + i;
-		channel_cfg->name = "channel";
+		channel_cfg->name = name;
 
-		channel_cfg->clock_count = ARRAY_SIZE(stm32_scmi_clock);
-		if (channel_cfg->clock_count) {
-			channel_cfg->clock =
-				calloc(channel_cfg->clock_count,
-				       sizeof(*channel_cfg->clock));
-
-			for (j = 0; j < channel_cfg->clock_count; j++) {
-				channel_cfg->clock[j] = (struct scmi_clock){
-					.name = stm32_scmi_clock[j].name,
-					.clk = stm32_scmi_clock[j].clk,
-					/* Default OFF for RIF issues */
-					.enabled = false,
-				};
-			}
+		channel_cfg->clock_count = chan_res.clock_count;
+		channel_cfg->clock = calloc(channel_cfg->clock_count,
+					    sizeof(*channel_cfg->clock));
+		for (j = 0; j < channel_cfg->clock_count; j++) {
+			channel_cfg->clock[j] = (struct scmi_clock){
+				.name = chan_res.clock[j].name,
+				.clk = chan_res.clock[j].clk,
+				/* Default OFF for RIF issues */
+				.enabled = false,
+			};
 		}
 
-		channel_cfg->reset_count = ARRAY_SIZE(stm32_scmi_reset);
-		if (channel_cfg->reset_count) {
-			channel_cfg->reset =
-				calloc(channel_cfg->reset_count,
-				       sizeof(*channel_cfg->reset));
-
-			for (j = 0; j < channel_cfg->reset_count; j++) {
-				channel_cfg->reset[j] = (struct scmi_reset){
-					.name = stm32_scmi_reset[j].name,
-					.rstctrl = stm32_scmi_reset[j].rstctrl,
-				};
-			}
+		channel_cfg->reset_count = chan_res.rd_count;
+		channel_cfg->reset = calloc(channel_cfg->reset_count,
+					    sizeof(*channel_cfg->reset));
+		for (j = 0; j < channel_cfg->reset_count; j++) {
+			channel_cfg->reset[j] = (struct scmi_reset){
+				.name = chan_res.rd[j].name,
+				.rstctrl = chan_res.rd[j].rstctrl,
+			};
 		}
 
-#if (defined(CFG_STM32MP25) || defined(CFG_STM32MP23))
-		channel_cfg->pd_count = ARRAY_SIZE(stm32_scmi_pd);
+		channel_cfg->pd_count = chan_res.pd_count;
 		if (channel_cfg->pd_count) {
 			channel_cfg->pd = calloc(channel_cfg->pd_count,
 						 sizeof(*channel_cfg->pd));
@@ -738,18 +730,18 @@ static TEE_Result scmi_scpfw_cfg_init(void)
 
 			for (j = 0; j < channel_cfg->pd_count; j++) {
 				struct clk *clk = stm32mp_rcc_clock_id_to_clk(
-					stm32_scmi_pd[j].clock_id);
+					chan_res.pd[j].clock_id);
 				struct regulator *regu = NULL;
 
-				if (stm32_scmi_pd[j].regu_name != NULL) {
+				if (chan_res.pd[j].regu_name) {
 					regu = regulator_get_by_name(
-						stm32_scmi_pd[j].regu_name);
+						chan_res.pd[j].regu_name);
 
 					if (!regu) {
 						EMSG("Regulator %s not found "
 						     "for %s power domain",
-						     stm32_scmi_pd[j].regu_name,
-						     stm32_scmi_pd[j].name);
+						     chan_res.pd[j].regu_name,
+						     chan_res.pd[j].name);
 						panic();
 					}
 				}
@@ -757,18 +749,27 @@ static TEE_Result scmi_scpfw_cfg_init(void)
 				if (!clk)
 					DMSG("Clock ID %ld not found for %s "
 					     "power domain",
-					     stm32_scmi_pd[j].clock_id,
-					     stm32_scmi_pd[j].name);
+					     chan_res.pd[j].clock_id,
+					     chan_res.pd[j].name);
 
 				channel_cfg->pd[j] = (struct scmi_pd){
-					.name = stm32_scmi_pd[j].name,
+					.name = chan_res.pd[j].name,
 					.clk = clk,
 					.regu = regu,
 				};
 			}
 		}
-#endif
 	}
+}
+
+static TEE_Result scmi_scpfw_cfg_init(void)
+{
+	get_scmi_clocks();
+	get_scmi_resets();
+
+	scmi_scpfw_cfg_init_channel("channel",
+				    &scpfw_cfg.agent_config[0],
+				    scmi_channel);
 
 	/* DVFS will be populated from cpu_opp driver */
 
@@ -777,8 +778,7 @@ static TEE_Result scmi_scpfw_cfg_init(void)
 
 		res = scmi_regulator_consumer_init();
 		if (res) {
-			free(channel_cfg->reset);
-			free(channel_cfg->clock);
+			scmi_scpfw_release_configuration();
 			EMSG("SCMI regulator consumer init: %#"PRIx32, res);
 			return res;
 		}
