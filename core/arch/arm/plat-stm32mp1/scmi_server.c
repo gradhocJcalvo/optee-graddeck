@@ -13,9 +13,10 @@
 #include <drivers/scmi-msg.h>
 #include <drivers/scmi.h>
 #include <drivers/stm32_cpu_opp.h>
-#include <drivers/stm32_firewall.h>
 #include <drivers/stm32mp_dt_bindings.h>
+#include <drivers/stm32_etzpc.h>
 #include <initcall.h>
+#include <kernel/pm.h>
 #include <mm/core_memprot.h>
 #include <mm/core_mmu.h>
 #include <platform_config.h>
@@ -48,13 +49,13 @@ struct stm32_scmi_clk {
 /*
  * struct stm32_scmi_rd - Data for the exposed reset controller
  * @reset_id: Reset identifier in RCC reset driver
- * @base: Physical controller address
+ * @fw_id: Firewall ID of the peripheral
  * @name: Reset string ID exposed to channel
  * @rstctrl: Reset controller device
  */
 struct stm32_scmi_rd {
 	unsigned long reset_id;
-	paddr_t base;
+	unsigned int fw_id;
 	const char *name;
 	struct rstctrl *rstctrl;
 };
@@ -87,10 +88,10 @@ register_phys_mem(MEM_AREA_IO_NSEC, CFG_STM32MP1_SCMI_SHM_BASE,
 		.enabled = (_init_enabled), \
 	}
 
-#define RESET_CELL(_scmi_id, _id, _base, _name) \
+#define RESET_CELL(_scmi_id, _id, _fw_id, _name) \
 	[(_scmi_id)] = { \
 		.reset_id = (_id), \
-		.base = (_base), \
+		.fw_id = (_fw_id), \
 		.name = (_name), \
 	}
 
@@ -157,26 +158,27 @@ static struct stm32_scmi_clk stm32_scmi_clock[] = {
 
 #ifdef CFG_STM32MP13
 static struct stm32_scmi_rd stm32_scmi_reset_domain[] = {
-	RESET_CELL(RST_SCMI_LTDC, LTDC_R, LTDC_BASE, "ltdc"),
-	RESET_CELL(RST_SCMI_MDMA, MDMA_R, MDMA_BASE, "mdma"),
+	RESET_CELL(RST_SCMI_LTDC, LTDC_R, STM32MP1_ETZPC_LTDC_ID, "ltdc"),
+	RESET_CELL(RST_SCMI_MDMA, MDMA_R, STM32MP1_ETZPC_MAX_ID, "mdma"),
 };
 #endif
 
 #ifdef CFG_STM32MP15
 static struct stm32_scmi_rd stm32_scmi_reset_domain[] = {
-	RESET_CELL(RST_SCMI_SPI6, SPI6_R, SPI6_BASE, "spi6"),
-	RESET_CELL(RST_SCMI_I2C4, I2C4_R, I2C4_BASE, "i2c4"),
-	RESET_CELL(RST_SCMI_I2C6, I2C6_R, I2C6_BASE, "i2c6"),
-	RESET_CELL(RST_SCMI_USART1, USART1_R, USART1_BASE, "usart1"),
-	RESET_CELL(RST_SCMI_STGEN, STGEN_R, STGEN_BASE, "stgen"),
-	RESET_CELL(RST_SCMI_GPIOZ, GPIOZ_R, GPIOZ_BASE, "gpioz"),
-	RESET_CELL(RST_SCMI_CRYP1, CRYP1_R, CRYP1_BASE, "cryp1"),
-	RESET_CELL(RST_SCMI_HASH1, HASH1_R, HASH1_BASE, "hash1"),
-	RESET_CELL(RST_SCMI_RNG1, RNG1_R, RNG1_BASE, "rng1"),
-	RESET_CELL(RST_SCMI_MDMA, MDMA_R, MDMA_BASE, "mdma"),
-	RESET_CELL(RST_SCMI_MCU, MCU_R, 0, "mcu"),
-	RESET_CELL(RST_SCMI_MCU_HOLD_BOOT, MCU_HOLD_BOOT_R, 0,
-		   "mcu_hold_boot"),
+	RESET_CELL(RST_SCMI_SPI6, SPI6_R, STM32MP1_ETZPC_SPI6_ID, "spi6"),
+	RESET_CELL(RST_SCMI_I2C4, I2C4_R, STM32MP1_ETZPC_I2C4_ID, "i2c4"),
+	RESET_CELL(RST_SCMI_I2C6, I2C6_R, STM32MP1_ETZPC_I2C6_ID, "i2c6"),
+	RESET_CELL(RST_SCMI_USART1, USART1_R, STM32MP1_ETZPC_USART1_ID,
+		   "usart1"),
+	RESET_CELL(RST_SCMI_STGEN, STGEN_R, STM32MP1_ETZPC_STGENC_ID, "stgen"),
+	RESET_CELL(RST_SCMI_GPIOZ, GPIOZ_R, STM32MP1_ETZPC_GPIOZ_ID, "gpioz"),
+	RESET_CELL(RST_SCMI_CRYP1, CRYP1_R, STM32MP1_ETZPC_CRYP1_ID, "cryp1"),
+	RESET_CELL(RST_SCMI_HASH1, HASH1_R, STM32MP1_ETZPC_HASH1_ID, "hash1"),
+	RESET_CELL(RST_SCMI_RNG1, RNG1_R, STM32MP1_ETZPC_RNG1_ID, "rng1"),
+	RESET_CELL(RST_SCMI_MDMA, MDMA_R, STM32MP1_ETZPC_MAX_ID, "mdma"),
+	RESET_CELL(RST_SCMI_MCU, MCU_R, STM32MP1_ETZPC_MAX_ID, "mcu"),
+	RESET_CELL(RST_SCMI_MCU_HOLD_BOOT, MCU_HOLD_BOOT_R,
+		   STM32MP1_ETZPC_MAX_ID, "mcu_hold_boot"),
 };
 #endif
 
@@ -555,15 +557,14 @@ int32_t plat_scmi_rd_autonomous(unsigned int channel_id, unsigned int scmi_id,
 				uint32_t state)
 {
 	const struct stm32_scmi_rd *rd = find_rd(channel_id, scmi_id);
-	const struct stm32_firewall_cfg nsec_cfg[] = {
-		{ FWLL_NSEC_RW | FWLL_MASTER(0) },
-		{ }, /* Null terminated */
-	};
+	unsigned int id = 0;
 
 	if (!rd)
 		return SCMI_NOT_FOUND;
 
-	if (rd->base && stm32_firewall_check_access(rd->base, 0, nsec_cfg))
+	id = rd->fw_id;
+
+	if (id != STM32MP1_ETZPC_MAX_ID && stm32_etzpc_check_ns_access(id))
 		return SCMI_DENIED;
 	assert(rd->rstctrl);
 
@@ -591,17 +592,17 @@ int32_t plat_scmi_rd_set_state(unsigned int channel_id, unsigned int scmi_id,
 			       bool assert_not_deassert)
 {
 	const struct stm32_scmi_rd *rd = find_rd(channel_id, scmi_id);
-	const struct stm32_firewall_cfg nsec_cfg[] = {
-		{ FWLL_NSEC_RW | FWLL_MASTER(0) },
-		{ }, /* Null terminated */
-	};
 	TEE_Result res = TEE_ERROR_GENERIC;
+	unsigned int id = 0;
 
 	if (!rd)
 		return SCMI_NOT_FOUND;
 
-	if (rd->base && stm32_firewall_check_access(rd->base, 0, nsec_cfg))
+	id = rd->fw_id;
+
+	if (id != STM32MP1_ETZPC_MAX_ID && stm32_etzpc_check_ns_access(id))
 		return SCMI_DENIED;
+
 	assert(rd->rstctrl);
 
 	if (assert_not_deassert) {
