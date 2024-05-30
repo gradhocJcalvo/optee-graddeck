@@ -119,6 +119,29 @@ static const char *const etzpc_decprot_strings[] __maybe_unused = {
 	"ETZPC_DECPROT_NS_RW",
 };
 
+/* Temporary firewall controller reference */
+static struct firewall_controller *fw_ctrl;
+
+TEE_Result stm32_etzpc_check_ns_access(unsigned int id)
+{
+	TEE_Result res = TEE_ERROR_ACCESS_DENIED;
+	struct firewall_query query = { };
+
+	query.ctrl = fw_ctrl;
+	query.arg_count = 2;
+	query.args = calloc(2, sizeof(uint32_t));
+	if (!query.args)
+		return TEE_ERROR_OUT_OF_MEMORY;
+
+	query.args[0] = id;
+	query.args[1] = DECPROT(id, DECPROT_NS_RW, DECPROT_UNLOCK);
+
+	res = firewall_check_access(&query);
+	free(query.args);
+
+	return res;
+}
+
 static uint32_t etzpc_lock(struct etzpc_device *dev)
 {
 	return may_spin_lock(&dev->lock);
@@ -685,6 +708,8 @@ static TEE_Result stm32_etzpc_probe(const void *fdt, int node,
 	res = firewall_dt_probe_bus(fdt, node, controller);
 	if (res)
 		goto err;
+
+	fw_ctrl = controller;
 
 	register_pm_core_service_cb(etzpc_pm, etzpc_dev, "stm32-etzpc");
 

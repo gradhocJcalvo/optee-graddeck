@@ -17,4 +17,14 @@ enum etzpc_decprot_attributes {
 	ETZPC_DECPROT_NS_RW = 3,
 	ETZPC_DECPROT_MAX = 4,
 };
+
+#if defined(CFG_STM32_ETZPC)
+TEE_Result stm32_etzpc_check_ns_access(unsigned int id);
+#else
+static inline TEE_Result stm32_etzpc_check_ns_access(unsigned int id __unused)
+{
+	return TEE_ERROR_ACCESS_DENIED;
+}
+#endif
+
 #endif /*__DRIVERS_STM32_ETZPC_H*/
