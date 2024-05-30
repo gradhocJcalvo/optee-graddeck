@@ -12,5 +12,6 @@
  * Disable log buffering by setting buffer size to 0.
  */
 #define FMW_LOG_BUFFER_SIZE 0
+#define FMW_LOG_MINIMAL_BANNER
 
 #endif /* FMW_LOG_H */
