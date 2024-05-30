@@ -225,6 +225,7 @@ $(call force,CFG_WITH_NSEC_GPIOS,n)
 CFG_STM32MP_OPP_COUNT ?= 3
 CFG_STM32_ADC ?= y
 CFG_WITH_PAGER ?= n
+CFG_WITH_TUI ?= y
 endif # CFG_STM32MP13
 
 ifeq ($(CFG_STM32MP15),y)
@@ -271,6 +272,16 @@ endif
 ifneq ($(CFG_WITH_LPAE),y)
 # Without LPAE, default TEE virtual address range is 1MB, we need at least 2MB.
 CFG_TEE_RAM_VA_SIZE ?= 0x00200000
+endif
+
+# Trusted User Interface
+ifeq ($(CFG_WITH_TUI),y)
+$(call force,CFG_DISPLAY,y,Mandated by CFG_WITH_TUI)
+$(call force,CFG_FRAME_BUFFER,y,Mandated by CFG_WITH_TUI)
+$(call force,CFG_STM32_LTDC,y,Mandated by CFG_WITH_TUI)
+# Provision virtual space to fit 10MByte plus the TUI frame buffer
+CFG_TUI_FRAME_BUFFER_SIZE_MAX ?= 0x01000000
+CFG_RESERVED_VASPACE_SIZE ?= (10 * 1024 * 1024 + $(CFG_TUI_FRAME_BUFFER_SIZE_MAX))
 endif
 
 ifneq ($(filter $(CFG_EMBED_DTB_SOURCE_FILE),$(flavorlist-512M)),)
