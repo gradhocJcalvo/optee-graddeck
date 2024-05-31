@@ -1674,8 +1674,10 @@ static TEE_Result stm32_i2c_probe(const void *fdt, int node,
 	init_data.analog_filter = true;
 	init_data.digital_filter_coef = 0;
 
-	if (compat_data == &secure_i2c)
+	if (compat_data == &secure_i2c) {
 		stm32_pinctrl_set_secure_cfg(pinctrl_active, true);
+		i2c_handle_p->i2c_secure = true;
+	}
 
 	if (pinctrl_apply_state(i2c_handle_p->pinctrl))
 		panic();

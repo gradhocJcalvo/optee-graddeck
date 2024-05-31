@@ -116,6 +116,7 @@ struct i2c_cfg {
  * @pinctrl: Pin control configuration for the I2C bus in active state
  * @pinctrl_sleep: Pin control configuration for the I2C bus in standby state
  * @mu: Protection on concurrent access to the I2C bus considering PM context
+ * @i2c_secure: Indicates that the I2C is secure
  */
 struct i2c_handle_s {
 	struct io_pa_va base;
@@ -130,6 +131,7 @@ struct i2c_handle_s {
 	struct pinctrl_state *pinctrl;
 	struct pinctrl_state *pinctrl_sleep;
 	struct mutex_pm_aware mu;
+	bool i2c_secure;
 };
 
 /*
