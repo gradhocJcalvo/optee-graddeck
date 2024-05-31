@@ -134,7 +134,7 @@
 		compatible = "st,scmi-regulator-consumer";
 		#address-cells = <1>;
 		#size-cells = <0>;
-
+		scmi-agent-id = <0>;
 		scmi-channel-id = <0>;
 
 		voltd-vddio1 {
