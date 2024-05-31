@@ -678,31 +678,31 @@
 			status = "disabled";
 
 			vdda18adc: vdda18adc {
-				compatible = "st,stm32mp25-pwr-regu";
+				compatible = "st,stm32mp21-pwr-regu";
 				regulator-name = "vdda18adc";
 				status = "disabled";
 			};
 
 			vddio1: vddio1 {
-				compatible = "st,stm32mp25-pwr-regu";
+				compatible = "st,stm32mp21-pwr-regu";
 				regulator-name = "vddio1";
 				status = "disabled";
 			};
 
 			vddio2: vddio2 {
-				compatible = "st,stm32mp25-pwr-regu";
+				compatible = "st,stm32mp21-pwr-regu";
 				regulator-name = "vddio2";
 				status = "disabled";
 			};
 
 			vddio3: vddio3 {
-				compatible = "st,stm32mp25-pwr-regu";
+				compatible = "st,stm32mp21-pwr-regu";
 				regulator-name = "vddio3";
 				status = "disabled";
 			};
 
 			vddio: vddio {
-				compatible = "st,stm32mp25-pwr-regu";
+				compatible = "st,stm32mp21-pwr-regu";
 				regulator-name = "vddio";
 				regulator-always-on;
 				status = "disabled";
