@@ -466,6 +466,7 @@ stm32mp25_pwr_irq_user_dt_probe(const void *fdt, int node,
 }
 
 static const struct dt_device_match pwr_irq_test_match_table[] = {
+	{ .compatible = "st,stm32mp21-pwr-irq-user" },
 	{ .compatible = "st,stm32mp25-pwr-irq-user" },
 	{ }
 };

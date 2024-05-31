@@ -321,6 +321,7 @@ static TEE_Result stm32mp_pwr_probe(const void *fdt, int node,
 }
 
 static const struct dt_device_match stm32mp_pwr_match_table[] = {
+	{ .compatible = "st,stm32mp21-pwr" },
 	{ .compatible = "st,stm32mp25-pwr" },
 	{ }
 };

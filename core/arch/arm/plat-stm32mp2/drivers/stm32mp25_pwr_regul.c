@@ -584,6 +584,7 @@ static TEE_Result pwr_regulator_probe(const void *fdt, int node,
 }
 
 static const struct dt_device_match pwr_regulator_match_table[] = {
+	{ .compatible = "st,stm32mp21-pwr-regu" },
 	{ .compatible = "st,stm32mp25-pwr-regu" },
 	{ }
 };
