@@ -491,6 +491,7 @@ static TEE_Result stm32_lptimer_set_driverdata(struct lptimer_device *lpt_dev)
 #ifdef CFG_EMBED_DTB
 static const char * const stm32_lptimer_counter_compat[] = {
 	"st,stm32-lptimer-counter",
+	"st,stm32mp21-lptimer-counter",
 	"st,stm32mp25-lptimer-counter",
 };
 
@@ -673,6 +674,10 @@ static const struct dt_device_match stm32_lptimer_match_table[] = {
 	{
 		.compatible = "st,stm32-lptimer",
 		.compat_data = &lptimer_cdata,
+	},
+	{
+		.compatible = "st,stm32mp21-lptimer",
+		.compat_data = &lptimer_mp25_cdata,
 	},
 	{
 		.compatible = "st,stm32mp25-lptimer",
