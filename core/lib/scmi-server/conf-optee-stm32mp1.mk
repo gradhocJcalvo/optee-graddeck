@@ -24,3 +24,6 @@ CFG_SCPFW_LOG_LEVEL ?= 1
 
 $(call force,CFG_SCPFW_NOTIFICATION,n)
 $(call force,CFG_SCPFW_FAST_CHANNEL,n)
+
+# Default configuration values for product specific modules
+CFG_SCPFW_MOD_PSU_OPTEE_REGULATOR ?= n
