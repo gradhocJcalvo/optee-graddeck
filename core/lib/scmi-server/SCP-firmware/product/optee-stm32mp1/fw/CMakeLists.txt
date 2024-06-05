@@ -9,6 +9,8 @@
 # Create the firmware target.
 #
 
+set (CFG_SCPFW_MOD_PSU_OPTEE_REGULATOR n)
+
 add_library(${SCP_FIRMWARE_TARGET})
 
 # cmake-lint: disable=E1122
