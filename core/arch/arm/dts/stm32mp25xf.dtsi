@@ -11,6 +11,7 @@
 		interrupts = <GIC_SPI 144 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&rcc CK_BUS_CRYP1>;
 		resets = <&rcc CRYP1_R>;
+		access-controllers = <&rifsc STM32MP25_RIFSC_CRYP1_ID 0>;
 		status = "disabled";
 	};
 
@@ -21,6 +22,7 @@
 		clocks = <&rcc CK_BUS_SAES>, <&rcc CK_BUS_RNG>;
 		clock-names = "bus", "rng";
 		resets = <&rcc SAES_R>;
+		access-controllers = <&rifsc STM32MP25_RIFSC_SAES_ID 0>;
 		status = "disabled";
 	};
 
@@ -31,6 +33,7 @@
 		clocks = <&rcc CK_BUS_PKA>,  <&rcc CK_BUS_RNG>;
 		clock-names = "bus", "rng";
 		resets = <&rcc PKA_R>;
+		access-controllers = <&rifsc STM32MP25_RIFSC_PKA_ID 0>;
 		status = "disabled";
 	};
 };
