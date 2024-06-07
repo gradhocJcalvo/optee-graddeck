@@ -7,8 +7,8 @@
 #include <config.h>
 #include <drivers/clk.h>
 #include <drivers/clk_dt.h>
+#include <drivers/firewall_device.h>
 #include <drivers/rstctrl.h>
-#include <drivers/stm32_firewall.h>
 #include <drivers/stm32_gpio.h>
 #include <io.h>
 #include <kernel/boot.h>
@@ -57,6 +57,7 @@
 #define OSPI_NB_RESET			U(2)
 #define OSPI_TIMEOUT_US_1MS		U(1000)
 #define OSPI_RESET_DELAY		U(2)
+#define OSPI_NB_RISUP			U(5)
 
 struct stm32_mm_region {
 	paddr_t start;
@@ -75,8 +76,7 @@ struct stm32_omm_pdata {
 	struct pinctrl_state *pinctrl_s;
 	struct stm32_ospi_pdata ospi_d[OSPI_NB];
 	struct stm32_mm_region region;
-	void *firewall_dt_config;
-	int firewall_nb_config;
+	struct firewall_query *firewall_confs[OSPI_NB_RISUP];
 	vaddr_t base;
 	uint32_t mux;
 	uint32_t cssel_ovr;
@@ -128,15 +128,11 @@ static TEE_Result stm32_omm_parse_fdt(const void *fdt, int node)
 	if (res && res != TEE_ERROR_ITEM_NOT_FOUND)
 		return res;
 
-	res = stm32_firewall_get_data_config(virt_to_phys((void *)omm_d->base),
-					     0, fdt, node,
-					     &omm_d->firewall_nb_config,
-					     &omm_d->firewall_dt_config);
-	if (res) {
-		if (res == TEE_ERROR_ITEM_NOT_FOUND)
-			res = TEE_ERROR_DEFER_DRIVER_INIT;
-
-		return res;
+	for (i = 0; i < OSPI_NB_RISUP; i++) {
+		res = firewall_dt_get_by_index(fdt, node, i,
+					       &omm_d->firewall_confs[i]);
+		if (res)
+			return res;
 	}
 
 	omm_d->mux = fdt_read_uint32_default(fdt, node, "st,omm-mux", 0);
@@ -332,15 +328,17 @@ static void stm32_omm_configure(void)
 
 static void stm32_omm_setup(void)
 {
+	unsigned int i = 0;
+
 	stm32_omm_set_mm();
 	stm32_omm_configure();
 	if (omm_d->pinctrl_d)
 		pinctrl_apply_state(omm_d->pinctrl_d);
 
-	if (stm32_firewall_set_data_config(virt_to_phys((void *)omm_d->base),
-					   0, omm_d->firewall_nb_config,
-					   omm_d->firewall_dt_config))
-		panic();
+	for (i = 0; i < OSPI_NB_RISUP; i++) {
+		if (firewall_set_configuration(omm_d->firewall_confs[i]))
+			panic();
+	}
 }
 
 static void stm32_omm_suspend(void)
@@ -384,11 +382,6 @@ static TEE_Result stm32_omm_probe(const void *fdt, int node,
 	return TEE_SUCCESS;
 
 err_free:
-	if (stm32_firewall_put_data_config(virt_to_phys((void *)omm_d->base),
-					   0, omm_d->firewall_nb_config,
-					   omm_d->firewall_dt_config))
-		panic();
-
 	free(omm_d);
 
 	return res;
