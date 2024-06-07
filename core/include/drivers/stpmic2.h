@@ -7,6 +7,7 @@
 #define __DRIVERS_STPMIC2_H
 
 #include <kernel/interrupt.h>
+#include <drivers/regulator.h>
 #include <drivers/stm32_i2c.h>
 #include <dt-bindings/mfd/st,stpmic2.h>
 #include <util.h>
@@ -370,5 +371,13 @@ enum itr_return stpmic2_irq_callback(struct stpmic2 *pmic, uint8_t it_id);
 TEE_Result stpmic2_set_irq_mask(struct stpmic2 *pmic, uint8_t num, bool state);
 TEE_Result stpmic2_irq_gen(struct stpmic2 *pmic, uint8_t num);
 int stpmic2_handle_irq(struct stpmic2 *pmic);
+
+size_t plat_pmic2_get_lp_mode_count(void);
+const char *plat_pmic2_get_lp_mode_name(int mode);
+
+TEE_Result plat_pmic2_supplied_init(struct regulator *regulator);
+
+TEE_Result stm32_pmic2_apply_pm_state(struct regulator *regulator,
+				      uint8_t mode);
 
 #endif /*__DRIVERS_STPMIC2_H*/

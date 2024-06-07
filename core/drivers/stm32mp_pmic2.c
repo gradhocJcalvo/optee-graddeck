@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: BSD-3-Clause
 /*
- * Copyright (c) 2022-2023, STMicroelectronics
+ * Copyright (c) 2022-2024, STMicroelectronics
  */
 
 #include <config.h>
 #include <drivers/regulator.h>
 #include <drivers/stm32_exti.h>
 #include <drivers/stm32_i2c.h>
+#if defined(CFG_STM32MP25) || defined(CFG_STM32MP23) || defined(CFG_STM32MP21)
 #include <drivers/stm32mp25_pwr.h>
+#else
+#include <drivers/stm32mp1_pwr.h>
+#endif
 #include <drivers/stpmic2.h>
 #include <kernel/boot.h>
 #include <kernel/delay.h>
@@ -29,51 +33,10 @@
 
 static bool stm32_pmic2;
 
-/*
- * Low power configurations:
- *
- * STM32_PM_DEFAULT
- *   "default" sub nodes in device-tree
- *   is applied at probe, and re-applied at PM resume.
- *   should support STOP1, LP-STOP1, STOP2, LP-STOP2
- *
- * STM32_PM_LPLV
- *   "lplv" sub nodes in device-tree
- *   should support STOP1, LPLV-STOP1, STOP2, LPLV-STOP2
- *
- * STM32_PM_STANDBY
- *   "standby" sub nodes in device-tree
- *   should support STANDBY1-DDR-SR
- *   is applied in pm suspend call back
- *
- * STM32_PM_OFF
- *   "off" sub nodes in device-tree
- *   should support STANDBY-DDR-OFF mode
- *   and should be applied before shutdown
- *
- */
-#define STM32_PM_DEFAULT		0
-#define STM32_PM_LPLV			1
-#define STM32_PM_STANDBY		2
-#define STM32_PM_OFF			3
-#define STM32_PM_NB_SOC_MODES		4
-
 #define STPMIC2_LP_STATE_OFF		BIT(0)
 #define STPMIC2_LP_STATE_ON		BIT(1)
 #define STPMIC2_LP_STATE_UNMODIFIED	BIT(2)
 #define STPMIC2_LP_STATE_SET_VOLT	BIT(3)
-
-/*
- * struct pmic_compat_data - pmic specificity helper
- * @desc_table: description table of each regulator
- * @desc_len: len of the description table
- * @ref_id: value of PMIC_REF_ID in PRODUCT_ID_SR
- */
-struct pmic_compat_data {
-	const struct regu_dt_desc *desc_table;
-	size_t desc_len;
-	uint8_t ref_id;
-};
 
 /*
  * struct pmic_regu - STPMIC2 regulator instance
@@ -90,10 +53,22 @@ struct pmic_regu {
 	struct stpmic2 *pmic;
 	uint32_t id;
 	int bypass_uv;
-	uint8_t lp_state[STM32_PM_NB_SOC_MODES];
-	int lp_level_uv[STM32_PM_NB_SOC_MODES];
+	uint8_t *lp_state;
+	int *lp_level_uv;
 	struct regulator_voltages_desc levels_desc;
 	int *levels;
+};
+
+/*
+ * struct pmic_compat_data - pmic specificity helper
+ * @desc_table: description table of each regulator
+ * @desc_len: len of the description table
+ * @ref_id: value of PMIC_REF_ID in PRODUCT_ID_SR
+ */
+struct pmic_compat_data {
+	const struct regu_dt_desc *desc_table;
+	size_t desc_len;
+	uint8_t ref_id;
 };
 
 /*
@@ -132,31 +107,6 @@ static const struct regu_dt_property prop_table[] = {
 		.prop = STPMIC2_ALTERNATE_INPUT_SOURCE,
 	},
 };
-
-/*
- * Local platform PM states helper functions
- */
-static size_t plat_get_lp_mode_count(void)
-{
-	return STM32_PM_NB_SOC_MODES;
-}
-
-static const char *plat_get_lp_mode_name(int mode)
-{
-	switch (mode) {
-	case STM32_PM_DEFAULT:
-		return "default";
-	case STM32_PM_LPLV:
-		return "lplv";
-	case STM32_PM_STANDBY:
-		return "standby";
-	case STM32_PM_OFF:
-		return "off";
-	default:
-		EMSG("Invalid lp mode %d", mode);
-		panic();
-	}
-}
 
 static void lock_unlock(bool lock_not_unlock)
 {
@@ -386,7 +336,7 @@ static TEE_Result pmic_list_voltages(struct regulator *regulator,
 	return TEE_SUCCESS;
 }
 
-static TEE_Result apply_pm_state(struct regulator *regulator, uint8_t mode)
+TEE_Result stm32_pmic2_apply_pm_state(struct regulator *regulator, uint8_t mode)
 {
 	struct pmic_regu *regu = regulator->priv;
 	uint8_t state = regu->lp_state[mode];
@@ -420,37 +370,6 @@ static TEE_Result apply_pm_state(struct regulator *regulator, uint8_t mode)
 	}
 
 	return TEE_SUCCESS;
-}
-
-static TEE_Result pmic_regu_pm(enum pm_op op, uint32_t pm_hint,
-			       const struct pm_callback_handle *pm_handle)
-{
-	struct regulator *regulator = pm_handle->handle;
-	unsigned int pwrlvl = PM_HINT_PLATFORM_STATE(pm_hint);
-	uint8_t mode = STM32_PM_DEFAULT;
-
-	if (op == PM_OP_SUSPEND) {
-		/* configure PMIC level according MAX PM domain OFF */
-		switch (pwrlvl) {
-		case PM_D1_LEVEL:
-		case PM_D2_LEVEL:
-			mode = STM32_PM_LPLV;
-			break;
-		case PM_D2_LPLV_LEVEL:
-			mode = STM32_PM_STANDBY;
-			break;
-		case PM_MAX_LEVEL:
-			mode = STM32_PM_OFF;
-			break;
-		default:
-			mode = STM32_PM_DEFAULT;
-			break;
-		}
-	} else if (op == PM_OP_RESUME) {
-		mode = STM32_PM_DEFAULT;
-	}
-
-	return apply_pm_state(regulator, mode);
 }
 
 static TEE_Result pmic_init(struct regulator *regulator)
@@ -501,21 +420,16 @@ static TEE_Result pmic_supplied_init(struct regulator *regulator,
 			return res;
 	}
 
-	res = apply_pm_state(regulator, STM32_PM_DEFAULT);
+	res = plat_pmic2_supplied_init(regulator);
 	if (res) {
-		EMSG("Failed to prepare regu suspend %s",
-		     regulator_name(regulator));
 		free(regu);
 		return res;
 	}
 
-	register_pm_core_service_cb(pmic_regu_pm, regulator,
-				    regulator_name(regulator));
-
 	return TEE_SUCCESS;
 }
 
-static const struct regulator_ops pmic_regu_ops = {
+const struct regulator_ops pmic2_regu_ops = {
 	.set_state = pmic_set_state,
 	.get_state = pmic_get_state,
 	.set_voltage = pmic_set_voltage,
@@ -525,75 +439,12 @@ static const struct regulator_ops pmic_regu_ops = {
 	.supplied_init = pmic_supplied_init,
 };
 
-static const struct regulator_ops pmic_switch_ops = {
+const struct regulator_ops pmic2_switch_ops = {
 	.set_state = pmic_set_state,
 	.get_state = pmic_get_state,
 	.init = pmic_init,
 	.supplied_init = pmic_supplied_init,
 };
-
-#define DEFINE_REGU(_name) { \
-		.name = (_name), \
-		.ops = &pmic_regu_ops, \
-	}
-
-#define DEFINE_SWITCH(_name) { \
-		.name = (_name), \
-		.ops = &pmic_switch_ops, \
-	}
-
-static const struct regu_dt_desc pmic25_reguls[] = {
-	DEFINE_REGU("buck1"),
-	DEFINE_REGU("buck2"),
-	DEFINE_REGU("buck3"),
-	DEFINE_REGU("buck4"),
-	DEFINE_REGU("buck5"),
-	DEFINE_REGU("buck6"),
-	DEFINE_REGU("buck7"),
-	DEFINE_REGU("ldo1"),
-	DEFINE_REGU("ldo2"),
-	DEFINE_REGU("ldo3"),
-	DEFINE_REGU("ldo4"),
-	DEFINE_REGU("ldo5"),
-	DEFINE_REGU("ldo6"),
-	DEFINE_REGU("ldo7"),
-	DEFINE_REGU("ldo8"),
-	DEFINE_SWITCH("refddr"),
-};
-DECLARE_KEEP_PAGER(pmic25_reguls);
-
-static const struct regu_dt_desc pmic1l_reguls[] = {
-	DEFINE_REGU("buck1"),
-	DEFINE_REGU("buck1h"),
-	DEFINE_REGU("buck2"),
-	DEFINE_REGU("ldo2"),
-	DEFINE_REGU("ldo3"),
-	DEFINE_REGU("ldo4"),
-	DEFINE_REGU("ldo5"),
-	DEFINE_SWITCH("gpo1"),
-	DEFINE_SWITCH("gpo2"),
-};
-DECLARE_KEEP_PAGER(pmic1l_reguls);
-
-static const struct regu_dt_desc pmic2l_reguls[] = {
-	DEFINE_REGU("buck1"),
-	DEFINE_REGU("buck1h"),
-	DEFINE_REGU("buck2"),
-	DEFINE_REGU("buck3"),
-	DEFINE_REGU("ldo1"),
-	DEFINE_REGU("ldo2"),
-	DEFINE_REGU("ldo3"),
-	DEFINE_REGU("ldo4"),
-	DEFINE_REGU("ldo5"),
-	DEFINE_REGU("ldo6"),
-	DEFINE_REGU("ldo7"),
-	DEFINE_SWITCH("gpo1"),
-	DEFINE_SWITCH("gpo2"),
-	DEFINE_SWITCH("gpo3"),
-	DEFINE_SWITCH("gpo4"),
-	DEFINE_SWITCH("gpo5"),
-};
-DECLARE_KEEP_PAGER(pmic2l_reguls);
 
 static void pmic_parse_regu_node(struct regu_dt_desc *regu_desc,
 				 const void *fdt, int node)
@@ -643,11 +494,10 @@ static void parse_low_power_mode(const void *fdt, int node,
 static void parse_low_power_modes(const void *fdt, int node,
 				  struct regu_dt_desc *regu_desc)
 {
-	const size_t lp_mode_count = plat_get_lp_mode_count();
 	unsigned int mode = 0;
 
-	for (mode = 0; mode < lp_mode_count; mode++) {
-		const char *lp_mode_name = plat_get_lp_mode_name(mode);
+	for (mode = 0; mode < plat_pmic2_get_lp_mode_count(); mode++) {
+		const char *lp_mode_name = plat_pmic2_get_lp_mode_name(mode);
 
 		if (lp_mode_name) {
 			int n = 0;
@@ -711,6 +561,22 @@ static TEE_Result register_pmic_regulator(const void *fdt, struct stpmic2 *pmic,
 
 	regu->pmic = pmic;
 	regu->id = id;
+
+	regu->lp_state = calloc(plat_pmic2_get_lp_mode_count(),
+				sizeof(*regu));
+	if (!regu->lp_state) {
+		free(regu);
+		return TEE_ERROR_OUT_OF_MEMORY;
+	}
+
+	regu->lp_level_uv = calloc(plat_pmic2_get_lp_mode_count(),
+				   sizeof(*regu));
+	if (!regu->lp_level_uv) {
+		free(regu->lp_state);
+		free(regu);
+		return TEE_ERROR_OUT_OF_MEMORY;
+	}
+
 	desc.priv = regu;
 
 	pmic_parse_regu_node(&desc, fdt, node);
@@ -718,6 +584,8 @@ static TEE_Result register_pmic_regulator(const void *fdt, struct stpmic2 *pmic,
 	res = regulator_dt_register(fdt, node, parent_node, &desc);
 	if (res) {
 		EMSG("Failed to register %s", regu_name);
+		free(regu->lp_level_uv);
+		free(regu->lp_state);
 		free(regu);
 		return res;
 	}
@@ -820,6 +688,7 @@ static TEE_Result initialize_pmic2_irq(const void *fdt, int node,
 
 		it = fdt32_to_cpu(*cuint) - 1;
 
+#if defined(CFG_STM32MP25) || defined(CFG_STM32MP23) || defined(CFG_STM32MP21)
 		res = stm32mp25_pwr_itr_alloc_add(fdt, wakeup_parent_node, it,
 						  stpmic2_irq_handler,
 						  PWR_WKUP_FLAG_FALLING |
@@ -829,6 +698,18 @@ static TEE_Result initialize_pmic2_irq(const void *fdt, int node,
 			return res;
 
 		stm32mp25_pwr_itr_enable(hdl->it);
+#else
+		res = stm32mp1_pwr_itr_alloc_add(fdt, wakeup_parent_node, it,
+						 stpmic2_irq_handler,
+						 PWR_WKUP_FLAG_FALLING |
+						 PWR_WKUP_FLAG_THREADED,
+						 pmic, &hdl);
+		if (res)
+			return res;
+
+		stm32mp1_pwr_itr_enable(hdl->it);
+
+#endif
 	}
 
 	notif_ids = fdt_getprop(fdt, node, "st,notif-it-id", &nb_notif);
@@ -979,6 +860,69 @@ static TEE_Result stm32_pmic2_probe(const void *fdt, int node,
 	return TEE_SUCCESS;
 }
 
+#define DEFINE_REGU(_name) { \
+		.name = (_name), \
+		.ops = &pmic2_regu_ops, \
+	}
+
+#define DEFINE_SWITCH(_name) { \
+		.name = (_name), \
+		.ops = &pmic2_switch_ops, \
+	}
+
+const struct regu_dt_desc pmic25_reguls[] = {
+	DEFINE_REGU("buck1"),
+	DEFINE_REGU("buck2"),
+	DEFINE_REGU("buck3"),
+	DEFINE_REGU("buck4"),
+	DEFINE_REGU("buck5"),
+	DEFINE_REGU("buck6"),
+	DEFINE_REGU("buck7"),
+	DEFINE_REGU("ldo1"),
+	DEFINE_REGU("ldo2"),
+	DEFINE_REGU("ldo3"),
+	DEFINE_REGU("ldo4"),
+	DEFINE_REGU("ldo5"),
+	DEFINE_REGU("ldo6"),
+	DEFINE_REGU("ldo7"),
+	DEFINE_REGU("ldo8"),
+	DEFINE_SWITCH("refddr"),
+};
+DECLARE_KEEP_PAGER(pmic25_reguls);
+
+const struct regu_dt_desc pmic1l_reguls[] = {
+	DEFINE_REGU("buck1"),
+	DEFINE_REGU("buck1h"),
+	DEFINE_REGU("buck2"),
+	DEFINE_REGU("ldo2"),
+	DEFINE_REGU("ldo3"),
+	DEFINE_REGU("ldo4"),
+	DEFINE_REGU("ldo5"),
+	DEFINE_SWITCH("gpo1"),
+	DEFINE_SWITCH("gpo2"),
+};
+DECLARE_KEEP_PAGER(pmic1l_reguls);
+
+const struct regu_dt_desc pmic2l_reguls[] = {
+	DEFINE_REGU("buck1"),
+	DEFINE_REGU("buck1h"),
+	DEFINE_REGU("buck2"),
+	DEFINE_REGU("buck3"),
+	DEFINE_REGU("ldo1"),
+	DEFINE_REGU("ldo2"),
+	DEFINE_REGU("ldo3"),
+	DEFINE_REGU("ldo4"),
+	DEFINE_REGU("ldo5"),
+	DEFINE_REGU("ldo6"),
+	DEFINE_REGU("ldo7"),
+	DEFINE_SWITCH("gpo1"),
+	DEFINE_SWITCH("gpo2"),
+	DEFINE_SWITCH("gpo3"),
+	DEFINE_SWITCH("gpo4"),
+	DEFINE_SWITCH("gpo5"),
+};
+DECLARE_KEEP_PAGER(pmic2l_reguls);
+
 static const struct pmic_compat_data stm32_pmic25_cdata = {
 	.desc_table = pmic25_reguls,
 	.desc_len = ARRAY_SIZE(pmic25_reguls),
@@ -1018,8 +962,9 @@ DEFINE_DT_DRIVER(stm32_pmic2_dt_driver) = {
 	.match_table = stm32_pmic2_match_table,
 	.probe = stm32_pmic2_probe,
 };
-
+#if defined(CFG_STM32MP25) || defined(CFG_STM32MP23) || defined(CFG_STM32MP21)
 bool stm32_pmic2_is_present(void)
 {
 	return stm32_pmic2;
 }
+#endif

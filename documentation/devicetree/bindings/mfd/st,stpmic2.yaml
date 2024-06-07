@@ -122,14 +122,21 @@ properties:
             $ref: /schemas/types.yaml#/definitions/flag
 
         patternProperties:
-          regulator-state-(default|lplv|standby|off):
+          "^(default|lplv|standby|off|lp-stop|lplv-stop|lplv-stop2|standby-ddr-sr|standby-ddr-off)$":
             type: object
             description:
               sub-nodes for regulator low power states.
-              default is applied for STOP1, LP-STOP1, STOP2, LP-STOP2
-              lplv is applied for LPLV-STOP1, LPLV-STOP2
-              standby is applied for STANDBY1-DDR-SR
-              off is applied for STANDBY-DDR-OFF
+              On STM32MP1:
+                lp-stop is applied for LP-STOP
+                lplv-stop is applied for LPLV-STOP
+                lplv-stop2 is applied for LPLV-STOP2
+                standby-ddr-sr is applied for STANDBY-DDR-SR
+                standby-ddr-off is applied before shutdown
+              On STM32MP2:
+                default is applied for STOP1, LP-STOP1, STOP2, LP-STOP2
+                lplv is applied for LPLV-STOP1, LPLV-STOP2
+                standby is applied for STANDBY1-DDR-SR
+                off is applied for STANDBY-DDR-OFF
 
             properties:
               regulator-on-in-suspend:
