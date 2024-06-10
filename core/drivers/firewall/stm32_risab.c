@@ -82,8 +82,8 @@ struct stm32_risab_pdata {
 	struct clk *clock;
 	struct mem_region region_cfged;
 	struct stm32_risab_rif_conf *subr_cfg;
+	struct io_pa_va base;
 	char risab_name[20];
-	uintptr_t base;
 	uint32_t pages_configured;
 	bool srwiad;
 
@@ -95,20 +95,27 @@ static SLIST_HEAD(, stm32_risab_pdata) risab_list =
 
 static bool is_tdcid;
 
+static vaddr_t risab_base(struct stm32_risab_pdata *risab)
+{
+	return io_pa_or_va_secure(&risab->base, 1);
+}
+
 void stm32_risab_clear_illegal_access_flags(void)
 {
 	struct stm32_risab_pdata *risab = NULL;
 
 	SLIST_FOREACH(risab, &risab_list, link) {
+		vaddr_t base = risab_base(risab);
+
 		if (clk_enable(risab->clock))
 			panic("Can't enable RISAB clock");
 
-		if (!io_read32(risab->base + _RISAB_IASR)) {
+		if (!io_read32(base + _RISAB_IASR)) {
 			clk_disable(risab->clock);
 			continue;
 		}
 
-		io_write32(risab->base + _RISAB_IACR, _RISAB_IACR_CAEF |
+		io_write32(base + _RISAB_IACR, _RISAB_IACR_CAEF |
 			   _RISAB_IACR_IAEF);
 
 		clk_disable(risab->clock);
@@ -121,11 +128,13 @@ void stm32_risab_dump_erroneous_data(void)
 	struct stm32_risab_pdata *risab = NULL;
 
 	SLIST_FOREACH(risab, &risab_list, link) {
+		vaddr_t base = risab_base(risab);
+
 		if (clk_enable(risab->clock))
 			panic("Can't enable RISAB clock");
 
 		/* Check if faulty address on this RISAB */
-		if (!io_read32(risab->base + _RISAB_IASR)) {
+		if (!io_read32(base + _RISAB_IASR)) {
 			clk_disable(risab->clock);
 			continue;
 		}
@@ -133,10 +142,10 @@ void stm32_risab_dump_erroneous_data(void)
 		EMSG("\n\nDUMPING DATA FOR %s\n\n", risab->risab_name);
 		EMSG("=====================================================");
 		EMSG("Status register (IAESR): %#x",
-		     io_read32(risab->base + _RISAB_IAESR));
+		     io_read32(base + _RISAB_IAESR));
 		EMSG("-----------------------------------------------------");
 		EMSG("Faulty address (IADDR): %#x",
-		     io_read32(risab->base + _RISAB_IADDR));
+		     io_read32(base + _RISAB_IADDR));
 
 		EMSG("=====================================================\n");
 
@@ -149,7 +158,7 @@ static bool regs_access_granted(struct stm32_risab_pdata *risab_d,
 				unsigned int reg_idx)
 {
 	unsigned int first_page = risab_d->subr_cfg[reg_idx].first_page;
-	uint32_t cidcfgr = io_read32(risab_d->base +
+	uint32_t cidcfgr = io_read32(risab_base(risab_d) +
 				     _RISAB_PGy_CIDCFGR(first_page));
 
 	/* Trusted CID access */
@@ -172,13 +181,14 @@ static bool regs_access_granted(struct stm32_risab_pdata *risab_d,
 static void set_block_seccfgr(struct stm32_risab_pdata *risab_d,
 			      unsigned int reg_idx)
 {
+	vaddr_t base = risab_base(risab_d);
 	unsigned int i = 0;
 	unsigned int first_page = risab_d->subr_cfg[reg_idx].first_page;
 	unsigned int last_page = first_page +
 				 risab_d->subr_cfg[reg_idx].nb_pages_cfged - 1;
 
 	for (i = first_page; i <= last_page; i++)
-		io_clrsetbits32(risab_d->base + _RISAB_PGy_SECCFGR(i),
+		io_clrsetbits32(base + _RISAB_PGy_SECCFGR(i),
 				_RISAB_PG_SECCFGR_MASK,
 				risab_d->subr_cfg[reg_idx].seccfgr);
 }
@@ -186,13 +196,14 @@ static void set_block_seccfgr(struct stm32_risab_pdata *risab_d,
 static void set_block_dprivcfgr(struct stm32_risab_pdata *risab_d,
 				unsigned int reg_idx)
 {
+	vaddr_t base = risab_base(risab_d);
 	unsigned int i = 0;
 	unsigned int first_page = risab_d->subr_cfg[reg_idx].first_page;
 	unsigned int last_page = first_page +
 				 risab_d->subr_cfg[reg_idx].nb_pages_cfged - 1;
 
 	for (i = first_page; i <= last_page; i++)
-		io_clrsetbits32(risab_d->base + _RISAB_PGy_PRIVCFGR(i),
+		io_clrsetbits32(base + _RISAB_PGy_PRIVCFGR(i),
 				_RISAB_PG_PRIVCFGR_MASK,
 				risab_d->subr_cfg[reg_idx].dprivcfgr);
 }
@@ -200,6 +211,7 @@ static void set_block_dprivcfgr(struct stm32_risab_pdata *risab_d,
 static void set_cidcfgr(struct stm32_risab_pdata *risab_d,
 			unsigned int reg_idx)
 {
+	vaddr_t base = risab_base(risab_d);
 	unsigned int i = 0;
 	unsigned int first_page = risab_d->subr_cfg[reg_idx].first_page;
 	unsigned int last_page = first_page +
@@ -211,7 +223,7 @@ static void set_cidcfgr(struct stm32_risab_pdata *risab_d,
 		 * configuration. Clearing previous configuration prevents
 		 * undesired events during the only legitimate configuration.
 		 */
-		io_clrsetbits32(risab_d->base + _RISAB_PGy_CIDCFGR(i),
+		io_clrsetbits32(base + _RISAB_PGy_CIDCFGR(i),
 				_RISAB_PG_CIDCFGR_CONF_MASK,
 				risab_d->subr_cfg[reg_idx].cidcfgr);
 	}
@@ -220,6 +232,7 @@ static void set_cidcfgr(struct stm32_risab_pdata *risab_d,
 static void set_read_conf(struct stm32_risab_pdata *risab_d,
 			  unsigned int reg_idx)
 {
+	vaddr_t base = risab_base(risab_d);
 	unsigned int i = 0;
 	unsigned int first_page = risab_d->subr_cfg[reg_idx].first_page;
 	unsigned int last_page = first_page +
@@ -228,8 +241,7 @@ static void set_read_conf(struct stm32_risab_pdata *risab_d,
 
 	for (i = 0; i < RISAB_NB_MAX_CID_SUPPORTED; i++) {
 		if (risab_d->subr_cfg[reg_idx].rlist[i])
-			io_clrsetbits32(risab_d->base + _RISAB_CIDxRDCFGR(i),
-					mask,
+			io_clrsetbits32(base + _RISAB_CIDxRDCFGR(i), mask,
 					risab_d->subr_cfg[reg_idx].rlist[i]);
 	}
 }
@@ -237,6 +249,7 @@ static void set_read_conf(struct stm32_risab_pdata *risab_d,
 static void set_write_conf(struct stm32_risab_pdata *risab_d,
 			   unsigned int reg_idx)
 {
+	vaddr_t base = risab_base(risab_d);
 	unsigned int i = 0;
 	unsigned int first_page = risab_d->subr_cfg[reg_idx].first_page;
 	unsigned int last_page = first_page +
@@ -245,8 +258,7 @@ static void set_write_conf(struct stm32_risab_pdata *risab_d,
 
 	for (i = 0; i < RISAB_NB_MAX_CID_SUPPORTED; i++) {
 		if (risab_d->subr_cfg[reg_idx].wlist[i])
-			io_clrsetbits32(risab_d->base + _RISAB_CIDxWRCFGR(i),
-					mask,
+			io_clrsetbits32(base + _RISAB_CIDxWRCFGR(i), mask,
 					risab_d->subr_cfg[reg_idx].wlist[i]);
 	}
 }
@@ -254,6 +266,7 @@ static void set_write_conf(struct stm32_risab_pdata *risab_d,
 static void set_cid_priv_conf(struct stm32_risab_pdata *risab_d,
 			      unsigned int reg_idx)
 {
+	vaddr_t base = risab_base(risab_d);
 	unsigned int i = 0;
 	unsigned int first_page = risab_d->subr_cfg[reg_idx].first_page;
 	unsigned int last_page = first_page +
@@ -262,14 +275,14 @@ static void set_cid_priv_conf(struct stm32_risab_pdata *risab_d,
 
 	for (i = 0; i < RISAB_NB_MAX_CID_SUPPORTED; i++) {
 		if (risab_d->subr_cfg[reg_idx].plist[i])
-			io_clrsetbits32(risab_d->base + _RISAB_CIDxPRIVCFGR(i),
-					mask,
+			io_clrsetbits32(base + _RISAB_CIDxPRIVCFGR(i), mask,
 					risab_d->subr_cfg[reg_idx].plist[i]);
 	}
 }
 
 static void apply_rif_config(struct stm32_risab_pdata *risab_d)
 {
+	vaddr_t base = risab_base(risab_d);
 	unsigned int i = 0;
 
 	if (clk_enable(risab_d->clock))
@@ -278,20 +291,17 @@ static void apply_rif_config(struct stm32_risab_pdata *risab_d)
 	/* If TDCID, we expect to restore default RISAB configuration */
 	if (is_tdcid) {
 		for (i = 0; i < _RISAB_NB_PAGES_MAX; i++) {
-			io_clrbits32(risab_d->base + _RISAB_PGy_CIDCFGR(i),
+			io_clrbits32(base + _RISAB_PGy_CIDCFGR(i),
 				     _RISAB_PG_CIDCFGR_CONF_MASK);
-			io_clrbits32(risab_d->base + _RISAB_PGy_SECCFGR(i),
+			io_clrbits32(base + _RISAB_PGy_SECCFGR(i),
 				     _RISAB_PG_SECCFGR_MASK);
-			io_clrbits32(risab_d->base + _RISAB_PGy_PRIVCFGR(i),
+			io_clrbits32(base + _RISAB_PGy_PRIVCFGR(i),
 				     _RISAB_PG_PRIVCFGR_MASK);
 		}
 		for (i = 0; i < RISAB_NB_MAX_CID_SUPPORTED; i++) {
-			io_clrbits32(risab_d->base + _RISAB_CIDxRDCFGR(i),
-				     UINT32_MAX);
-			io_clrbits32(risab_d->base + _RISAB_CIDxWRCFGR(i),
-				     UINT32_MAX);
-			io_clrbits32(risab_d->base + _RISAB_CIDxPRIVCFGR(i),
-				     UINT32_MAX);
+			io_clrbits32(base + _RISAB_CIDxRDCFGR(i), UINT32_MAX);
+			io_clrbits32(base + _RISAB_CIDxWRCFGR(i), UINT32_MAX);
+			io_clrbits32(base + _RISAB_CIDxPRIVCFGR(i), UINT32_MAX);
 		}
 	}
 
@@ -414,14 +424,12 @@ static TEE_Result parse_dt(const void *fdt, int node,
 	const fdt32_t *cuint = NULL;
 	const fdt32_t *mem_regions = NULL;
 	struct dt_node_info info = {};
-	struct io_pa_va addr = {};
 
 	fdt_fill_device_info(fdt, &info, node);
 	assert(info.reg != DT_INFO_INVALID_REG &&
 	       info.reg_size != DT_INFO_INVALID_REG_SIZE);
 
-	addr.pa = info.reg;
-	risab_d->base = io_pa_or_va(&addr, info.reg_size);
+	risab_d->base.pa = info.reg;
 
 	/* Gate the IP */
 	res = clk_dt_get_by_index(fdt, node, 0, &risab_d->clock);
@@ -506,12 +514,12 @@ static TEE_Result parse_dt(const void *fdt, int node,
 static void set_srswiad_conf(struct stm32_risab_pdata *risab_d)
 {
 	if (risab_d->srwiad)
-		io_setbits32(risab_d->base, _RISAB_CR_SRWIAD);
+		io_setbits32(risab_base(risab_d), _RISAB_CR_SRWIAD);
 };
 
 static void clean_iac_regs(struct stm32_risab_pdata *risab_d)
 {
-	io_setbits32(risab_d->base + _RISAB_IACR, GENMASK_32(1, 0));
+	io_setbits32(risab_base(risab_d) + _RISAB_IACR, GENMASK_32(1, 0));
 }
 
 static void set_vderam_syscfg(struct stm32_risab_pdata *risab_d)
@@ -532,7 +540,7 @@ static TEE_Result stm32_risab_pm_resume(struct stm32_risab_pdata *risab)
 	size_t i = 0;
 
 	if (is_tdcid) {
-		if (virt_to_phys((void *)risab->base) == RISAB6_BASE)
+		if (risab->base.pa == RISAB6_BASE)
 			set_vderam_syscfg(risab);
 		set_srswiad_conf(risab);
 		clean_iac_regs(risab);
@@ -567,7 +575,7 @@ static TEE_Result stm32_risab_pm_suspend(struct stm32_risab_pdata *risab)
 
 	for (i = 0; i < risab->nb_regions_cfged; i++) {
 		size_t j = 0;
-		uintptr_t base = risab->base;
+		vaddr_t base = risab_base(risab);
 		unsigned int first_page = risab->subr_cfg[i].first_page;
 
 		/* Save all configuration fields that need to be restored */
@@ -618,8 +626,8 @@ stm32_risab_pm(enum pm_op op, unsigned int pm_hint,
 static TEE_Result stm32_risab_probe(const void *fdt, int node,
 				    const void *compat_data __maybe_unused)
 {
-	TEE_Result res = TEE_ERROR_GENERIC;
 	struct stm32_risab_pdata *risab_d = NULL;
+	TEE_Result res = TEE_ERROR_GENERIC;
 
 	res = stm32_rifsc_check_tdcid(&is_tdcid);
 	if (res)
@@ -637,7 +645,7 @@ static TEE_Result stm32_risab_probe(const void *fdt, int node,
 		panic("Can't enable RISAB clock");
 
 	if (is_tdcid) {
-		if (virt_to_phys((void *)risab_d->base) == RISAB6_BASE)
+		if (risab_d->base.pa == RISAB6_BASE)
 			set_vderam_syscfg(risab_d);
 		clean_iac_regs(risab_d);
 		set_srswiad_conf(risab_d);
