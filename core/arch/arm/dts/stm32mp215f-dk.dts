@@ -6,10 +6,6 @@
 /dts-v1/;
 
 #include <dt-bindings/clock/stm32mp21-clksrc.h>
-#include <dt-bindings/soc/stm32mp21-rifsc.h>
-#include <dt-bindings/soc/stm32mp25-rif.h>
-#include <dt-bindings/soc/stm32mp25-risab.h>
-#include <dt-bindings/soc/stm32mp25-risaf.h>
 #include "stm32mp215.dtsi"
 #include "stm32mp21xf.dtsi"
 #include "stm32mp215f-dk-ca35tdcid-rcc.dtsi"
