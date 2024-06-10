@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <drivers/clk.h>
 #include <drivers/clk_dt.h>
+#include <drivers/firewall.h>
 #include <drivers/stm32_rif.h>
 #include <drivers/stm32_risab.h>
 #include <dt-bindings/soc/stm32mp25-risab.h>
@@ -14,6 +15,7 @@
 #include <kernel/boot.h>
 #include <kernel/dt.h>
 #include <kernel/pm.h>
+#include <kernel/spinlock.h>
 #include <libfdt.h>
 #include <mm/core_memprot.h>
 #include <platform_config.h>
@@ -83,6 +85,7 @@ struct stm32_risab_pdata {
 	struct mem_region region_cfged;
 	struct stm32_risab_rif_conf *subr_cfg;
 	struct io_pa_va base;
+	unsigned int conf_lock;
 	char risab_name[20];
 	uint32_t pages_configured;
 	bool srwiad;
@@ -332,7 +335,7 @@ static void apply_rif_config(struct stm32_risab_pdata *risab_d)
 
 static void parse_risab_rif_conf(struct stm32_risab_pdata *risab_d,
 				 struct stm32_risab_rif_conf *subr_cfg,
-				 uint32_t rif_conf)
+				 uint32_t rif_conf, bool check_overlap)
 {
 	unsigned int first_page = subr_cfg->first_page;
 	unsigned int last_page = first_page + subr_cfg->nb_pages_cfged - 1;
@@ -354,7 +357,8 @@ static void parse_risab_rif_conf(struct stm32_risab_pdata *risab_d,
 		 * attributes can later be dynamically modified but not its
 		 * bounds.
 		 */
-		if (reg_pages_cfged & risab_d->pages_configured)
+		if (check_overlap &&
+		    reg_pages_cfged & risab_d->pages_configured)
 			panic("Memory region overlap detected");
 	} else {
 		subr_cfg->seccfgr = 0;
@@ -363,13 +367,15 @@ static void parse_risab_rif_conf(struct stm32_risab_pdata *risab_d,
 	/* Parse default privilege configuration */
 	if (rif_conf & BIT(RISAB_DPRIV_SHIFT)) {
 		subr_cfg->dprivcfgr = _RISAB_PG_PRIVCFGR_MASK;
-		if (reg_pages_cfged & risab_d->pages_configured)
+		if (check_overlap &&
+		    reg_pages_cfged & risab_d->pages_configured)
 			panic("Memory region overlap detected");
 	} else {
 		subr_cfg->dprivcfgr = 0;
 	}
 
-	risab_d->pages_configured |= reg_pages_cfged;
+	if (check_overlap)
+		risab_d->pages_configured |= reg_pages_cfged;
 
 	for (i = 0; i < RISAB_NB_MAX_CID_SUPPORTED; i++) {
 		/* RISAB compartment priv configuration */
@@ -512,7 +518,8 @@ static TEE_Result parse_dt(const void *fdt, int node,
 		assert((unsigned int)(lenp / sizeof(uint32_t)) == 1);
 
 		parse_risab_rif_conf(risab_d, &risab_d->subr_cfg[i],
-				     fdt32_to_cpu(cuint[0]));
+				     fdt32_to_cpu(cuint[0]),
+				     true /*check_overlap*/);
 	}
 
 	return TEE_SUCCESS;
@@ -540,6 +547,255 @@ static void set_vderam_syscfg(struct stm32_risab_pdata *risab_d)
 				     VDERAMCR_MASK);
 	else
 		stm32mp_syscfg_write(SYSCFG_VDERAMCR, 0, VDERAMCR_MASK);
+}
+
+static struct stm32_risab_rif_conf *
+get_subreg_by_range(struct stm32_risab_pdata *risab, paddr_t paddr, size_t size)
+{
+	unsigned int nb_page = size / _RISAB_PAGE_SIZE;
+	unsigned int i = 0;
+
+	for (i = 0; i < risab->nb_regions_cfged; i++) {
+		unsigned int first_page = (paddr - risab->region_cfged.base) /
+					  _RISAB_PAGE_SIZE;
+
+		if (first_page == risab->subr_cfg[i].first_page &&
+		    nb_page == risab->subr_cfg[i].nb_pages_cfged)
+			return risab->subr_cfg + i;
+	}
+
+	return NULL;
+}
+
+static TEE_Result stm32_risab_check_access(struct firewall_query *fw,
+					   paddr_t paddr, size_t size,
+					   bool read, bool write)
+{
+	struct stm32_risab_rif_conf *reg_conf = NULL;
+	TEE_Result res = TEE_ERROR_ACCESS_DENIED;
+	struct stm32_risab_pdata *risab = NULL;
+	unsigned int first_page = 0;
+	uint32_t write_cids = 0;
+	uint32_t read_cids = 0;
+	uint32_t priv_cids = 0;
+	uint32_t dprivcfgr = 0;
+	uint32_t seccfgr = 0;
+	uint32_t cidcfgr = 0;
+	uint32_t q_conf = 0;
+	unsigned int i = 0;
+	vaddr_t base = 0;
+
+	assert(fw->ctrl->priv && (read || write));
+
+	risab = fw->ctrl->priv;
+	base = risab_base(risab);
+
+	if (!IS_ALIGNED(paddr, _RISAB_PAGE_SIZE) ||
+	    !IS_ALIGNED(size, _RISAB_PAGE_SIZE)) {
+		EMSG("Physical ddress %"PRIxPA" or size:%#zx misaligned with RISAB page boundaries",
+		     paddr, size);
+		return TEE_ERROR_BAD_PARAMETERS;
+	}
+
+	if (fw->arg_count != 1)
+		return TEE_ERROR_BAD_PARAMETERS;
+
+	/*
+	 * RISAF region configuration, we assume the query is as
+	 * follows:
+	 * fw->args[0]: Configuration of the region
+	 */
+	q_conf = fw->args[0];
+
+	reg_conf = get_subreg_by_range(risab, paddr, size);
+	if (!reg_conf)
+		return TEE_ERROR_BAD_PARAMETERS;
+
+	first_page = reg_conf->first_page;
+
+	res = clk_enable(risab->clock);
+	if (res)
+		return res;
+
+	seccfgr = io_read32(base + _RISAB_PGy_SECCFGR(first_page));
+	/* Security level is exclusive on memories */
+	if (!!(q_conf & BIT(RISAB_SEC_SHIFT)) ^ !!(seccfgr & BIT(first_page))) {
+		if (!(q_conf & BIT(RISAB_SEC_SHIFT) &&
+		      (io_read32(base + _RISAB_CR) & _RISAB_CR_SRWIAD))) {
+			res = TEE_ERROR_ACCESS_DENIED;
+			goto out;
+		}
+	}
+
+	dprivcfgr = io_read32(base + _RISAB_PGy_PRIVCFGR(first_page));
+	cidcfgr = io_read32(base + _RISAB_PGy_CIDCFGR(first_page));
+
+	if (!(cidcfgr & _RISAB_PG_CIDCFGR_CFEN)) {
+		if (dprivcfgr && !(q_conf & BIT(RISAB_DPRIV_SHIFT))) {
+			res = TEE_ERROR_ACCESS_DENIED;
+			goto out;
+		} else {
+			/* CID filtering is not activated, can safely exit. */
+			res = TEE_SUCCESS;
+			goto out;
+		}
+	}
+
+	read_cids = SHIFT_U32(q_conf & RISAB_RLIST_MASK, RISAB_READ_LIST_SHIFT);
+	write_cids = SHIFT_U32(q_conf & RISAB_WLIST_MASK,
+			       RISAB_WRITE_LIST_SHIFT);
+	priv_cids = q_conf & RISAB_PLIST_MASK;
+
+	for (i = 0; i < RISAB_NB_MAX_CID_SUPPORTED; i++) {
+		uint32_t read_list = io_read32(base + _RISAB_CIDxRDCFGR(i));
+		uint32_t write_list = io_read32(base + _RISAB_CIDxWRCFGR(i));
+		uint32_t priv_list = io_read32(base + _RISAB_CIDxPRIVCFGR(i));
+
+		if (read && (read_cids & BIT(i)) &&
+		    !(read_list & BIT(first_page))) {
+			res = TEE_ERROR_ACCESS_DENIED;
+			goto out;
+		}
+
+		if (write && (write_cids & BIT(i)) &&
+		    !(write_list & BIT(first_page))) {
+			res = TEE_ERROR_ACCESS_DENIED;
+			goto out;
+		}
+
+		if ((priv_list & BIT(first_page)) && !(priv_cids & BIT(i))) {
+			res = TEE_ERROR_ACCESS_DENIED;
+			goto out;
+		}
+	}
+
+	res = TEE_SUCCESS;
+
+out:
+	clk_disable(risab->clock);
+
+	return res;
+}
+
+static TEE_Result stm32_risab_reconfigure_region(struct firewall_query *fw,
+						 paddr_t paddr, size_t size)
+{
+	struct stm32_risab_rif_conf reg_conf = { };
+	struct stm32_risab_pdata *risab = NULL;
+	TEE_Result res = TEE_ERROR_GENERIC;
+	paddr_t sub_region_offset = 0;
+	unsigned int first_page = 0;
+	uint32_t old_cidcfgr = 0;
+	uint32_t exceptions = 0;
+	uint32_t old_dpriv = 0;
+	unsigned int i = 0;
+
+	assert(fw->ctrl->priv);
+
+	risab = fw->ctrl->priv;
+
+	if (!IS_ALIGNED(paddr, _RISAB_PAGE_SIZE) ||
+	    !IS_ALIGNED(size, _RISAB_PAGE_SIZE)) {
+		EMSG("Physical ddress %"PRIxPA" or size:%#zx misaligned with RISAB page boundaries",
+		     paddr, size);
+		return TEE_ERROR_BAD_PARAMETERS;
+	}
+
+	if (fw->arg_count != 1)
+		return TEE_ERROR_BAD_PARAMETERS;
+
+	/*
+	 * Get the sub region offset and check if it is not out
+	 * of bounds
+	 */
+	sub_region_offset = paddr - risab->region_cfged.base;
+	assert(sub_region_offset < (risab->region_cfged.base +
+	       risab->region_cfged.size));
+
+	/*
+	 * RISAF region configuration, we assume the query is as
+	 * follows:
+	 * fw->args[0]: Configuration of the region
+	 */
+	for (i = 0; i < risab->nb_regions_cfged; i++) {
+		if (sub_region_offset / _RISAB_PAGE_SIZE !=
+		    risab->subr_cfg[i].first_page ||
+		    (size / _RISAB_PAGE_SIZE) !=
+		    risab->subr_cfg[i].nb_pages_cfged)
+			continue;
+
+		parse_risab_rif_conf(risab, &risab->subr_cfg[i], fw->args[0],
+				     false /*!check_overlap*/);
+
+		reg_conf = risab->subr_cfg[i];
+		break;
+	}
+
+	if (i == risab->nb_regions_cfged)
+		return TEE_ERROR_BAD_PARAMETERS;
+
+	first_page = risab->subr_cfg[i].first_page;
+	res = clk_enable(risab->clock);
+	if (res)
+		return res;
+
+	DMSG("Reconfiguring %s pages %u-%u: %s, %s, CID attributes: %#"PRIx32", R:%#"PRIx32", W:%#"PRIx32", P:%#"PRIx32"",
+	     risab->risab_name, reg_conf.first_page, reg_conf.first_page +
+	     reg_conf.nb_pages_cfged - 1,
+	     reg_conf.seccfgr ? "Secure" : "Non secure",
+	     reg_conf.dprivcfgr ? "Default priv" : "Default unpriv",
+	     reg_conf.cidcfgr,
+	     fw->args[0] & RISAB_RLIST_MASK,
+	     fw->args[0] & RISAB_WLIST_MASK,
+	     fw->args[0] & RISAB_PLIST_MASK);
+
+	exceptions = cpu_spin_lock_xsave(&risab->conf_lock);
+
+	old_dpriv = io_read32(risab_base(risab) +
+			      _RISAB_PGy_PRIVCFGR(first_page));
+	set_block_dprivcfgr(risab, &reg_conf);
+
+	/* Delegate RIF configuration or not */
+	if (!is_tdcid) {
+		DMSG("Cannot set %s CID configuration for region %u",
+		     risab->risab_name, i);
+	} else {
+		old_cidcfgr = io_read32(risab_base(risab) +
+					_RISAB_PGy_CIDCFGR(first_page));
+		set_cidcfgr(risab, &reg_conf);
+	}
+
+	if (!regs_access_granted(risab, i)) {
+		/* Restore old configuration before returning error */
+		if (is_tdcid) {
+			reg_conf.cidcfgr = old_cidcfgr;
+			set_cidcfgr(risab, &reg_conf);
+		}
+		reg_conf.dprivcfgr = old_dpriv;
+		set_block_dprivcfgr(risab, &reg_conf);
+		cpu_spin_unlock_xrestore(&risab->conf_lock, exceptions);
+		clk_disable(risab->clock);
+		return TEE_ERROR_ACCESS_DENIED;
+	}
+
+	/*
+	 * This sequence will generate an IAC if the CID filtering configuration
+	 * is inconsistent with these desired rights to apply. Start by default
+	 * setting security configuration for all blocks.
+	 */
+	set_block_seccfgr(risab, &reg_conf);
+
+	/* Grant page access to some CIDs, in read and/or write */
+	set_read_conf(risab, &reg_conf);
+	set_write_conf(risab, &reg_conf);
+
+	/* For each granted CID define privilege access per page */
+	set_cid_priv_conf(risab, &reg_conf);
+	cpu_spin_unlock_xrestore(&risab->conf_lock, exceptions);
+
+	clk_disable(risab->clock);
+
+	return TEE_SUCCESS;
 }
 
 static TEE_Result stm32_risab_pm_resume(struct stm32_risab_pdata *risab)
@@ -582,11 +838,11 @@ static TEE_Result stm32_risab_pm_resume(struct stm32_risab_pdata *risab)
 
 static TEE_Result stm32_risab_pm_suspend(struct stm32_risab_pdata *risab)
 {
+	vaddr_t base = risab_base(risab);
 	size_t i = 0;
 
 	for (i = 0; i < risab->nb_regions_cfged; i++) {
 		size_t j = 0;
-		vaddr_t base = risab_base(risab);
 		unsigned int first_page = risab->subr_cfg[i].first_page;
 
 		/* Save all configuration fields that need to be restored */
@@ -634,9 +890,15 @@ stm32_risab_pm(enum pm_op op, unsigned int pm_hint,
 	return res;
 }
 
+static const struct firewall_controller_ops firewall_ops = {
+	.check_memory_access = stm32_risab_check_access,
+	.set_memory_conf = stm32_risab_reconfigure_region,
+};
+
 static TEE_Result stm32_risab_probe(const void *fdt, int node,
 				    const void *compat_data __maybe_unused)
 {
+	struct firewall_controller *controller = NULL;
 	struct stm32_risab_pdata *risab_d = NULL;
 	TEE_Result res = TEE_ERROR_GENERIC;
 
@@ -666,7 +928,22 @@ static TEE_Result stm32_risab_probe(const void *fdt, int node,
 
 	clk_disable(risab_d->clock);
 
+	controller = calloc(1, sizeof(*controller));
+	if (!controller) {
+		res = TEE_ERROR_OUT_OF_MEMORY;
+		goto err;
+	}
+
+	controller->base = &risab_d->base;
+	controller->name = risab_d->risab_name;
+	controller->priv = risab_d;
+	controller->ops = &firewall_ops;
+
 	SLIST_INSERT_HEAD(&risab_list, risab_d, link);
+
+	res = firewall_dt_controller_register(fdt, node, controller);
+	if (res)
+		panic();
 
 	register_pm_core_service_cb(stm32_risab_pm, risab_d, "stm32-risab");
 
