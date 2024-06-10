@@ -8,6 +8,10 @@
 #include <dt-bindings/interrupt-controller/arm-gic.h>
 #include <dt-bindings/regulator/st,stm32mp21-regulator.h>
 #include <dt-bindings/reset/st,stm32mp21-rcc.h>
+#include <dt-bindings/soc/stm32mp21-rifsc.h>
+#include <dt-bindings/soc/stm32mp25-rif.h>
+#include <dt-bindings/soc/stm32mp25-risab.h>
+#include <dt-bindings/soc/stm32mp25-risaf.h>
 
 / {
 	#address-cells = <2>;
@@ -215,6 +219,7 @@
 			reg = <0x42080000 0x1000>;
 			#address-cells = <1>;
 			#size-cells = <1>;
+			#access-controller-cells = <2>;
 
 			lptimer1: timer@40090000 {
 				compatible = "st,stm32mp21-lptimer";
@@ -224,6 +229,7 @@
 				clock-names = "mux";
 				#address-cells = <1>;
 				#size-cells = <0>;
+				access-controllers = <&rifsc STM32MP21_RIFSC_LPTIM1_ID 0>;
 				status = "disabled";
 
 				counter {
@@ -254,6 +260,7 @@
 				reg = <0x400e0000 0x400>;
 				interrupts = <GIC_SPI 115 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_USART2>;
+				access-controllers = <&rifsc STM32MP21_RIFSC_USART2_ID 0>;
 				status = "disabled";
 			};
 
@@ -262,6 +269,7 @@
 				reg = <0x400f0000 0x400>;
 				interrupts = <GIC_SPI 116 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_USART3>;
+				access-controllers = <&rifsc STM32MP21_RIFSC_USART3_ID 0>;
 				status = "disabled";
 			};
 
@@ -270,6 +278,7 @@
 				reg = <0x40100000 0x400>;
 				interrupts = <GIC_SPI 126 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_UART4>;
+				access-controllers = <&rifsc STM32MP21_RIFSC_UART4_ID 0>;
 				status = "disabled";
 			};
 
@@ -278,6 +287,7 @@
 				reg = <0x40110000 0x400>;
 				interrupts = <GIC_SPI 127 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_UART5>;
+				access-controllers = <&rifsc STM32MP21_RIFSC_UART5_ID 0>;
 				status = "disabled";
 			};
 
@@ -289,6 +299,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				i2c-analog-filter;
+				access-controllers = <&rifsc STM32MP21_RIFSC_I2C1_ID 0>;
 				status = "disabled";
 			};
 
@@ -300,6 +311,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				i2c-analog-filter;
+				access-controllers = <&rifsc STM32MP21_RIFSC_I2C2_ID 0>;
 				status = "disabled";
 			};
 
@@ -308,6 +320,7 @@
 				reg = <0x40220000 0x400>;
 				interrupts = <GIC_SPI 136 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_USART6>;
+				access-controllers = <&rifsc STM32MP21_RIFSC_USART6_ID 0>;
 				status = "disabled";
 			};
 
@@ -316,6 +329,7 @@
 				reg = <0x40330000 0x400>;
 				interrupts = <GIC_SPI 114 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_USART1>;
+				access-controllers = <&rifsc STM32MP21_RIFSC_USART1_ID 0>;
 				status = "disabled";
 			};
 
@@ -324,6 +338,7 @@
 				reg = <0x40370000 0x400>;
 				interrupts = <GIC_SPI 148 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_UART7>;
+				access-controllers = <&rifsc STM32MP21_RIFSC_UART7_ID 0>;
 				status = "disabled";
 			};
 
@@ -333,6 +348,7 @@
 				interrupts = <GIC_SPI 145 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_BUS_HASH2>;
 				resets = <&rcc HASH2_R>;
+				access-controllers = <&rifsc STM32MP21_RIFSC_HASH2_ID 0>;
 				status = "disabled";
 			};
 
@@ -341,6 +357,7 @@
 				reg = <0x42020000 0x400>;
 				clocks = <&clk_rcbsec>, <&rcc CK_BUS_RNG2>;
 				clock-names = "rng_clk", "rng_hclk";
+				access-controllers = <&rifsc STM32MP21_RIFSC_RNG2_ID 0>;
 				resets = <&rcc RNG2_R>;
 			};
 
@@ -350,6 +367,7 @@
 				interrupts = <GIC_SPI 2 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_BUS_IWDG1>, <&rcc LSI_CK>;
 				clock-names = "pclk", "lsi";
+				access-controllers = <&rifsc STM32MP21_RIFSC_IWDG1_ID 0>;
 				status = "disabled";
 			};
 
@@ -359,6 +377,7 @@
 				interrupts = <GIC_SPI 3 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_BUS_IWDG2>, <&rcc LSI_CK>;
 				clock-names = "pclk", "lsi";
+				access-controllers = <&rifsc STM32MP21_RIFSC_IWDG2_ID 0>;
 				status = "disabled";
 			};
 
@@ -370,6 +389,7 @@
 				i2c-analog-filter;
 				#address-cells = <1>;
 				#size-cells = <0>;
+				access-controllers = <&rifsc STM32MP21_RIFSC_I2C3_ID 0>;
 				status = "disabled";
 			};
 		};
