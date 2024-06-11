@@ -308,11 +308,15 @@ static void apply_rif_config(struct stm32_risab_pdata *risab_d)
 	for (i = 0; i < risab_d->nb_regions_cfged; i++) {
 		set_block_dprivcfgr(risab_d, i);
 
+		/* Delegate RIF configuration or not */
+		if (!is_tdcid)
+			DMSG("Cannot set %s CID configuration for region %u",
+			     risab_d->risab_name, i);
+		else
+			set_cidcfgr(risab_d, i);
+
 		if (!regs_access_granted(risab_d, i))
 			panic();
-
-		/* Delegate RIF configuration or not */
-		set_cidcfgr(risab_d, i);
 
 		/*
 		 * This sequence will generate an IAC if the CID filtering
@@ -550,10 +554,14 @@ static TEE_Result stm32_risab_pm_resume(struct stm32_risab_pdata *risab)
 		/* Restoring RISAB RIF configuration */
 		set_block_dprivcfgr(risab, i);
 
+		if (!is_tdcid)
+			DMSG("Cannot set %s CID configuration for region %zu",
+			     risab->risab_name, i);
+		else
+			set_cidcfgr(risab, i);
+
 		if (!regs_access_granted(risab, i))
 			continue;
-
-		set_cidcfgr(risab, i);
 
 		/*
 		 * This sequence will generate an IAC if the CID filtering
