@@ -19,6 +19,7 @@
 #include <fwk_module_idx.h>
 #include <fwk_status.h>
 #include <mod_tfm_mbx.h>
+#include <mod_tfm_smt.h>
 #include <mod_msg_smt.h>
 #include <cmsis_compiler.h>
 #define COMPILER_BARRIER() __ASM volatile("" : : : "memory")
@@ -127,6 +128,46 @@ fwk_id_t tfm_mbx_get_device(unsigned int id)
 /*
  * Mailbox module driver API
  */
+#ifdef BUILD_HAS_MOD_TFM_SMT
+void tfm_mbx_signal_smt_message(fwk_id_t device_id)
+{
+    struct mbx_device_ctx *device_ctx;
+    unsigned int device_idx = fwk_id_get_element_idx(device_id);
+
+    if (device_idx < mbx_ctx.device_count) {
+        device_ctx = &mbx_ctx.device_ctx_table[device_idx];
+
+        fwk_assert(fwk_id_get_module_idx(device_ctx->shmem_id) ==
+                   FWK_MODULE_IDX_TFM_SMT);
+
+        /* Lock the channel until the message has been processed */
+        mutex_lock(&device_ctx->lock);
+
+        device_ctx->shmem_api.smt->signal_message(device_ctx->shmem_id);
+    } else {
+        fwk_unexpected();
+    }
+}
+/*
+ * Provide a raise interrupt interface to the Mailbox driver
+ */
+static int raise_smt_interrupt(fwk_id_t channel_id)
+{
+    size_t idx = fwk_id_get_element_idx(channel_id);
+    struct mbx_device_ctx *channel_ctx = &mbx_ctx.device_ctx_table[idx];
+
+    /* Release the channel as the message has been processed */
+    mutex_unlock(&channel_ctx->lock);
+
+    /* There should be a message in the mailbox */
+    return FWK_SUCCESS;
+}
+
+
+const struct mod_tfm_smt_driver_api mbx_smt_api = {
+    .raise_interrupt = raise_smt_interrupt,
+};
+#endif
 
 #ifdef BUILD_HAS_MOD_MSG_SMT
 static int raise_shm_notification(fwk_id_t channel_id, size_t size)
@@ -228,7 +269,11 @@ static int mbx_process_bind_request(fwk_id_t source_id,
     }
 
     switch (fwk_id_get_module_idx(source_id)) {
-
+#ifdef BUILD_HAS_MOD_TFM_SMT
+    case FWK_MODULE_IDX_TFM_SMT:
+        *api = &mbx_smt_api;
+        break;
+#endif
 #ifdef BUILD_HAS_MOD_MSG_SMT
     case FWK_MODULE_IDX_MSG_SMT:
         *api = &mbx_shm_api;

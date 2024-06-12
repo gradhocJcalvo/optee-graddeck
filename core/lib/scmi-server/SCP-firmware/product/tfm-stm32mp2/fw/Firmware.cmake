@@ -34,6 +34,8 @@ list(PREPEND SCP_MODULE_PATHS "${CMAKE_CURRENT_LIST_DIR}/../module/tfm_clock")
 list(PREPEND SCP_MODULE_PATHS "${CMAKE_CURRENT_LIST_DIR}/../module/tfm_mbx")
 list(PREPEND SCP_MODULE_PATHS "${CMAKE_CURRENT_LIST_DIR}/../module/tfm_reset")
 list(PREPEND SCP_MODULE_PATHS "${CMAKE_CURRENT_LIST_DIR}/../module/tfm_console")
+list(PREPEND SCP_MODULE_PATHS "${CMAKE_CURRENT_LIST_DIR}/../module/tfm_smt")
+
 
 # The order of the modules in the following list is the order in which the
 # modules are initialized, bound, started during the pre-runtime phase.
@@ -46,6 +48,7 @@ list(APPEND SCP_MODULES "tfm-clock")
 list(APPEND SCP_MODULES "clock")
 list(APPEND SCP_MODULES "scmi-clock")
 list(APPEND SCP_MODULES "tfm-regu-consumer")
+list(APPEND SCP_MODULES "tfm-smt")
 list(APPEND SCP_MODULES "voltage-domain")
 list(APPEND SCP_MODULES "scmi-voltage-domain")
 list(APPEND SCP_MODULES "tfm-reset")

@@ -18,6 +18,9 @@
 #include <mod_msg_smt.h>
 #include <mod_tfm_clock.h>
 #include <mod_tfm_mbx.h>
+#ifdef CFG_SCPFW_MOD_TFM_SMT
+#include <mod_tfm_smt.h>
+#endif
 #include <mod_tfm_reset.h>
 #include <mod_reset_domain.h>
 #include <mod_scmi.h>
@@ -40,10 +43,16 @@ static struct mod_scmi_config scmi_data;
 static struct fwk_element *scmi_service_elt;
 
 /* SCMI channel mailbox/shmem */
+#ifdef CFG_SCPFW_MOD_MSG_SMT
 static struct fwk_element *msg_smt_elt;
 static struct mod_msg_smt_channel_config *msg_smt_data;
+#endif
 static struct fwk_element *tfm_mbx_elt;
 static struct mod_tfm_mbx_channel_config *tfm_mbx_data;
+#ifdef CFG_SCPFW_MOD_TFM_SMT
+static struct fwk_element *tfm_smt_elt;
+static struct mod_tfm_smt_channel_config *tfm_smt_data;
+#endif
 
 #ifdef CFG_SCPFW_MOD_SCMI_CLOCK
 /* SCMI clock generic */
@@ -52,10 +61,10 @@ static struct mod_scmi_clock_agent *scmi_clk_agent_tbl;
 
 #ifdef CFG_SCPFW_MOD_CLOCK
 /* Clocks and tfm/clock, same number/indices. Elements and configuration data */
-static struct fwk_element *tfm_clock_elt;		/* Optee/clock elements */
-static struct mod_tfm_clock_config *tfm_clock_cfg;	/* Config data for tfm/clock elements */
-static struct fwk_element *clock_elt;			/* Clock elements */
-static struct mod_clock_dev_config *clock_data;		/* Config data for clock elements */
+static struct fwk_element *tfm_clock_elt;               /* tfm/clock elements */
+static struct mod_tfm_clock_config *tfm_clock_cfg;      /* Config data for tfm/clock elements */
+static struct fwk_element *clock_elt;                   /* Clock elements */
+static struct mod_clock_dev_config *clock_data;         /* Config data for clock elements */
 #endif
 
 #ifdef CFG_SCPFW_MOD_RESET_DOMAIN
@@ -96,6 +105,7 @@ static const struct fwk_element *tfm_mbx_get_element_table(fwk_id_t module_id)
 struct fwk_module_config config_tfm_mbx = {
     .elements = FWK_MODULE_DYNAMIC_ELEMENTS(tfm_mbx_get_element_table),
 };
+#ifdef CFG_SCPFW_MOD_MSG_SMT
 
 /* Config data for msg_smt module */
 static const struct fwk_element *msg_smt_get_element_table(fwk_id_t module_id)
@@ -107,13 +117,26 @@ static const struct fwk_element *msg_smt_get_element_table(fwk_id_t module_id)
 struct fwk_module_config config_msg_smt = {
     .elements = FWK_MODULE_DYNAMIC_ELEMENTS(msg_smt_get_element_table),
 };
+#endif
 
+#ifdef CFG_SCPFW_MOD_TFM_SMT
+/* Config data for tfm_smt module */
+static const struct fwk_element *tfm_smt_get_element_table(fwk_id_t module_id)
+{
+    fwk_assert(fwk_id_get_module_idx(module_id) == FWK_MODULE_IDX_TFM_SMT);
+    return (const struct fwk_element *)tfm_smt_elt;
+};
+
+struct fwk_module_config config_tfm_smt = {
+    .elements = FWK_MODULE_DYNAMIC_ELEMENTS(tfm_smt_get_element_table),
+};
+#endif
 /* Config data for scmi_clock, clock and tfm_clock modules */
 #ifdef CFG_SCPFW_MOD_SCMI_CLOCK
 struct fwk_module_config config_scmi_clock = {
     .data = &((struct mod_scmi_clock_config){
-        .agent_table = NULL,			/* Allocated during initialization */
-        .agent_count = 0,			/* Set during initialization */
+        .agent_table = NULL,                    /* Allocated during initialization */
+        .agent_count = 0,                       /* Set during initialization */
     }),
 };
 #endif
@@ -144,8 +167,8 @@ struct fwk_module_config config_tfm_clock = {
 #ifdef CFG_SCPFW_MOD_RESET_DOMAIN
 struct fwk_module_config config_scmi_reset_domain = {
     .data = &((struct mod_scmi_reset_domain_config){
-        .agent_table = NULL,			/* Allocated during initialization */
-        .agent_count = 0,			/* Set during initialization */
+        .agent_table = NULL,                    /* Allocated during initialization */
+        .agent_count = 0,                       /* Set during initialization */
     }),
 };
 
@@ -174,8 +197,8 @@ struct fwk_module_config config_tfm_reset = {
 /* Config data for scmi_voltage_domain, voltage_domain and tfm_regu modules */
 struct fwk_module_config config_scmi_voltage_domain = {
     .data = &((struct mod_scmi_voltd_config){
-        .agent_table = NULL,			/* Allocated during initialization */
-        .agent_count = 0,			/* Set during initialization */
+        .agent_table = NULL,                    /* Allocated during initialization */
+        .agent_count = 0,                       /* Set during initialization */
     }),
 };
 
@@ -333,6 +356,7 @@ static void allocate_global_resources(struct scpfw_config *cfg)
 static void set_scmi_comm_resources(struct scpfw_config *cfg)
 {
     unsigned int channel_index;
+    unsigned int __maybe_unused msg_smt_index = 0, tfm_smt_index = 0;
     size_t i, j;
     /* @cfg does not consider agent #0 this the reserved platform/server agent */
     size_t scmi_agent_count = cfg->agent_count + 1;
@@ -343,10 +367,19 @@ static void set_scmi_comm_resources(struct scpfw_config *cfg)
     scmi_service_elt = fwk_mm_calloc(scpfw_resource_counter.channel_count + 1,
                                      sizeof(*scmi_service_elt));
 
+#ifdef CFG_SCPFW_MOD_MSG_SMT
     msg_smt_elt = fwk_mm_calloc(scpfw_resource_counter.channel_count + 1,
                                 sizeof(*msg_smt_elt));
     msg_smt_data = fwk_mm_calloc(scpfw_resource_counter.channel_count,
                                  sizeof(*msg_smt_data));
+#endif
+
+#ifdef CFG_SCPFW_MOD_TFM_SMT
+    tfm_smt_elt = fwk_mm_calloc(scpfw_resource_counter.channel_count + 1,
+                                  sizeof(*tfm_smt_elt));
+    tfm_smt_data = fwk_mm_calloc(scpfw_resource_counter.channel_count,
+                                   sizeof(*tfm_smt_data));
+#endif
 
     tfm_mbx_elt = fwk_mm_calloc(scpfw_resource_counter.channel_count + 1,
                                   sizeof(*tfm_mbx_elt));
@@ -361,7 +394,6 @@ static void set_scmi_comm_resources(struct scpfw_config *cfg)
         .vendor_identifier = "STMicroelectronics",
         .sub_vendor_identifier = "STMicroelectronics",
     };
-
     channel_index = 0;
 
     for (i = 0; i < cfg->agent_count; i++) {
@@ -376,39 +408,76 @@ static void set_scmi_comm_resources(struct scpfw_config *cfg)
             struct mod_scmi_service_config *service_data;
 
             service_data = fwk_mm_calloc(1, sizeof(*service_data));
-            *service_data = (struct mod_scmi_service_config){
-                .transport_id = (fwk_id_t)FWK_ID_ELEMENT_INIT(FWK_MODULE_IDX_MSG_SMT, channel_index),
-                .transport_api_id = (fwk_id_t)FWK_ID_API_INIT(FWK_MODULE_IDX_MSG_SMT,
-                                                              MOD_MSG_SMT_API_IDX_SCMI_TRANSPORT),
-                .scmi_agent_id = agent_cfg->agent_id,
-                .scmi_p2a_id = FWK_ID_NONE_INIT,
-            };
-
-            fwk_assert((service_data->scmi_agent_id == STM32MP25_AGENT_ID_M33_NS)||
-                       (service_data->scmi_agent_id == STM32MP25_AGENT_ID_CA35));
-
             scmi_service_elt[channel_index].name = channel_cfg->name;
             scmi_service_elt[channel_index].data = service_data;
 
-            msg_smt_elt[channel_index].name = channel_cfg->name;
-            msg_smt_elt[channel_index].data = (void *)(msg_smt_data + channel_index);
-
-            msg_smt_data[channel_index] = (struct mod_msg_smt_channel_config){
-                .type = MOD_MSG_SMT_CHANNEL_TYPE_REQUESTER,
-                .mailbox_size = 128,
-                .driver_id = (fwk_id_t)FWK_ID_ELEMENT_INIT(FWK_MODULE_IDX_TFM_MBX,
-                                                           channel_index),
-                .driver_api_id = (fwk_id_t)FWK_ID_API_INIT(FWK_MODULE_IDX_TFM_MBX, 0),
-            };
-
             tfm_mbx_elt[channel_index].name = channel_cfg->name;
             tfm_mbx_elt[channel_index].data = (void *)(tfm_mbx_data + channel_index);
+            switch  (agent_cfg->agent_id) {
+#ifdef CFG_SCPFW_MOD_MSG_SMT
+            case STM32MP25_AGENT_ID_M33_NS:
+                *service_data = (struct mod_scmi_service_config){
+                    .transport_id = (fwk_id_t)FWK_ID_ELEMENT_INIT(FWK_MODULE_IDX_MSG_SMT, msg_smt_index),
+                    .transport_api_id = (fwk_id_t)FWK_ID_API_INIT(FWK_MODULE_IDX_MSG_SMT,
+                                                                  MOD_MSG_SMT_API_IDX_SCMI_TRANSPORT),
+                    .scmi_agent_id = agent_cfg->agent_id,
+                    .scmi_p2a_id = FWK_ID_NONE_INIT,
+                };
 
-            tfm_mbx_data[channel_index] = (struct mod_tfm_mbx_channel_config){
-                .driver_id = (fwk_id_t)FWK_ID_ELEMENT_INIT(FWK_MODULE_IDX_MSG_SMT, channel_index),
-                .driver_api_id = (fwk_id_t)FWK_ID_API_INIT(FWK_MODULE_IDX_MSG_SMT,
-                                                           MOD_MSG_SMT_API_IDX_DRIVER_INPUT),
-            };
+                msg_smt_elt[msg_smt_index].name = channel_cfg->name;
+                msg_smt_elt[msg_smt_index].data = (void *)(msg_smt_data + msg_smt_index);
+
+                msg_smt_data[msg_smt_index] = (struct mod_msg_smt_channel_config){
+                    .type = MOD_MSG_SMT_CHANNEL_TYPE_REQUESTER,
+                    .mailbox_size = 128,
+                    .driver_id = (fwk_id_t)FWK_ID_ELEMENT_INIT(FWK_MODULE_IDX_TFM_MBX,
+                                                               channel_index),
+                    .driver_api_id = (fwk_id_t)FWK_ID_API_INIT(FWK_MODULE_IDX_TFM_MBX, 0),
+                };
+                tfm_mbx_data[channel_index] = (struct mod_tfm_mbx_channel_config){
+                    .driver_id = (fwk_id_t)FWK_ID_ELEMENT_INIT(FWK_MODULE_IDX_MSG_SMT, msg_smt_index),
+                    .driver_api_id = (fwk_id_t)FWK_ID_API_INIT(FWK_MODULE_IDX_MSG_SMT,
+                                                               MOD_MSG_SMT_API_IDX_DRIVER_INPUT),
+                };
+                msg_smt_index++;
+                break;
+#endif
+#ifdef CFG_SCPFW_MOD_TFM_SMT
+            case STM32MP25_AGENT_ID_CA35 :
+                *service_data = (struct mod_scmi_service_config){
+                    .transport_id = (fwk_id_t)FWK_ID_ELEMENT_INIT(FWK_MODULE_IDX_TFM_SMT, tfm_smt_index),
+                    .transport_api_id = (fwk_id_t)FWK_ID_API_INIT(FWK_MODULE_IDX_TFM_SMT,
+                                                                  MOD_TFM_SMT_API_IDX_SCMI_TRANSPORT),
+                    .scmi_agent_id = agent_cfg->agent_id,
+                    .scmi_p2a_id = FWK_ID_NONE_INIT,
+                };
+
+                tfm_smt_elt[tfm_smt_index].name = channel_cfg->name;
+                tfm_smt_elt[tfm_smt_index ].data = (void *)(tfm_smt_data + tfm_smt_index);
+
+                tfm_smt_data[tfm_smt_index] = (struct mod_tfm_smt_channel_config){
+                    .type = MOD_TFM_SMT_CHANNEL_TYPE_REQUESTER,
+                        .policies = MOD_SMT_POLICY_NONE,
+                        .mailbox_address = (unsigned int)channel_cfg->shm.area,
+                        .mailbox_size = 128,
+                        .driver_id = (fwk_id_t)FWK_ID_ELEMENT_INIT(FWK_MODULE_IDX_TFM_MBX,
+                                                                   channel_index),
+                        .driver_api_id = (fwk_id_t)FWK_ID_API_INIT(FWK_MODULE_IDX_TFM_MBX, 0),
+                };
+
+                tfm_mbx_data[channel_index] =
+                    (struct mod_tfm_mbx_channel_config){
+                        .driver_id = (fwk_id_t)FWK_ID_ELEMENT_INIT(FWK_MODULE_IDX_TFM_SMT, tfm_smt_index),
+                        .driver_api_id = (fwk_id_t)FWK_ID_API_INIT(FWK_MODULE_IDX_TFM_SMT,
+                                                                   MOD_TFM_SMT_API_IDX_DRIVER_INPUT),
+                    };
+                tfm_smt_index++;
+                break;
+#endif
+            default:
+                FWK_LOG_ERR("agent transport un supported");
+                panic();
+            }
 
             channel_index++;
         }
