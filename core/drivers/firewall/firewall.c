@@ -187,6 +187,35 @@ TEE_Result firewall_set_alternate_conf(struct firewall_alt_conf *conf)
 	return TEE_SUCCESS;
 }
 
+TEE_Result firewall_set_memory_configuration(struct firewall_query *fw,
+					     paddr_t paddr, size_t size)
+{
+	assert(fw && fw->ctrl && fw->ctrl->ops);
+
+	if (!fw->ctrl->ops->set_memory_conf)
+		return TEE_ERROR_NOT_SUPPORTED;
+
+	return fw->ctrl->ops->set_memory_conf(fw, paddr, size);
+}
+
+TEE_Result firewall_set_memory_alternate_conf(struct firewall_alt_conf *conf,
+					      paddr_t paddr, size_t size)
+{
+	TEE_Result res = TEE_ERROR_GENERIC;
+	size_t i = 0;
+
+	assert(conf);
+
+	for (i = 0; i < conf->nb_queries; i++) {
+		res = firewall_set_memory_configuration(conf->queries[i], paddr,
+							size);
+		if (res)
+			return res;
+	}
+
+	return TEE_SUCCESS;
+}
+
 TEE_Result firewall_check_access(struct firewall_query *fw)
 {
 	assert(fw && fw->ctrl && fw->ctrl->ops);
