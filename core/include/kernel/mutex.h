@@ -101,5 +101,14 @@ void condvar_broadcast(struct condvar *cv);
 void condvar_wait(struct condvar *cv, struct mutex *m);
 #endif
 
+/*
+ * Helper for testing that a given mutex is locked. This helper is to be used
+ * with caution since it does not enforce that the executing thread is holding
+ * the mutex.
+ */
+static inline bool mutex_is_locked(struct mutex *m)
+{
+	return m->state;
+}
 #endif /*__KERNEL_MUTEX_H*/
 
