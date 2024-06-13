@@ -1122,3 +1122,10 @@ $(eval $(call cfg-depends-all,CFG_CRYPTO_HW_PBKDF2,CFG_CRYPTO_PBKDF2))
 CFG_HALT_CORES_ON_PANIC ?= n
 CFG_HALT_CORES_ON_PANIC_SGI ?= 15
 $(eval $(call cfg-depends-all,CFG_HALT_CORES_ON_PANIC,CFG_GIC))
+
+# CFG_RAM_CONSOLE, when enabled, stores in TA RAM all trace messages emitted
+# as soon as TA RAM memory pool is initialized. When a console driver registers,
+# it prints logged messages and frees the RAM console memory.
+# CFG_RAM_CONSOLE_SIZE defines the byte size of the RAM console buffer.
+CFG_RAM_CONSOLE ?= n
+CFG_RAM_CONSOLE_SIZE ?= 65536
