@@ -130,6 +130,25 @@
 		};
 	};
 
+	scmi_cm33_agent: scmi-cm-agent@0 {
+		compatible = "st,scmi-cortexm-agent";
+		mbox-names = "scmi_cm33";
+		mboxes = <&ipcc1 RIF_IPCC_CPU1_CHANNEL(16)>;
+		scmi-agent-id = <1>;
+		scmi-channel-id = <0>;
+
+		scmi_regu_cm33: scmi-regu-cm33 {
+			compatible = "st,scmi-regulator-consumer";
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			voltd-vdd33ucpd {
+				reg = <VOLTD_SCMI_UCPD>;
+				voltd-supply = <&vdd33ucpd>;
+			};
+		};
+	};
+
 	scmi_regu: scmi-regu {
 		compatible = "st,scmi-regulator-consumer";
 		#address-cells = <1>;
@@ -152,10 +171,6 @@
 		voltd-vddio4 {
 			reg = <VOLTD_SCMI_VDDIO4>;
 			voltd-supply = <&vddio4>;
-		};
-		voltd-vdd33ucpd {
-			reg = <VOLTD_SCMI_UCPD>;
-			voltd-supply = <&vdd33ucpd>;
 		};
 		voltd-vdda18adc {
 			reg = <VOLTD_SCMI_ADC>;
@@ -201,6 +216,8 @@
 		ipcc1: mailbox@40490000 {
 			compatible = "st,stm32mp25-ipcc";
 			reg = <0x40490000 0x400>;
+			interrupts = <GIC_SPI 173 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "rx";
 			clocks = <&rcc CK_BUS_IPCC1>;
 		};
 
@@ -534,6 +551,7 @@
 			reg = <0x420a0000 0x1000>;
 			clocks = <&rcc CK_BUS_BKPSRAM>;
 			st,mem-map = <0x0 0x42000000 0x0 0x2000>;
+			#access-controller-cells = <1>;
 		};
 
 		risaf2: risaf@420b0000 {
@@ -541,6 +559,7 @@
 			reg = <0x420b0000 0x1000>;
 			clocks = <&rcc CK_KER_OSPI1>;
 			st,mem-map = <0x0 0x60000000 0x0 0x10000000>;
+			#access-controller-cells = <1>;
 			status = "disabled";
 		};
 
@@ -549,11 +568,7 @@
 			reg = <0x420d0000 0x1000>;
 			clocks = <&rcc CK_BUS_RISAF4>;
 			st,mem-map = <0x0 0x80000000 0x1 0x00000000>;
-		};
-
-		risaf5: risaf@420e0000 {
-			/* Not present on STM32MP23 */
-			status = "disabled";
+			#access-controller-cells = <1>;
 		};
 
 		risab1: risab@420f0000 {
@@ -969,6 +984,7 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 			ranges;
+			st,backup-zones = <24 24 24 24 12 12 8>;
 			status = "disabled";
 
 			nvram: nvram@46010100 {
