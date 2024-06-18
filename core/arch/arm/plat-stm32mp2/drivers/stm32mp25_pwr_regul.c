@@ -425,11 +425,17 @@ enum pwr_regulator {
 	IOD_VDDIO1,
 	IOD_VDDIO2,
 	IOD_VDDIO3,
+#ifndef CFG_STM32MP21
 	IOD_VDDIO4,
+#endif
 	IOD_VDDIO,
+#ifndef CFG_STM32MP21
 	REGU_UCPD,
+#endif
 	REGU_A,
+#ifndef CFG_STM32MP21
 	REGU_GPU,
+#endif
 	PWR_REGU_COUNT
 };
 
@@ -461,6 +467,7 @@ static struct pwr_regu pwr_regulators[PWR_REGU_COUNT] = {
 		.is_an_iod = true,
 		.comp_idx = SYSFG_VDDIO3_ID,
 	 },
+#ifndef CFG_STM32MP21
 	 [IOD_VDDIO4] = {
 		.enable_reg = PWR_CR1,
 		.enable_mask = PWR_CR1_VDDIO4VMEN,
@@ -470,24 +477,28 @@ static struct pwr_regu pwr_regulators[PWR_REGU_COUNT] = {
 		.is_an_iod = true,
 		.comp_idx = SYSFG_VDDIO4_ID,
 	 },
+#endif
 	 [IOD_VDDIO] = {
 		.enable_reg = PWR_CR1,
 		.vrsel_mask = PWR_CR1_VDDIOVRSEL,
 		.is_an_iod = true,
 		.comp_idx = SYSFG_VDD_IO_ID,
 	 },
+#ifndef CFG_STM32MP21
 	 [REGU_UCPD] = {
 		.enable_reg = PWR_CR1,
 		.enable_mask = PWR_CR1_UCPDVMEN,
 		.ready_mask = PWR_CR1_UCPDRDY,
 		.valid_mask = PWR_CR1_UCPDSV,
 	 },
+#endif
 	 [REGU_A] = {
 		.enable_reg = PWR_CR1,
 		.enable_mask = PWR_CR1_AVMEN,
 		.ready_mask = PWR_CR1_ARDY,
 		.valid_mask = PWR_CR1_ASV,
 	 },
+#ifndef CFG_STM32MP21
 	 [REGU_GPU] = {
 		.enable_reg = PWR_CR12,
 		.enable_mask = PWR_CR12_GPUVMEN,
@@ -496,6 +507,7 @@ static struct pwr_regu pwr_regulators[PWR_REGU_COUNT] = {
 		.keep_monitor_on = true,
 		.rifsc_filtering_id = STM32MP25_RIFSC_GPU_ID,
 	 },
+#endif
 };
 
 #define DEFINE_REGUL(_id, _name, _supply) {		\
@@ -518,15 +530,21 @@ static struct pwr_regu pwr_regulators[PWR_REGU_COUNT] = {
 static struct regulator pwr_regu_device[PWR_REGU_COUNT];
 
 /* Not const to allow probe to reassign ops if device is a fixed_iod */
-static const struct regu_dt_desc pwr_regu_desc[] = {
+static const struct regu_dt_desc pwr_regu_desc[PWR_REGU_COUNT] = {
 	[IOD_VDDIO1] = DEFINE_REGUL(IOD_VDDIO1, "vddio1", "vddio1"),
 	[IOD_VDDIO2] = DEFINE_REGUL(IOD_VDDIO2, "vddio2", "vddio2"),
 	[IOD_VDDIO3] = DEFINE_REGUL(IOD_VDDIO3, "vddio3", "vddio3"),
+#ifndef CFG_STM32MP21
 	[IOD_VDDIO4] = DEFINE_REGUL(IOD_VDDIO4, "vddio4", "vddio4"),
+#endif
 	[IOD_VDDIO]  = DEFINE_REGUL(IOD_VDDIO, "vddio", "vdd"),
+#ifndef CFG_STM32MP21
 	[REGU_UCPD]  = DEFINE_FIXED(REGU_UCPD, "vdd33ucpd", "vdd33ucpd"),
+#endif
 	[REGU_A]     = DEFINE_FIXED(REGU_A, "vdda18adc", "vdda18adc"),
+#ifndef CFG_STM32MP21
 	[REGU_GPU]   = DEFINE_REGUL(REGU_GPU, "vddgpu", "vddgpu"),
+#endif
 };
 DECLARE_KEEP_PAGER(pwr_regu_desc);
 
