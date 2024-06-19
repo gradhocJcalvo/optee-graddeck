@@ -4,7 +4,7 @@
  */
 #include <drivers/stm32_iac.h>
 #include <drivers/stm32_rif.h>
-#include <dt-bindings/soc/stm32mp25-rifsc.h>
+#include <drivers/stm32mp_dt_bindings.h>
 #include <io.h>
 #include <kernel/boot.h>
 #include <kernel/dt.h>
@@ -124,6 +124,7 @@ static TEE_Result stm32_iac_parse_fdt(void)
 #define IAC_ILAC_ID(reg_val, offset)	(IAC_FIRST_ILAC_IN_REG(reg_val) + \
 					 IAC_EXCEPT_LSB_BIT(offset))
 
+#if defined(CFG_STM32MP25) || defined(CFG_STM32MP23)
 static const uint32_t iac_fbd_periph[] = {
 	STM32MP25_RIFSC_PWR_ID, STM32MP25_RIFSC_GPIOA_ID,
 	STM32MP25_RIFSC_GPIOB_ID, STM32MP25_RIFSC_GPIOC_ID,
@@ -133,6 +134,17 @@ static const uint32_t iac_fbd_periph[] = {
 	STM32MP25_RIFSC_GPIOJ_ID, STM32MP25_RIFSC_GPIOK_ID,
 	STM32MP25_RIFSC_GPIOZ_ID
 };
+#endif
+#if defined(CFG_STM32MP21)
+static const uint32_t iac_fbd_periph[] = {
+	STM32MP21_RIFSC_PWR_ID, STM32MP21_RIFSC_GPIOA_ID,
+	STM32MP21_RIFSC_GPIOB_ID, STM32MP21_RIFSC_GPIOC_ID,
+	STM32MP21_RIFSC_GPIOD_ID, STM32MP21_RIFSC_GPIOE_ID,
+	STM32MP21_RIFSC_GPIOF_ID, STM32MP21_RIFSC_GPIOG_ID,
+	STM32MP21_RIFSC_GPIOH_ID, STM32MP21_RIFSC_GPIOI_ID,
+	STM32MP21_RIFSC_GPIOZ_ID
+};
+#endif
 
 static enum itr_return stm32_iac_itr(struct itr_handler *h __unused)
 {
