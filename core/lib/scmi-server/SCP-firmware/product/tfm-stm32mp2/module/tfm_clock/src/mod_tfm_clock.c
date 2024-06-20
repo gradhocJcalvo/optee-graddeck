@@ -298,12 +298,18 @@ static int stub_pending_power_transition(fwk_id_t dev_id,
     return FWK_E_SUPPORT;
 }
 
+static int get_rate_from_index(fwk_id_t dev_id,
+                               unsigned int rate_index, uint64_t *rate)
+{
+    return FWK_E_SUPPORT;
+}
+
 static const struct mod_clock_drv_api api_tfm_clock = {
     .get_rate = get_rate,
     .set_state = set_state,
     .get_state = get_state,
     .get_range = get_range,
-    .get_rate_from_index = NULL,
+    .get_rate_from_index = get_rate_from_index,
     .set_rate = set_rate,
     .get_duty_cycle = get_duty_cycle,
     .round_rate = get_rounded_rate,
