@@ -71,7 +71,7 @@ static struct mod_reset_domain_dev_config *reset_data;
 /* SCMI voltage domains and tfm regulators */
 static struct mod_scmi_voltd_agent *scmi_voltd_agent_tbl;
 static struct fwk_element *tfm_regu_elt;
-static struct mod_tfm_regu_consumer_dev_config *tfm_regu_data;
+static struct mod_tfm_regu_consumer_dev_config *tfm_regu_cfg;
 static struct fwk_element *voltd_elt;
 static struct mod_voltd_dev_config *voltd_data;
 #endif
@@ -318,8 +318,8 @@ static void allocate_global_resources(struct scpfw_config *cfg)
     scmi_voltd_config->agent_table = scmi_voltd_agent_tbl;
     scmi_voltd_config->agent_count = scmi_agent_count;
 
-    tfm_regu_data = fwk_mm_calloc(scpfw_resource_counter.regu_count,
-                                    sizeof(*tfm_regu_data));
+    tfm_regu_cfg = fwk_mm_calloc(scpfw_resource_counter.regu_count,
+                                    sizeof(*tfm_regu_cfg));
     tfm_regu_elt = fwk_mm_calloc(scpfw_resource_counter.regu_count + 1,
                                     sizeof(*tfm_regu_elt));
 
@@ -547,14 +547,13 @@ static void set_resources(struct scpfw_config *cfg)
                     } else {
                         name = reserved;
                     }
-
-                    dev[regu_index].element_id =
-                       (fwk_id_t)FWK_ID_ELEMENT_INIT(FWK_MODULE_IDX_VOLTAGE_DOMAIN, k);
+                    dev[k].element_id =
+                       (fwk_id_t)FWK_ID_ELEMENT_INIT(FWK_MODULE_IDX_VOLTAGE_DOMAIN, regu_index);
 
                     tfm_regu_elt[regu_index].name = name;
-                    tfm_regu_elt[regu_index].data = (void *)(tfm_regu_data + regu_index);
-                    tfm_regu_data[regu_index].dev = voltd_cfg->dev;
-                    tfm_regu_data[regu_index].default_enabled = voltd_cfg->enabled;
+                    tfm_regu_elt[regu_index].data = (void *)(tfm_regu_cfg + regu_index);
+                    tfm_regu_cfg[regu_index].dev = voltd_cfg->dev;
+                    tfm_regu_cfg[regu_index].default_enabled = voltd_cfg->enabled;
 
                     voltd_data[regu_index].driver_id =
                         (fwk_id_t)FWK_ID_ELEMENT_INIT(FWK_MODULE_IDX_TFM_REGU_CONSUMER,

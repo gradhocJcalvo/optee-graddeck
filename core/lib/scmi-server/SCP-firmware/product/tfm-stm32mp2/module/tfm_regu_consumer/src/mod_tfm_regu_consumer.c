@@ -130,17 +130,14 @@ static int tfm_regu_consumer_set_config(fwk_id_t dev_id, uint8_t mode_type,
 static int tfm_regu_consumer_get_level(fwk_id_t dev_id, int32_t *level_uv)
 {
     struct tfm_regu_consumer_dev_ctx *ctx;
-    int32_t level_mv;
     int ret;
 
     ret = find_ctx(dev_id, &ctx);
     if (ret)
         return ret;
 
-    if (regulator_get_voltage(ctx->dev, &level_mv))
+    if (regulator_get_voltage(ctx->dev, level_uv))
         return FWK_E_PANIC;
-
-    *level_uv = (int)level_mv * 1000;
 
     FWK_LOG_INFO("SCMI voltd %u: get level PMIC %s = %ld",
               fwk_id_get_element_idx(dev_id), regu_name(ctx->dev), *level_uv);
@@ -153,16 +150,11 @@ static int tfm_regu_consumer_set_level(fwk_id_t dev_id, int32_t level_uv)
     struct tfm_regu_consumer_dev_ctx *ctx = NULL;
     int ret = FWK_E_PANIC;
 
-    if (level_uv / 1000 > UINT16_MAX) {
-        FWK_LOG_ERR("Volatge level too high (mV shall fit in 16 bits)");
-        return FWK_E_PARAM;
-    }
-
     ret = find_ctx(dev_id, &ctx);
     if (ret)
         return ret;
 
-    if (regulator_set_voltage(ctx->dev, level_uv / 1000, level_uv/1000))
+    if (regulator_set_voltage(ctx->dev, level_uv, level_uv))
         return FWK_E_DEVICE;
 
     FWK_LOG_INFO("SCMI voltd %u: set level PMIC %s to %ld",
@@ -214,12 +206,55 @@ static int tfm_regu_consumer_get_info(fwk_id_t dev_id,
     info->name = regu_name(ctx->dev);
     info->level_range.level_type = MOD_VOLTD_VOLTAGE_LEVEL_DISCRETE;
     info->level_range.level_count = full_count;
-    info->level_range.min_uv = volt_uv[0]*1000;
-    info->level_range.max_uv = volt_uv[1]*1000;
+    info->level_range.min_uv = volt_uv[0];
+    info->level_range.max_uv = volt_uv[1];
 
     FWK_LOG_INFO("SCMI voltd %u: get_info PMIC %s, range [%ld %ld]",
               fwk_id_get_element_idx(dev_id), regu_name(ctx->dev),
               info->level_range.min_uv, info->level_range.max_uv);
+
+    return FWK_SUCCESS;
+}
+
+static int tfm_voltd_regulator_level_from_index(fwk_id_t dev_id,
+                                                  unsigned int index,
+                                                  int32_t *level_uv)
+{
+    struct tfm_regu_consumer_dev_ctx *ctx;
+    int full_count;
+    int32_t volt_uv;
+    int ret = find_ctx(dev_id, &ctx);
+
+    if (ret) {
+        return ret;
+    }
+    if (ctx == NULL) {
+        return FWK_E_PARAM;
+    }
+
+    if (ctx->dev == NULL) {
+        /* Treat unexposed voltage domain a stubbed 0V fixed level regulator */
+        if (index > 0) {
+            return FWK_E_RANGE;
+        }
+        *level_uv = 0;
+
+        return FWK_SUCCESS;
+    }
+
+    full_count = regulator_count_voltages(ctx->dev);
+    if (index >= full_count)
+        return FWK_E_PARAM;
+
+    if (regulator_list_voltage(ctx->dev, index, &volt_uv)) {
+        return FWK_E_SUPPORT;
+    }
+    *level_uv = volt_uv;
+
+    FWK_LOG_DEBUG(
+                  MOD_PREFIX "Get level from index for %u/%s: index %u, level %"PRId32"uV",
+                  fwk_id_get_element_idx(dev_id), regulator_name(ctx->dev),
+                  index, *level_uv);
 
     return FWK_SUCCESS;
 }
@@ -230,7 +265,7 @@ static const struct mod_voltd_drv_api api_tfm_regu = {
     .set_config = tfm_regu_consumer_set_config,
     .get_config = tfm_regu_consumer_get_config,
     .get_info = tfm_regu_consumer_get_info,
-    .get_level_from_index = NULL,
+    .get_level_from_index = tfm_voltd_regulator_level_from_index,
 };
 
 /*
