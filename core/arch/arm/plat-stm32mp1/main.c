@@ -372,10 +372,11 @@ static TEE_Result init_stm32mp1_drivers(void)
 {
 	struct dt_driver_provider *prov = NULL;
 	TEE_Result res = TEE_ERROR_GENERIC;
-	uint32_t firewall_query_args[2] = { ETZPC_TZMA1_ID, SYSRAM_SEC_SIZE };
+	uint32_t query_arg[1] = { ETZPC_TZMA1_ID |
+				  SYSRAM_SEC_SIZE << ETZPC_MODE_SHIFT };
 	struct firewall_query firewall = {
-		.args = firewall_query_args,
-		.arg_count = ARRAY_SIZE(firewall_query_args),
+		.args = query_arg,
+		.arg_count = 1,
 	};
 	int node = 0;
 

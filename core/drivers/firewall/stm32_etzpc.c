@@ -117,22 +117,14 @@ static struct firewall_controller *fw_ctrl;
 
 TEE_Result stm32_etzpc_check_ns_access(unsigned int id)
 {
-	TEE_Result res = TEE_ERROR_ACCESS_DENIED;
-	struct firewall_query query = { };
+	uint32_t query_arg = DECPROT(id, DECPROT_NS_RW, DECPROT_UNLOCK);
+	struct firewall_query query = {
+		.arg_count = 1,
+		.args = &query_arg,
+		.ctrl = fw_ctrl,
+	};
 
-	query.ctrl = fw_ctrl;
-	query.arg_count = 2;
-	query.args = calloc(2, sizeof(uint32_t));
-	if (!query.args)
-		return TEE_ERROR_OUT_OF_MEMORY;
-
-	query.args[0] = id;
-	query.args[1] = DECPROT(id, DECPROT_NS_RW, DECPROT_UNLOCK);
-
-	res = firewall_check_access(&query);
-	free(query.args);
-
-	return res;
+	return firewall_check_access(&query);
 }
 
 static uint32_t etzpc_lock(struct etzpc_device *dev)
@@ -353,25 +345,21 @@ static TEE_Result stm32_etzpc_check_access(struct firewall_query *firewall)
 	enum etzpc_decprot_attributes attr = ETZPC_DECPROT_MAX;
 	uint32_t id = 0;
 
-	if (!firewall || firewall->arg_count != 2)
+	if (!firewall || firewall->arg_count != 1)
 		return TEE_ERROR_BAD_PARAMETERS;
 
 	/*
 	 * Peripheral configuration, we assume the configuration is as
 	 * follows:
-	 * firewall->args[0]: Firewall ID
-	 * firewall->args[1]: DECPROT macro to extract etzpc_decprot_attributes
-	 *		      from
+	 * firewall->args[0]: Firewall configuration to check using DECPROT
+	 * macro
 	 */
-	id = firewall->args[0];
-	attr_req = etzpc_binding2decprot((firewall->args[1] &
+	id = firewall->args[0] & ETZPC_ID_MASK;
+	attr_req = etzpc_binding2decprot((firewall->args[0] &
 					  ETZPC_MODE_MASK) >> ETZPC_MODE_SHIFT);
 
 	if (id < etzpc_dev->ddata->num_per_sec) {
 		attr = etzpc_do_get_decprot(etzpc_dev, id);
-		DMSG("Check access %"PRIu32" - attr %s - requested %s", id,
-		     etzpc_decprot_strings[attr],
-		     etzpc_decprot_strings[attr_req]);
 
 		/*
 		 * Access authorized if the attributes requested match the
@@ -401,11 +389,10 @@ static TEE_Result stm32_etzpc_acquire_access(struct firewall_query *firewall)
 	enum etzpc_decprot_attributes attr = ETZPC_DECPROT_MCU_ISOLATION;
 	uint32_t id = 0;
 
-	if (!firewall || firewall->arg_count != 2)
+	if (!firewall || firewall->arg_count != 1)
 		return TEE_ERROR_BAD_PARAMETERS;
 
-	id = firewall->args[0];
-
+	id = firewall->args[0] & ETZPC_ID_MASK;
 	if (id < etzpc_dev->ddata->num_per_sec) {
 		attr = etzpc_do_get_decprot(etzpc_dev, id);
 		if (attr == ETZPC_DECPROT_MCU_ISOLATION)
@@ -427,10 +414,10 @@ stm32_etzpc_acquire_memory_access(struct firewall_query *firewall,
 	size_t prot_size = 0;
 	uint32_t id = 0;
 
-	if (!firewall || firewall->arg_count != 2)
+	if (!firewall || firewall->arg_count != 1)
 		return TEE_ERROR_BAD_PARAMETERS;
 
-	id = firewall->args[0];
+	id = firewall->args[0] & ETZPC_ID_MASK;
 	switch (id) {
 	case ETZPC_TZMA0_ID:
 		tzma_base = ROM_BASE;
@@ -460,10 +447,10 @@ static TEE_Result stm32_etzpc_configure(struct firewall_query *firewall)
 	unsigned int total_sz = 0;
 	uint32_t id = 0;
 
-	if (firewall->arg_count != 2)
+	if (firewall->arg_count != 1)
 		return TEE_ERROR_BAD_PARAMETERS;
 
-	id = firewall->args[0];
+	id = firewall->args[0] & ETZPC_ID_MASK;
 
 	FMSG("Setting firewall configuration for peripheral ID: %"PRIu32, id);
 
@@ -473,11 +460,10 @@ static TEE_Result stm32_etzpc_configure(struct firewall_query *firewall)
 		/*
 		 * Peripheral configuration, we assume the configuration is as
 		 * follows:
-		 * firewall->args[0]: Firewall ID
-		 * firewall->args[1]: Firewall configuration to apply
+		 * firewall->args[0]: Firewall configuration to apply
 		 */
 
-		mode = (firewall->args[1] & ETZPC_MODE_MASK) >>
+		mode = (firewall->args[0] & ETZPC_MODE_MASK) >>
 		       ETZPC_MODE_SHIFT;
 		attr = etzpc_binding2decprot(mode);
 
@@ -486,29 +472,34 @@ static TEE_Result stm32_etzpc_configure(struct firewall_query *firewall)
 			return TEE_ERROR_ACCESS_DENIED;
 		}
 
+		DMSG("Setting access config for periph %"PRIu32" - attr %s", id,
+		     etzpc_decprot_strings[attr]);
+
 		etzpc_do_configure_decprot(etzpc_dev, id, attr);
-		if (firewall->args[1] & ETZPC_LOCK_MASK)
+		if (firewall->args[0] & ETZPC_LOCK_MASK)
 			etzpc_do_lock_decprot(etzpc_dev, id);
 
 		return TEE_SUCCESS;
 	} else if (id == ETZPC_TZMA0_ID || id == ETZPC_TZMA1_ID) {
 		unsigned int tzma_id = 0;
+		size_t memory_size = (firewall->args[0] & ETZPC_MODE_MASK) >>
+				     ETZPC_MODE_SHIFT;
 
 		/*
 		 * TZMA configuration, we assume the configuration is as
 		 * follows:
-		 * firewall->args[0]: One of ETZPC_TZMA0_ID/ETZPC_TZMA1_ID
-		 * firewall->args[1]: Memory size to secure
+		 * firewall->args[0]: Memory configuration to apply, with memory
+		 * size replacing mode field.
 		 */
 		switch (id) {
 		case ETZPC_TZMA0_ID:
-			if (firewall->args[1] > ROM_SIZE)
+			if (memory_size > ROM_SIZE)
 				return TEE_ERROR_BAD_PARAMETERS;
 
 			tzma_id = 0;
 			break;
 		case ETZPC_TZMA1_ID:
-			if (firewall->args[1] > SYSRAM_SIZE)
+			if (memory_size > SYSRAM_SIZE)
 				return TEE_ERROR_BAD_PARAMETERS;
 
 			tzma_id = 1;
@@ -517,14 +508,14 @@ static TEE_Result stm32_etzpc_configure(struct firewall_query *firewall)
 			return TEE_ERROR_BAD_PARAMETERS;
 		}
 
-		assert(IS_ALIGNED(firewall->args[1], SMALL_PAGE_SIZE));
+		assert(IS_ALIGNED(memory_size, SMALL_PAGE_SIZE));
 
 		if (tzma_is_locked(etzpc_dev, tzma_id)) {
 			EMSG("TZMA configuration locked");
 			return TEE_ERROR_ACCESS_DENIED;
 		}
 
-		total_sz = ROUNDUP_DIV(firewall->args[1], SMALL_PAGE_SIZE);
+		total_sz = ROUNDUP_DIV(memory_size, SMALL_PAGE_SIZE);
 		etzpc_do_configure_tzma(etzpc_dev, tzma_id, total_sz);
 	} else {
 		EMSG("Unknown firewall ID: %"PRIu32, id);
