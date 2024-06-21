@@ -319,7 +319,8 @@ static void stm32_exti_rif_parse_dt(struct stm32_exti_pdata *exti,
 		if (c_cid > stm32_exti_maxcid(exti))
 			panic("CID out of range");
 
-		exti->c_cids[pos - 1] = (c_cid << SCID_SHIFT) | _CIDCFGR_CFEN;
+		exti->c_cids[pos - 1] = (c_cid << _CIDCFGR_SCID_SHIFT) |
+					_CIDCFGR_CFEN;
 	}
 }
 
