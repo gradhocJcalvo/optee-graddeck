@@ -112,6 +112,13 @@
 
 #define STM32MP1_ETZPC_MAX_ID		96
 
-#define DECPROT(id, mode, lock)		(((id) << 16) | ((mode) << 8) | (lock))
+#define DECPROT(id, mode, lock)		((id) | ((mode) << ETZPC_MODE_SHIFT) | \
+					 ((lock) << ETZPC_LOCK_SHIFT))
+
+#define ETZPC_ID_MASK			GENMASK_32(7, 0)
+#define ETZPC_LOCK_MASK			BIT(8)
+#define ETZPC_LOCK_SHIFT		8
+#define ETZPC_MODE_SHIFT		9
+#define ETZPC_MODE_MASK			GENMASK_32(31, 9)
 
 #endif /* _DT_BINDINGS_SOC_STM32MP15_ETZPC_H */

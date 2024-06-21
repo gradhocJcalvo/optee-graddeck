@@ -30,13 +30,6 @@
 #include <stm32_util.h>
 #include <util.h>
 
-/* Devicetree compatibility */
-#define ETZPC_LOCK_MASK			BIT(0)
-#define ETZPC_MODE_SHIFT		8
-#define ETZPC_MODE_MASK			GENMASK_32(1, 0)
-#define ETZPC_ID_SHIFT			16
-#define ETZPC_ID_MASK			GENMASK_32(7, 0)
-
 /* ID Registers */
 #define ETZPC_TZMA0_SIZE		U(0x000)
 #define ETZPC_DECPROT0			U(0x010)
@@ -371,8 +364,8 @@ static TEE_Result stm32_etzpc_check_access(struct firewall_query *firewall)
 	 *		      from
 	 */
 	id = firewall->args[0];
-	attr_req = etzpc_binding2decprot((firewall->args[1] >>
-					  ETZPC_MODE_SHIFT) & ETZPC_MODE_MASK);
+	attr_req = etzpc_binding2decprot((firewall->args[1] &
+					  ETZPC_MODE_MASK) >> ETZPC_MODE_SHIFT);
 
 	if (id < etzpc_dev->ddata->num_per_sec) {
 		attr = etzpc_do_get_decprot(etzpc_dev, id);
@@ -484,8 +477,8 @@ static TEE_Result stm32_etzpc_configure(struct firewall_query *firewall)
 		 * firewall->args[1]: Firewall configuration to apply
 		 */
 
-		mode = (firewall->args[1] >> ETZPC_MODE_SHIFT) &
-		       ETZPC_MODE_MASK;
+		mode = (firewall->args[1] & ETZPC_MODE_MASK) >>
+		       ETZPC_MODE_SHIFT;
 		attr = etzpc_binding2decprot(mode);
 
 		if (decprot_is_locked(etzpc_dev, id)) {
@@ -602,8 +595,8 @@ static void fdt_etzpc_conf_decprot(struct etzpc_device *dev,
 
 	for (i = 0; i < len / sizeof(uint32_t); i++) {
 		uint32_t value = fdt32_to_cpu(cuint[i]);
-		uint32_t id = (value >> ETZPC_ID_SHIFT) & ETZPC_ID_MASK;
-		uint32_t mode = (value >> ETZPC_MODE_SHIFT) & ETZPC_MODE_MASK;
+		uint32_t id = value & ETZPC_ID_MASK;
+		uint32_t mode = (value & ETZPC_MODE_MASK) >> ETZPC_MODE_SHIFT;
 		bool lock = value & ETZPC_LOCK_MASK;
 		enum etzpc_decprot_attributes attr = ETZPC_DECPROT_MAX;
 
