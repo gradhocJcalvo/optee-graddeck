@@ -478,6 +478,7 @@ static TEE_Result stm32_rifsc_check_access(struct firewall_query *firewall)
 	uintptr_t rifsc_base = rifsc_pdata.base;
 	unsigned int cid_reg_offset = 0;
 	unsigned int periph_offset = 0;
+	unsigned int resource_id = 0;
 	uint32_t cid_to_check = 0;
 	unsigned int reg_id = 0;
 	bool priv_check = true;
@@ -488,30 +489,28 @@ static TEE_Result stm32_rifsc_check_access(struct firewall_query *firewall)
 
 	assert(rifsc_base);
 
-	if (!firewall || firewall->arg_count != 2)
+	if (!firewall || firewall->arg_count != 1)
 		return TEE_ERROR_BAD_PARAMETERS;
 
 	/*
 	 * Peripheral configuration, we assume the configuration is as
 	 * follows:
-	 * firewall->args[0]: Firewall ID
-	 * firewall->args[1]: RIF configuration to check, reusing RIFPROT()
-	 *		      macro. Only secure, privilege and static CID
-	 *		      fields are used
+	 * firewall->args[0]: RIF configuration to check
 	 */
-	if (firewall->args[0] >= RIMU_ID_OFFSET)
+	resource_id = firewall->args[0] & RIF_PER_ID_MASK;
+	if (resource_id >= RIMU_ID_OFFSET)
 		return TEE_SUCCESS;
 
-	reg_id = firewall->args[0] / _PERIPH_IDS_PER_REG;
-	periph_offset = firewall->args[0] % _PERIPH_IDS_PER_REG;
-	cid_reg_offset = _OFFSET_PERX_CIDCFGR * firewall->args[0];
+	reg_id = resource_id / _PERIPH_IDS_PER_REG;
+	periph_offset = resource_id % _PERIPH_IDS_PER_REG;
+	cid_reg_offset = _OFFSET_PERX_CIDCFGR * resource_id;
 	cidcfgr = io_read32(rifsc_base + _RIFSC_RISC_PER0_CIDCFGR +
 			    cid_reg_offset);
 	seccfgr = io_read32(rifsc_base + _RIFSC_RISC_SECCFGR0 + 0x4 * reg_id);
 	privcfgr = io_read32(rifsc_base + _RIFSC_RISC_PRIVCFGR0 + 0x4 * reg_id);
-	sec_check = (BIT(RIF_SEC_SHIFT) & firewall->args[1]) != 0;
-	priv_check = (BIT(RIF_PRIV_SHIFT) & firewall->args[1]) != 0;
-	cid_to_check = (firewall->args[1] & RIF_SCID_MASK) >> RIF_SCID_SHIFT;
+	sec_check = (BIT(RIF_SEC_SHIFT) & firewall->args[0]) != 0;
+	priv_check = (BIT(RIF_PRIV_SHIFT) & firewall->args[0]) != 0;
+	cid_to_check = (firewall->args[0] & RIF_SCID_MASK) >> RIF_SCID_SHIFT;
 
 	if (!sec_check && seccfgr & BIT(periph_offset))
 		return TEE_ERROR_ACCESS_DENIED;
@@ -535,6 +534,7 @@ static TEE_Result stm32_rifsc_acquire_access(struct firewall_query *firewall)
 {
 	uintptr_t rifsc_base = rifsc_pdata.base;
 	unsigned int cid_reg_offset = 0;
+	unsigned int resource_id = 0;
 	uint32_t cidcfgr = 0;
 
 	assert(rifsc_base);
@@ -542,18 +542,18 @@ static TEE_Result stm32_rifsc_acquire_access(struct firewall_query *firewall)
 	if (!firewall || !firewall->arg_count)
 		return TEE_ERROR_BAD_PARAMETERS;
 
-	if (firewall->args[0] >= RIMU_ID_OFFSET)
+	/*
+	 * Peripheral configuration, we assume the configuration is as
+	 * follows:
+	 * firewall->args[0]: Firewall ID of the resource to acquire
+	 */
+	resource_id = firewall->args[0] & RIF_PER_ID_MASK;
+	if (resource_id >= RIMU_ID_OFFSET)
 		return TEE_SUCCESS;
 
-	cid_reg_offset = _OFFSET_PERX_CIDCFGR * firewall->args[0];
+	cid_reg_offset = _OFFSET_PERX_CIDCFGR * resource_id;
 	cidcfgr = io_read32(rifsc_base + _RIFSC_RISC_PER0_CIDCFGR +
 			    cid_reg_offset);
-
-	FMSG("CID filtering %s ,static CID%u ,semaphore list:%#x for periph %u",
-	     (cidcfgr & _CIDCFGR_CFEN) ? "enabled" : "disabled",
-	     (cidcfgr & RIFSC_RISC_SCID_MASK) >> SCID_SHIFT,
-	     (cidcfgr & RIFSC_RISC_SEML_MASK) >> SEMWL_SHIFT,
-	     firewall->args[0]);
 
 	/* Only check CID attributes */
 	if (!(cidcfgr & _CIDCFGR_CFEN))
@@ -588,11 +588,16 @@ static TEE_Result stm32_rifsc_set_config(struct firewall_query *firewall)
 	if (res)
 		return res;
 
-	if (!firewall || firewall->arg_count != 2)
+	if (!firewall || firewall->arg_count != 1)
 		return TEE_ERROR_BAD_PARAMETERS;
 
-	id = firewall->args[0];
-	conf = firewall->args[1];
+	/*
+	 * Peripheral configuration, we assume the configuration is as
+	 * follows:
+	 * firewall->args[0]: RIF configuration to set
+	 */
+	id = firewall->args[0] & RIF_PER_ID_MASK;
+	conf = firewall->args[0];
 
 	if (id < RIMU_ID_OFFSET) {
 		struct risup_cfg risup = { };
@@ -612,6 +617,11 @@ static TEE_Result stm32_rifsc_set_config(struct firewall_query *firewall)
 			if (cidcfgr != risup.cid_attr)
 				return TEE_ERROR_BAD_PARAMETERS;
 		}
+
+		DMSG("Setting config for peripheral: %u, %s, %s, cid attr: %#"PRIx32", %s",
+		     id, risup.sec ? "Secure" : "Non secure",
+		     risup.priv ? "Privileged" : "Non privileged",
+		     risup.cid_attr, risup.lock ? "Locked" : "Unlocked");
 
 		return stm32_risup_cfg(&rifsc_pdata, &risup);
 	}
