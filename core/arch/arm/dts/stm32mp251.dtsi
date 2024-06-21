@@ -261,7 +261,7 @@
 			reg = <0x42080000 0x1000>;
 			#address-cells = <1>;
 			#size-cells = <1>;
-			#access-controller-cells = <2>;
+			#access-controller-cells = <1>;
 
 			lptimer1: timer@40090000 {
 				compatible = "st,stm32mp25-lptimer";
@@ -271,7 +271,7 @@
 				clock-names = "mux";
 				#address-cells = <1>;
 				#size-cells = <0>;
-				access-controllers = <&rifsc STM32MP25_RIFSC_LPTIM1_ID 0>;
+				access-controllers = <&rifsc STM32MP25_RIFSC_LPTIM1_ID>;
 				status = "disabled";
 
 				counter {
@@ -305,7 +305,7 @@
 				clock-names = "mux";
 				#address-cells = <1>;
 				#size-cells = <0>;
-				access-controllers = <&rifsc STM32MP25_RIFSC_LPTIM2_ID 0>;
+				access-controllers = <&rifsc STM32MP25_RIFSC_LPTIM2_ID>;
 				status = "disabled";
 
 				counter {
@@ -336,7 +336,7 @@
 				reg = <0x400e0000 0x400>;
 				interrupts = <GIC_SPI 115 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_USART2>;
-				access-controllers = <&rifsc STM32MP25_RIFSC_USART2_ID 0>;
+				access-controllers = <&rifsc STM32MP25_RIFSC_USART2_ID>;
 				status = "disabled";
 			};
 
@@ -345,7 +345,7 @@
 				reg = <0x400f0000 0x400>;
 				interrupts = <GIC_SPI 116 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_USART3>;
-				access-controllers = <&rifsc STM32MP25_RIFSC_USART3_ID 0>;
+				access-controllers = <&rifsc STM32MP25_RIFSC_USART3_ID>;
 				status = "disabled";
 			};
 
@@ -354,7 +354,7 @@
 				reg = <0x40100000 0x400>;
 				interrupts = <GIC_SPI 126 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_UART4>;
-				access-controllers = <&rifsc STM32MP25_RIFSC_UART4_ID 0>;
+				access-controllers = <&rifsc STM32MP25_RIFSC_UART4_ID>;
 				status = "disabled";
 			};
 
@@ -363,7 +363,7 @@
 				reg = <0x40110000 0x400>;
 				interrupts = <GIC_SPI 127 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_UART5>;
-				access-controllers = <&rifsc STM32MP25_RIFSC_UART5_ID 0>;
+				access-controllers = <&rifsc STM32MP25_RIFSC_UART5_ID>;
 				status = "disabled";
 			};
 
@@ -375,7 +375,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				i2c-analog-filter;
-				access-controllers = <&rifsc STM32MP25_RIFSC_I2C1_ID 0>;
+				access-controllers = <&rifsc STM32MP25_RIFSC_I2C1_ID>;
 				status = "disabled";
 			};
 
@@ -387,7 +387,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				i2c-analog-filter;
-				access-controllers = <&rifsc STM32MP25_RIFSC_I2C2_ID 0>;
+				access-controllers = <&rifsc STM32MP25_RIFSC_I2C2_ID>;
 				status = "disabled";
 			};
 
@@ -399,7 +399,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				i2c-analog-filter;
-				access-controllers = <&rifsc STM32MP25_RIFSC_I2C3_ID 0>;
+				access-controllers = <&rifsc STM32MP25_RIFSC_I2C3_ID>;
 				status = "disabled";
 			};
 
@@ -411,7 +411,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				i2c-analog-filter;
-				access-controllers = <&rifsc STM32MP25_RIFSC_I2C4_ID 0>;
+				access-controllers = <&rifsc STM32MP25_RIFSC_I2C4_ID>;
 				status = "disabled";
 			};
 
@@ -423,7 +423,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				i2c-analog-filter;
-				access-controllers = <&rifsc STM32MP25_RIFSC_I2C5_ID 0>;
+				access-controllers = <&rifsc STM32MP25_RIFSC_I2C5_ID>;
 				status = "disabled";
 			};
 
@@ -435,7 +435,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				i2c-analog-filter;
-				access-controllers = <&rifsc STM32MP25_RIFSC_I2C6_ID 0>;
+				access-controllers = <&rifsc STM32MP25_RIFSC_I2C6_ID>;
 				status = "disabled";
 			};
 
@@ -447,7 +447,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				i2c-analog-filter;
-				access-controllers = <&rifsc STM32MP25_RIFSC_I2C7_ID 0>;
+				access-controllers = <&rifsc STM32MP25_RIFSC_I2C7_ID>;
 				status = "disabled";
 			};
 
@@ -456,7 +456,7 @@
 				reg = <0x40220000 0x400>;
 				interrupts = <GIC_SPI 136 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_USART6>;
-				access-controllers = <&rifsc STM32MP25_RIFSC_USART6_ID 0>;
+				access-controllers = <&rifsc STM32MP25_RIFSC_USART6_ID>;
 				status = "disabled";
 			};
 
@@ -465,7 +465,7 @@
 				reg = <0x402c0000 0x400>;
 				interrupts = <GIC_SPI 150 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_UART9>;
-				access-controllers = <&rifsc STM32MP25_RIFSC_UART9_ID 0>;
+				access-controllers = <&rifsc STM32MP25_RIFSC_UART9_ID>;
 				status = "disabled";
 			};
 
@@ -474,7 +474,7 @@
 				reg = <0x40330000 0x400>;
 				interrupts = <GIC_SPI 114 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_USART1>;
-				access-controllers = <&rifsc STM32MP25_RIFSC_USART1_ID 0>;
+				access-controllers = <&rifsc STM32MP25_RIFSC_USART1_ID>;
 				status = "disabled";
 			};
 
@@ -483,7 +483,7 @@
 				reg = <0x40370000 0x400>;
 				interrupts = <GIC_SPI 148 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_UART7>;
-				access-controllers = <&rifsc STM32MP25_RIFSC_UART7_ID 0>;
+				access-controllers = <&rifsc STM32MP25_RIFSC_UART7_ID>;
 				status = "disabled";
 			};
 
@@ -492,7 +492,7 @@
 				reg = <0x40380000 0x400>;
 				interrupts = <GIC_SPI 149 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_UART8>;
-				access-controllers = <&rifsc STM32MP25_RIFSC_UART8_ID 0>;
+				access-controllers = <&rifsc STM32MP25_RIFSC_UART8_ID>;
 				status = "disabled";
 			};
 
@@ -502,7 +502,7 @@
 				interrupts = <GIC_SPI 145 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_BUS_HASH>;
 				resets = <&rcc HASH_R>;
-				access-controllers = <&rifsc STM32MP25_RIFSC_HASH_ID 0>;
+				access-controllers = <&rifsc STM32MP25_RIFSC_HASH_ID>;
 				status = "disabled";
 			};
 
@@ -512,7 +512,7 @@
 				clocks = <&clk_rcbsec>, <&rcc CK_BUS_RNG>;
 				clock-names = "rng_clk", "rng_hclk";
 				resets = <&rcc RNG_R>;
-				access-controllers = <&rifsc STM32MP25_RIFSC_RNG_ID 0>;
+				access-controllers = <&rifsc STM32MP25_RIFSC_RNG_ID>;
 			};
 
 			iwdg1: watchdog@44010000 {
@@ -521,7 +521,7 @@
 				interrupts = <GIC_SPI 2 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_BUS_IWDG1>, <&rcc LSI_CK>;
 				clock-names = "pclk", "lsi";
-				access-controllers = <&rifsc STM32MP25_RIFSC_IWDG1_ID 0>;
+				access-controllers = <&rifsc STM32MP25_RIFSC_IWDG1_ID>;
 				status = "disabled";
 			};
 
@@ -531,7 +531,7 @@
 				interrupts = <GIC_SPI 3 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_BUS_IWDG2>, <&rcc LSI_CK>;
 				clock-names = "pclk", "lsi";
-				access-controllers = <&rifsc STM32MP25_RIFSC_IWDG2_ID 0>;
+				access-controllers = <&rifsc STM32MP25_RIFSC_IWDG2_ID>;
 				status = "disabled";
 			};
 
@@ -543,7 +543,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				i2c-analog-filter;
-				access-controllers = <&rifsc STM32MP25_RIFSC_I2C8_ID 0>;
+				access-controllers = <&rifsc STM32MP25_RIFSC_I2C8_ID>;
 				status = "disabled";
 			};
 
@@ -555,7 +555,7 @@
 				clock-names = "mux";
 				#address-cells = <1>;
 				#size-cells = <0>;
-				access-controllers = <&rifsc STM32MP25_RIFSC_LPTIM3_ID 0>;
+				access-controllers = <&rifsc STM32MP25_RIFSC_LPTIM3_ID>;
 				status = "disabled";
 
 				counter {
@@ -589,7 +589,7 @@
 				clock-names = "mux";
 				#address-cells = <1>;
 				#size-cells = <0>;
-				access-controllers = <&rifsc STM32MP25_RIFSC_LPTIM4_ID 0>;
+				access-controllers = <&rifsc STM32MP25_RIFSC_LPTIM4_ID>;
 				status = "disabled";
 
 				counter {
@@ -623,7 +623,7 @@
 				clock-names = "mux";
 				#address-cells = <1>;
 				#size-cells = <0>;
-				access-controllers = <&rifsc STM32MP25_RIFSC_LPTIM5_ID 0>;
+				access-controllers = <&rifsc STM32MP25_RIFSC_LPTIM5_ID>;
 				status = "disabled";
 
 				counter {
