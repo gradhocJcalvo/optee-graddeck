@@ -45,6 +45,13 @@
 #define RIFPROT_PRIV			BIT(9)
 #define RIFPROT_LOCK			BIT(10)
 
+#define _RIF_FLD_PREP(field, value)	(((uint32_t)(value) << \
+					  (field ## _SHIFT)) & \
+					 (field ## _MASK))
+#define _RIF_FLD_GET(field, value)	(((uint32_t)(value) & \
+					  (field ## _MASK)) >> \
+					 (field ## _SHIFT))
+
 #define SCID_OK(cidcfgr, scid_m, cid)	(((cidcfgr) & (scid_m)) ==	\
 					 ((cid) << (SCID_SHIFT)) &&	\
 					 !((cidcfgr) & (_CIDCFGR_SEMEN)))
@@ -193,24 +200,24 @@ static inline TEE_Result
 /*
  * Parse RIF config from Device Tree extracted information
  * @rif_conf: Configuration read in the device tree
- * @conf_data: Buffer containing the RIF configuration to apply for an IP
- * @sec_conf: Buffer containing the secure RIF configuration for an IP
- * @priv_conf: Buffer containing the CID RIF configurations for an IP channels
- *             (i.e: GPIO pins, FMC controllers)
- * @nb_cid_supp: Number of supported CID for the IP
- * @nb_channel: Number of channels for the IP
+ * @conf_data: Buffer containing the RIF configuration to apply for a peripheral
+ * @sec_conf: Buffer containing the secure RIF configuration for a peripheral
+ * @priv_conf: Buffer containing the CID RIF configuration for a peripheral's
+ * resources (i.e: GPIO pins, FMC controllers)
+ * @nb_cid_supp: Number of supported CID for the peripheral
+ * @nb_resource: Number of resources for the peripheral
  */
 #ifdef CFG_STM32_RIF
 void stm32_rif_parse_cfg(uint32_t rif_conf,
 			 struct rif_conf_data *conf_data,
 			 unsigned int nb_cid_supp,
-			 unsigned int nb_channel);
+			 unsigned int nb_resource);
 #else
 static inline void
-		stm32_rif_parse_cfg(uint32_t rif_conf __unused,
-				    struct rif_conf_data *conf_data __unused,
-				    unsigned int nb_cid_supp __unused,
-				    unsigned int nb_channel __unused)
+stm32_rif_parse_cfg(uint32_t rif_conf __unused,
+		    struct rif_conf_data *conf_data __unused,
+		    unsigned int nb_cid_supp __unused,
+		    unsigned int nb_resource __unused)
 {
 }
 #endif

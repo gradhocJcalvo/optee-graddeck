@@ -77,14 +77,16 @@
 #define _PERIPH_IDS_PER_REG		U(32)
 #define _OFFSET_PERX_CIDCFGR		U(0x8)
 
-#define RIFSC_RISC_CFEN_MASK		BIT(0)
-#define RIFSC_RISC_SEM_EN_MASK		BIT(1)
-#define RIFSC_RISC_SCID_MASK		GENMASK_32(6, 4)
-#define RIFSC_RISC_SEC_MASK		BIT(8)
-#define RIFSC_RISC_PRIV_MASK		BIT(9)
-#define RIFSC_RISC_LOCK_MASK		BIT(10)
-#define RIFSC_RISC_SEML_MASK		GENMASK_32(23, 16)
-#define RIFSC_RISC_PER_ID_MASK		GENMASK_32(31, 24)
+#define RIFSC_RISC_CIDCFGR_CFEN_MASK	BIT(0)
+#define RIFSC_RISC_CIDCFGR_CFEN_SHIFT	U(0)
+#define RIFSC_RISC_CIDCFGR_SEM_EN_MASK	BIT(1)
+#define RIFSC_RISC_CIDCFGR_SEM_EN_SHIFT	U(1)
+#define RIFSC_RISC_CIDCFGR_SCID_MASK	GENMASK_32(6, 4)
+#define RIFSC_RISC_CIDCFGR_SCID_SHIFT	U(4)
+#define RIFSC_RISC_CIDCFGR_LOCK_MASK	BIT(10)
+#define RIFSC_RISC_CIDCFGR_LOCK_SHIFT	U(10)
+#define RIFSC_RISC_CIDCFGR_SEML_MASK	GENMASK_32(23, 16)
+#define RIFSC_RISC_CIDCFGR_SEML_SHIFT	U(16)
 
 #define RIFSC_RISC_PERx_CID_MASK	(RIFSC_RISC_CFEN_MASK | \
 					 RIFSC_RISC_SEM_EN_MASK | \
@@ -95,19 +97,10 @@
 #define RIFSC_RIMC_MCID_MASK		GENMASK_32(6, 4)
 #define RIFSC_RIMC_MSEC_MASK		BIT(8)
 #define RIFSC_RIMC_MPRIV_MASK		BIT(9)
-#define RIFSC_RIMC_M_ID_MASK		GENMASK_32(23, 16)
-
-#define RIFSC_RIMC_ATTRx_MASK		(RIFSC_RIMC_MODE_MASK | \
-					 RIFSC_RIMC_MCID_MASK | \
-					 RIFSC_RIMC_MSEC_MASK | \
-					 RIFSC_RIMC_MPRIV_MASK)
 
 /* max entries */
 #define MAX_RIMU			U(16)
 #define MAX_RISUP			U(128)
-
-#define _RIF_FLD_PREP(field, value)	(((uint32_t)(value) << (field ## _SHIFT)) & (field ## _MASK))
-#define _RIF_FLD_GET(field, value)	(((uint32_t)(value) & (field ## _MASK)) >> (field ## _SHIFT))
 
 struct rifsc_driver_data {
 	uint32_t version;
@@ -225,11 +218,11 @@ static TEE_Result stm32_rifsc_dt_conf_risup(const void *fdt, int node,
 		uint32_t value = fdt32_to_cpu(cuint[i]);
 		struct risup_cfg *risup = *risups + i;
 
-		risup->id = _RIF_FLD_GET(RIFSC_RISC_PER_ID, value);
-		risup->sec = (bool)_RIF_FLD_GET(RIFSC_RISC_SEC, value);
-		risup->priv = (bool)_RIF_FLD_GET(RIFSC_RISC_PRIV, value);
-		risup->lock = (bool)_RIF_FLD_GET(RIFSC_RISC_LOCK, value);
-		risup->cid_attr = _RIF_FLD_GET(RIFSC_RISC_PERx_CID, value);
+		risup->id = _RIF_FLD_GET(RIF_PER_ID, value);
+		risup->sec = (value & BIT(RIF_SEC_SHIFT)) != 0;
+		risup->priv = (value & BIT(RIF_PRIV_SHIFT)) != 0;
+		risup->lock = (value & BIT(RIF_LOCK_SHIFT)) != 0;
+		risup->cid_attr = _RIF_FLD_GET(RIF_PERx_CID, value);
 	}
 
 	return TEE_SUCCESS;
@@ -259,9 +252,9 @@ static TEE_Result stm32_rifsc_dt_conf_rimu(const void *fdt, int node,
 		uint32_t value = fdt32_to_cpu(cuint[i]);
 		struct rimu_cfg *rimu = pdata->rimu + i;
 
-		rimu->id = _RIF_FLD_GET(RIFSC_RIMC_M_ID, value) -
+		rimu->id = _RIF_FLD_GET(RIMUPROT_RIMC_M_ID, value) -
 			   RIMU_ID_OFFSET;
-		rimu->attr = _RIF_FLD_GET(RIFSC_RIMC_ATTRx, value);
+		rimu->attr = _RIF_FLD_GET(RIMUPROT_RIMC_ATTRx, value);
 	}
 
 	return TEE_SUCCESS;
@@ -434,11 +427,11 @@ TEE_Result stm32_rifsc_reconfigure_risup(unsigned int risup_id,
 		return TEE_ERROR_ACCESS_DENIED;
 	}
 
-	risup->cid_attr = cid << RIFSC_RISC_SCID_SHIFT;
+	risup->cid_attr = cid << RIFSC_RISC_CIDCFGR_SCID_SHIFT;
 	if (cfen)
-		risup->cid_attr |= RIFSC_RISC_CFEN_MASK;
+		risup->cid_attr |= RIFSC_RISC_CIDCFGR_CFEN_MASK;
 	else
-		risup->cid_attr &= ~RIFSC_RISC_CFEN_MASK;
+		risup->cid_attr &= ~RIFSC_RISC_CIDCFGR_CFEN_MASK;
 
 	risup->sec = sec;
 	risup->priv = priv;
@@ -516,10 +509,9 @@ static TEE_Result stm32_rifsc_check_access(struct firewall_query *firewall)
 			    cid_reg_offset);
 	seccfgr = io_read32(rifsc_base + _RIFSC_RISC_SECCFGR0 + 0x4 * reg_id);
 	privcfgr = io_read32(rifsc_base + _RIFSC_RISC_PRIVCFGR0 + 0x4 * reg_id);
-	sec_check = _RIF_FLD_GET(RIFSC_RISC_SEC, firewall->args[1]) != 0;
-	priv_check = _RIF_FLD_GET(RIFSC_RISC_PRIV, firewall->args[1]) != 0;
-	cid_to_check = _RIF_FLD_GET(RIFSC_RISC_PERx_CID, firewall->args[1]) >>
-		       RIFSC_RISC_SCID_SHIFT;
+	sec_check = (BIT(RIF_SEC_SHIFT) & firewall->args[1]) != 0;
+	priv_check = (BIT(RIF_PRIV_SHIFT) & firewall->args[1]) != 0;
+	cid_to_check = (firewall->args[1] & RIF_SCID_MASK) >> RIF_SCID_SHIFT;
 
 	if (!sec_check && seccfgr & BIT(periph_offset))
 		return TEE_ERROR_ACCESS_DENIED;
@@ -533,7 +525,7 @@ static TEE_Result stm32_rifsc_check_access(struct firewall_query *firewall)
 	if ((cidcfgr & _CIDCFGR_SEMEN &&
 	     !SEM_EN_AND_OK(cidcfgr, cid_to_check)) ||
 	    (!(cidcfgr & _CIDCFGR_SEMEN) &&
-	     !SCID_OK(cidcfgr, RIFSC_RISC_SCID_MASK, cid_to_check)))
+	     !SCID_OK(cidcfgr, RIFSC_RISC_CIDCFGR_SCID_MASK, cid_to_check)))
 		return TEE_ERROR_BAD_PARAMETERS;
 
 	return TEE_SUCCESS;
@@ -578,7 +570,7 @@ static TEE_Result stm32_rifsc_acquire_access(struct firewall_query *firewall)
 						   MAX_CID_SUPPORTED);
 	}
 
-	if (!SCID_OK(cidcfgr, RIFSC_RISC_SCID_MASK, RIF_CID1))
+	if (!SCID_OK(cidcfgr, RIFSC_RISC_CIDCFGR_SCID_MASK, RIF_CID1))
 		return TEE_ERROR_ACCESS_DENIED;
 
 	return TEE_SUCCESS;
@@ -606,11 +598,11 @@ static TEE_Result stm32_rifsc_set_config(struct firewall_query *firewall)
 		struct risup_cfg risup = { };
 		uint32_t cidcfgr = 0;
 
-		risup.id = firewall->args[0];
-		risup.sec = _RIF_FLD_GET(RIFSC_RISC_SEC, conf) != 0;
-		risup.priv = _RIF_FLD_GET(RIFSC_RISC_PRIV, conf) != 0;
-		risup.lock = _RIF_FLD_GET(RIFSC_RISC_LOCK, conf) != 0;
-		risup.cid_attr = _RIF_FLD_GET(RIFSC_RISC_PERx_CID, conf);
+		risup.id = id;
+		risup.sec = (BIT(RIF_SEC_SHIFT) & conf) != 0;
+		risup.priv = (BIT(RIF_PRIV_SHIFT) & conf) != 0;
+		risup.lock = (BIT(RIF_LOCK_SHIFT) & conf) != 0;
+		risup.cid_attr = _RIF_FLD_GET(RIF_PERx_CID, conf);
 
 		if (!is_tdcid) {
 			cidcfgr = io_read32(rifsc_pdata.base +
@@ -627,8 +619,8 @@ static TEE_Result stm32_rifsc_set_config(struct firewall_query *firewall)
 	if (!is_tdcid)
 		return TEE_ERROR_ACCESS_DENIED;
 
-	rimu.id = _RIF_FLD_GET(RIFSC_RIMC_M_ID, conf) - RIMU_ID_OFFSET;
-	rimu.attr = _RIF_FLD_GET(RIFSC_RIMC_ATTRx, conf);
+	rimu.id = _RIF_FLD_GET(RIMUPROT_RIMC_M_ID, conf) - RIMU_ID_OFFSET;
+	rimu.attr = _RIF_FLD_GET(RIMUPROT_RIMC_ATTRx, conf);
 
 	return stm32_rimu_cfg(&rifsc_pdata, &rimu);
 }
@@ -750,7 +742,7 @@ TEE_Result stm32_rifsc_check_tdcid(bool *tdcid_state)
 	*tdcid_state = false;
 
 	if (((io_read32(rifsc_pdata.base + _RIFSC_RIMC_CR) &
-	     _RIFSC_RIMC_CR_TDCID_MASK)) == (RIF_CID1 << SCID_SHIFT))
+	     _RIFSC_RIMC_CR_TDCID_MASK)) == (RIF_CID1 << _CIDCFGR_SCID_SHIFT))
 		*tdcid_state = true;
 
 	return TEE_SUCCESS;
