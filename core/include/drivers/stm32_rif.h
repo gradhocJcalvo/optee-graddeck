@@ -16,8 +16,10 @@
  * CIDCFGR register
  */
 #define _CIDCFGR_CFEN			BIT(0)
+#define _CIDCFGR_SCID_SHIFT		U(4)
 #define _CIDCFGR_SEMEN			BIT(1)
-#define _CIDCFGR_SEMWL(x)		BIT(SEMWL_SHIFT + (x))
+#define _CIDCFGR_SEMWL_SHIFT		U(16)
+#define _CIDCFGR_SEMWL(x)		BIT(_CIDCFGR_SEMWL_SHIFT + (x))
 
 /*
  * SEMCR register
