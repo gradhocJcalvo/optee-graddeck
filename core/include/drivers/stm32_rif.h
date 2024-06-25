@@ -34,17 +34,6 @@
 #define MAX_CID_BITFIELD		U(3)
 #define MAX_CID_SUPPORTED		U(7)
 
-#define SCID_SHIFT			U(4)
-#define SEMWL_SHIFT			U(16)
-#define RIF_ID_SHIFT			U(24)
-
-#define RIF_ID_MASK			GENMASK_32(31, 24)
-#define RIF_CHANNEL_ID(x)		((RIF_ID_MASK & (x)) >> RIF_ID_SHIFT)
-
-#define RIFPROT_SEC			BIT(8)
-#define RIFPROT_PRIV			BIT(9)
-#define RIFPROT_LOCK			BIT(10)
-
 #define _RIF_FLD_PREP(field, value)	(((uint32_t)(value) << \
 					  (field ## _SHIFT)) & \
 					 (field ## _MASK))
@@ -53,7 +42,7 @@
 					 (field ## _SHIFT))
 
 #define SCID_OK(cidcfgr, scid_m, cid)	(((cidcfgr) & (scid_m)) ==	\
-					 ((cid) << (SCID_SHIFT)) &&	\
+					 ((cid) << (_CIDCFGR_SCID_SHIFT)) && \
 					 !((cidcfgr) & (_CIDCFGR_SEMEN)))
 
 #define SEM_EN_AND_OK(cidcfgr, wl)	(((cidcfgr) & _CIDCFGR_CFEN) &&  \
