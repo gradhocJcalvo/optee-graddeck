@@ -962,9 +962,9 @@ DEFINE_DT_DRIVER(stm32_pmic2_dt_driver) = {
 	.match_table = stm32_pmic2_match_table,
 	.probe = stm32_pmic2_probe,
 };
-#if defined(CFG_STM32MP25) || defined(CFG_STM32MP23) || defined(CFG_STM32MP21)
-bool stm32_pmic2_is_present(void)
+
+bool stm32_stpmic2_is_present(void)
 {
 	return stm32_pmic2;
 }
-#endif
+

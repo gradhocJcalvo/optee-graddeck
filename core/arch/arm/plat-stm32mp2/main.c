@@ -499,7 +499,7 @@ void stm32_debug_suspend(unsigned long a0)
 
 	/* Pulse on NRSTC1MS pin for standby request when PMIC is used */
 	if (dbgmcu_cr & DBGMCU_CR_DBG_STANDBY && a0 >= PM_D2_LPLV_LEVEL &&
-	    stm32_pmic2_is_present())
+	    stm32_stpmic2_is_present())
 		io_setbits32(stm32_rcc_base() + RCC_C1MSRDCR,
 			     RCC_C1MSRDCR_C1MSRST);
 

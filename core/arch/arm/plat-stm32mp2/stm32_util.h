@@ -33,9 +33,9 @@ bool stm32mp_supports_cpu_opp(uint32_t opp_id);
 #endif /*CFG_STM32_CPU_OPP*/
 
 #ifdef CFG_STPMIC2
-bool stm32_pmic2_is_present(void);
+bool stm32_stpmic2_is_present(void);
 #else
-static inline bool stm32_pmic2_is_present(void)
+static inline bool stm32_stpmic2_is_present(void)
 {
 	return false;
 }

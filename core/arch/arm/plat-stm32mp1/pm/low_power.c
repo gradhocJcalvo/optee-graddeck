@@ -14,7 +14,6 @@
 #include <drivers/stm32_etzpc.h>
 #include <drivers/stm32mp_dt_bindings.h>
 #include <drivers/stm32mp1_ddrc.h>
-#include <drivers/stm32mp1_pmic.h>
 #include <drivers/stm32mp1_pwr.h>
 #ifdef CFG_STM32MP13
 #include <drivers/stm32mp13_rcc.h>
@@ -229,7 +228,8 @@ void stm32_enter_cstop(uint32_t mode)
 				    mode == STM32_PM_CSTOP_ALLOW_LPLV_STOP2))
 		pwr_cr1 |= PWR_CR1_LPCFG;
 
-	if (stm32mp_with_pmic()) {
+	/* The PMIC2 applies it's low power config in a suspend call back */
+	if (stm32_stpmic1_is_present()) {
 		stm32mp_get_pmic();
 		stm32mp_pmic_apply_lp_config(config_pwr[mode].regul_suspend_node_name);
 		stm32mp_put_pmic();
@@ -367,7 +367,8 @@ void __noreturn stm32_enter_cstop_shutdown(uint32_t mode)
 
 	switch (mode) {
 	case STM32_PM_SHUTDOWN:
-		if (stm32mp_with_pmic()) {
+		/* The PMIC2 driver does not implement switch off function */
+		if (stm32_stpmic1_is_present()) {
 			wait_console_flushed();
 			stm32mp_get_pmic();
 			stpmic1_switch_off();

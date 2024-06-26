@@ -9,6 +9,7 @@
 #include <assert.h>
 #include <drivers/clk.h>
 #include <drivers/pinctrl.h>
+#include <drivers/stm32mp1_pmic.h>
 #include <drivers/stm32mp1_rcc_util.h>
 #include <kernel/panic.h>
 #include <stdbool.h>
@@ -44,8 +45,28 @@ TEE_Result stm32mp_syscfg_erase_sram3(void);
 /* Platform util for the GIC */
 vaddr_t get_gicd_base(void);
 
-/* Platform util for PMIC support */
-bool stm32mp_with_pmic(void);
+#ifdef CFG_STPMIC1
+bool stm32_stpmic1_is_present(void);
+#else
+static inline bool stm32_stpmic1_is_present(void)
+{
+	return false;
+}
+#endif
+
+#ifdef CFG_STPMIC2
+bool stm32_stpmic2_is_present(void);
+#else
+static inline bool stm32_stpmic2_is_present(void)
+{
+	return false;
+}
+#endif
+
+static inline bool stm32mp_with_pmic(void)
+{
+	return stm32_stpmic1_is_present() || stm32_stpmic2_is_present();
+}
 
 /* Power management service */
 #ifdef CFG_PSCI_ARM32
