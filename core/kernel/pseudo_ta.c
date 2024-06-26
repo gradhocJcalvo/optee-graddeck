@@ -329,6 +329,7 @@ TEE_Result tee_ta_init_pseudo_ta_session(const TEE_UUID *uuid,
 	return TEE_SUCCESS;
 }
 
+#ifdef CFG_WITH_USER_TA
 TEE_Result to_bounce_params(uint32_t param_types,
 			    TEE_Param params[TEE_NUM_PARAMS],
 			    TEE_Param bparams[TEE_NUM_PARAMS],
@@ -420,3 +421,4 @@ TEE_Result from_bounce_params(uint32_t param_types,
 
 	return res;
 }
+#endif
