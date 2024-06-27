@@ -1,4 +1,3 @@
-srcs-y += stm32_firewall.c
 srcs-$(CFG_STM32_ETZPC) += stm32_etzpc.c
 srcs-$(CFG_STM32_IAC) += stm32_iac.c
 srcs-$(CFG_STM32_RIF) += stm32_rif.c

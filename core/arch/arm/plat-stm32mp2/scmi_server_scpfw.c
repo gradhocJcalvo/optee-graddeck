@@ -14,7 +14,6 @@
 #ifdef CFG_STM32_CPU_OPP
 #include <drivers/stm32_cpu_opp.h>
 #endif
-#include <drivers/stm32_firewall.h>
 #include <drivers/stm32_remoteproc.h>
 #include <drivers/stm32mp_dt_bindings.h>
 #include <initcall.h>
