@@ -598,6 +598,7 @@
 			reg = <0x420f0000 0x1000>;
 			clocks = <&rcc CK_ICN_LS_MCU>;
 			st,mem-map = <0xa000000 0x20000>;
+			#access-controller-cells = <1>;
 		};
 
 		risab2: risab@42100000 {
@@ -605,6 +606,7 @@
 			reg = <0x42100000 0x1000>;
 			clocks = <&rcc CK_ICN_LS_MCU>;
 			st,mem-map = <0xa020000 0x20000>;
+			#access-controller-cells = <1>;
 		};
 
 		risab3: risab@42110000 {
@@ -612,6 +614,7 @@
 			reg = <0x42110000 0x1000>;
 			clocks = <&rcc CK_ICN_LS_MCU>;
 			st,mem-map = <0xa040000 0x20000>;
+			#access-controller-cells = <1>;
 		};
 
 		risab4: risab@42120000 {
@@ -619,6 +622,7 @@
 			reg = <0x42120000 0x1000>;
 			clocks = <&rcc CK_ICN_LS_MCU>;
 			st,mem-map = <0xa060000 0x20000>;
+			#access-controller-cells = <1>;
 		};
 
 		risab5: risab@42130000 {
@@ -626,6 +630,7 @@
 			reg = <0x42130000 0x1000>;
 			clocks = <&rcc CK_ICN_LS_MCU>;
 			st,mem-map = <0xa080000 0x20000>;
+			#access-controller-cells = <1>;
 		};
 
 		risab6: risab@42140000 {
@@ -633,6 +638,7 @@
 			reg = <0x42140000 0x1000>;
 			clocks = <&rcc CK_ICN_LS_MCU>;
 			st,mem-map = <0xa0a0000 0x20000>;
+			#access-controller-cells = <1>;
 			status = "disabled";
 		};
 
