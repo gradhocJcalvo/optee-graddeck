@@ -338,37 +338,42 @@ static void apply_rif_config(struct stm32_risab_pdata *risab_d)
 }
 
 static void parse_risab_rif_conf(struct stm32_risab_pdata *risab_d,
-				 uint32_t rif_conf, unsigned int idx,
-				 unsigned int subr_offset)
+				 struct stm32_risab_rif_conf *subr_cfg,
+				 uint32_t rif_conf)
 {
-	unsigned int first_page = subr_offset / _RISAB_PAGE_SIZE;
-	unsigned int last_page = first_page +
-				 risab_d->subr_cfg[idx].nb_pages_cfged - 1;
+	unsigned int first_page = subr_cfg->first_page;
+	unsigned int last_page = first_page + subr_cfg->nb_pages_cfged - 1;
 	uint32_t reg_pages_cfged = GENMASK_32(last_page, first_page);
 	unsigned int i = 0;
 
 	assert(last_page <= _RISAB_NB_PAGES_MAX);
 
-	risab_d->subr_cfg[idx].first_page = first_page;
+	subr_cfg->first_page = first_page;
 
 	DMSG("Configuring pages %u to %u", first_page, last_page);
 
 	/* Parse secure configuration */
 	if (rif_conf & BIT(RISAB_SEC_SHIFT)) {
-		risab_d->subr_cfg[idx].seccfgr = _RISAB_PG_SECCFGR_MASK;
+		subr_cfg->seccfgr = _RISAB_PG_SECCFGR_MASK;
+		/*
+		 * Memory region overlapping should only be checked at platform
+		 * setup when memory mapping is first applied. A region's
+		 * attributes can later be dynamically modified but not its
+		 * bounds.
+		 */
 		if (reg_pages_cfged & risab_d->pages_configured)
 			panic("Memory region overlap detected");
 	} else {
-		risab_d->subr_cfg[idx].seccfgr = 0;
+		subr_cfg->seccfgr = 0;
 	}
 
 	/* Parse default privilege configuration */
 	if (rif_conf & BIT(RISAB_DPRIV_SHIFT)) {
-		risab_d->subr_cfg[idx].dprivcfgr = _RISAB_PG_PRIVCFGR_MASK;
+		subr_cfg->dprivcfgr = _RISAB_PG_PRIVCFGR_MASK;
 		if (reg_pages_cfged & risab_d->pages_configured)
 			panic("Memory region overlap detected");
 	} else {
-		risab_d->subr_cfg[idx].dprivcfgr = 0;
+		subr_cfg->dprivcfgr = 0;
 	}
 
 	risab_d->pages_configured |= reg_pages_cfged;
@@ -376,35 +381,35 @@ static void parse_risab_rif_conf(struct stm32_risab_pdata *risab_d,
 	for (i = 0; i < RISAB_NB_MAX_CID_SUPPORTED; i++) {
 		/* RISAB compartment priv configuration */
 		if (rif_conf & BIT(i)) {
-			risab_d->subr_cfg[idx].plist[i] |=
+			subr_cfg->plist[i] |=
 			GENMASK_32(first_page +
-				   risab_d->subr_cfg[idx].nb_pages_cfged - 1,
+				   subr_cfg->nb_pages_cfged - 1,
 				   first_page);
 		}
 
 		/* RISAB compartment read configuration */
 		if (rif_conf & BIT(i) << RISAB_READ_LIST_SHIFT) {
-			risab_d->subr_cfg[idx].rlist[i] |=
+			subr_cfg->rlist[i] |=
 			GENMASK_32(first_page +
-				   risab_d->subr_cfg[idx].nb_pages_cfged - 1,
+				   subr_cfg->nb_pages_cfged - 1,
 				   first_page);
 		}
 
 		/* RISAB compartment write configuration */
 		if (rif_conf & BIT(i) << RISAB_WRITE_LIST_SHIFT) {
-			risab_d->subr_cfg[idx].wlist[i] |=
+			subr_cfg->wlist[i] |=
 			GENMASK_32(first_page +
-				   risab_d->subr_cfg[idx].nb_pages_cfged - 1,
+				   subr_cfg->nb_pages_cfged - 1,
 				   first_page);
 		}
 	}
 
 	/* CID filtering configuration */
 	if (rif_conf & BIT(RISAB_CFEN_SHIFT))
-		risab_d->subr_cfg[idx].cidcfgr |= _RISAB_PG_CIDCFGR_CFEN;
+		subr_cfg->cidcfgr |= _RISAB_PG_CIDCFGR_CFEN;
 
 	if (rif_conf & BIT(RISAB_DCEN_SHIFT))
-		risab_d->subr_cfg[idx].cidcfgr |= _RISAB_PG_CIDCFGR_DCEN;
+		subr_cfg->cidcfgr |= _RISAB_PG_CIDCFGR_DCEN;
 
 	if (rif_conf & RISAB_DCCID_MASK) {
 		uint32_t ddcid = (((rif_conf & RISAB_DCCID_MASK) >>
@@ -414,7 +419,7 @@ static void parse_risab_rif_conf(struct stm32_risab_pdata *risab_d,
 		assert(((rif_conf & RISAB_DCCID_MASK) >> RISAB_DCCID_SHIFT) <
 		       RISAB_NB_MAX_CID_SUPPORTED);
 
-		risab_d->subr_cfg[idx].cidcfgr |= ddcid;
+		subr_cfg->cidcfgr |= ddcid;
 	}
 }
 
@@ -486,6 +491,9 @@ static TEE_Result parse_dt(const void *fdt, int node,
 		address = (uintptr_t)fdt_reg_base_address(fdt, mem_reg_node);
 		length = fdt_reg_size(fdt, mem_reg_node);
 
+		assert(IS_ALIGNED(address, _RISAB_PAGE_SIZE) &&
+		       IS_ALIGNED(length, _RISAB_PAGE_SIZE));
+
 		/*
 		 * Get the sub region offset and check if it is not out
 		 * of bonds
@@ -495,6 +503,8 @@ static TEE_Result parse_dt(const void *fdt, int node,
 		assert(sub_region_offset < (risab_d->region_cfged.base +
 					    risab_d->region_cfged.size));
 
+		risab_d->subr_cfg[i].first_page = sub_region_offset /
+						  _RISAB_PAGE_SIZE;
 		risab_d->subr_cfg[i].nb_pages_cfged = length /
 						      _RISAB_PAGE_SIZE;
 		if (!risab_d->subr_cfg[i].nb_pages_cfged)
@@ -508,8 +518,8 @@ static TEE_Result parse_dt(const void *fdt, int node,
 		/* There should be only one configuration for this region */
 		assert((unsigned int)(lenp / sizeof(uint32_t)) == 1);
 
-		parse_risab_rif_conf(risab_d, fdt32_to_cpu(cuint[0]), i,
-				     sub_region_offset);
+		parse_risab_rif_conf(risab_d, &risab_d->subr_cfg[i],
+				     fdt32_to_cpu(cuint[0]));
 	}
 
 	return TEE_SUCCESS;
