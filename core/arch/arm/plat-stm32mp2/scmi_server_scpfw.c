@@ -769,20 +769,14 @@ static void scmi_scpfw_cfg_init_channel(const char *name,
 			for (j = 0; j < channel_cfg->pd_count; j++) {
 				struct clk *clk = stm32mp_rcc_clock_id_to_clk(
 					chan_res.pd[j].clock_id);
-				struct regulator *regu = NULL;
+				struct regulator *regu = regulator_get_by_name(
+					chan_res.pd[j].regu_name);
 
-				if (chan_res.pd[j].regu_name) {
-					regu = regulator_get_by_name(
-						chan_res.pd[j].regu_name);
-
-					if (!regu) {
-						EMSG("Regulator %s not found "
-						     "for %s power domain",
-						     chan_res.pd[j].regu_name,
-						     chan_res.pd[j].name);
-						panic();
-					}
-				}
+				if (!regu)
+					DMSG("Regulator %s not found "
+					     "for %s power domain",
+					     chan_res.pd[j].regu_name,
+					     chan_res.pd[j].name);
 
 				if (!clk)
 					DMSG("Clock ID %ld not found for %s "
