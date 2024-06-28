@@ -179,45 +179,41 @@ static bool regs_access_granted(struct stm32_risab_pdata *risab_d,
 }
 
 static void set_block_seccfgr(struct stm32_risab_pdata *risab_d,
-			      unsigned int reg_idx)
+			      struct stm32_risab_rif_conf *subr_cfg)
 {
 	vaddr_t base = risab_base(risab_d);
 	unsigned int i = 0;
-	unsigned int first_page = risab_d->subr_cfg[reg_idx].first_page;
-	unsigned int last_page = first_page +
-				 risab_d->subr_cfg[reg_idx].nb_pages_cfged - 1;
+	unsigned int last_page = subr_cfg->first_page +
+				 subr_cfg->nb_pages_cfged - 1;
 
-	for (i = first_page; i <= last_page; i++)
+	for (i = subr_cfg->first_page; i <= last_page; i++)
 		io_clrsetbits32(base + _RISAB_PGy_SECCFGR(i),
-				_RISAB_PG_SECCFGR_MASK,
-				risab_d->subr_cfg[reg_idx].seccfgr);
+				_RISAB_PG_SECCFGR_MASK, subr_cfg->seccfgr);
 }
 
 static void set_block_dprivcfgr(struct stm32_risab_pdata *risab_d,
-				unsigned int reg_idx)
+				struct stm32_risab_rif_conf *subr_cfg)
 {
 	vaddr_t base = risab_base(risab_d);
 	unsigned int i = 0;
-	unsigned int first_page = risab_d->subr_cfg[reg_idx].first_page;
-	unsigned int last_page = first_page +
-				 risab_d->subr_cfg[reg_idx].nb_pages_cfged - 1;
+	unsigned int last_page = subr_cfg->first_page +
+				 subr_cfg->nb_pages_cfged - 1;
 
-	for (i = first_page; i <= last_page; i++)
+	for (i = subr_cfg->first_page; i <= last_page; i++)
 		io_clrsetbits32(base + _RISAB_PGy_PRIVCFGR(i),
 				_RISAB_PG_PRIVCFGR_MASK,
-				risab_d->subr_cfg[reg_idx].dprivcfgr);
+				subr_cfg->dprivcfgr);
 }
 
 static void set_cidcfgr(struct stm32_risab_pdata *risab_d,
-			unsigned int reg_idx)
+			struct stm32_risab_rif_conf *subr_cfg)
 {
 	vaddr_t base = risab_base(risab_d);
 	unsigned int i = 0;
-	unsigned int first_page = risab_d->subr_cfg[reg_idx].first_page;
-	unsigned int last_page = first_page +
-				 risab_d->subr_cfg[reg_idx].nb_pages_cfged - 1;
+	unsigned int last_page = subr_cfg->first_page +
+				 subr_cfg->nb_pages_cfged - 1;
 
-	for (i = first_page; i <= last_page; i++) {
+	for (i = subr_cfg->first_page; i <= last_page; i++) {
 		/*
 		 * When TDCID, OP-TEE should be the one to set the CID filtering
 		 * configuration. Clearing previous configuration prevents
@@ -225,58 +221,55 @@ static void set_cidcfgr(struct stm32_risab_pdata *risab_d,
 		 */
 		io_clrsetbits32(base + _RISAB_PGy_CIDCFGR(i),
 				_RISAB_PG_CIDCFGR_CONF_MASK,
-				risab_d->subr_cfg[reg_idx].cidcfgr);
+				subr_cfg->cidcfgr);
 	}
 }
 
 static void set_read_conf(struct stm32_risab_pdata *risab_d,
-			  unsigned int reg_idx)
+			  struct stm32_risab_rif_conf *subr_cfg)
 {
 	vaddr_t base = risab_base(risab_d);
 	unsigned int i = 0;
-	unsigned int first_page = risab_d->subr_cfg[reg_idx].first_page;
-	unsigned int last_page = first_page +
-				 risab_d->subr_cfg[reg_idx].nb_pages_cfged - 1;
-	uint32_t mask = GENMASK_32(last_page, first_page);
+	unsigned int last_page = subr_cfg->first_page +
+				 subr_cfg->nb_pages_cfged - 1;
+	uint32_t mask = GENMASK_32(last_page, subr_cfg->first_page);
 
 	for (i = 0; i < RISAB_NB_MAX_CID_SUPPORTED; i++) {
-		if (risab_d->subr_cfg[reg_idx].rlist[i])
+		if (subr_cfg->rlist[i])
 			io_clrsetbits32(base + _RISAB_CIDxRDCFGR(i), mask,
-					risab_d->subr_cfg[reg_idx].rlist[i]);
+					subr_cfg->rlist[i]);
 	}
 }
 
 static void set_write_conf(struct stm32_risab_pdata *risab_d,
-			   unsigned int reg_idx)
+			   struct stm32_risab_rif_conf *subr_cfg)
 {
 	vaddr_t base = risab_base(risab_d);
 	unsigned int i = 0;
-	unsigned int first_page = risab_d->subr_cfg[reg_idx].first_page;
-	unsigned int last_page = first_page +
-				 risab_d->subr_cfg[reg_idx].nb_pages_cfged - 1;
-	uint32_t mask = GENMASK_32(last_page, first_page);
+	unsigned int last_page = subr_cfg->first_page +
+				 subr_cfg->nb_pages_cfged - 1;
+	uint32_t mask = GENMASK_32(last_page, subr_cfg->first_page);
 
 	for (i = 0; i < RISAB_NB_MAX_CID_SUPPORTED; i++) {
-		if (risab_d->subr_cfg[reg_idx].wlist[i])
+		if (subr_cfg->wlist[i])
 			io_clrsetbits32(base + _RISAB_CIDxWRCFGR(i), mask,
-					risab_d->subr_cfg[reg_idx].wlist[i]);
+					subr_cfg->wlist[i]);
 	}
 }
 
 static void set_cid_priv_conf(struct stm32_risab_pdata *risab_d,
-			      unsigned int reg_idx)
+			      struct stm32_risab_rif_conf *subr_cfg)
 {
 	vaddr_t base = risab_base(risab_d);
 	unsigned int i = 0;
-	unsigned int first_page = risab_d->subr_cfg[reg_idx].first_page;
-	unsigned int last_page = first_page +
-				 risab_d->subr_cfg[reg_idx].nb_pages_cfged - 1;
-	uint32_t mask = GENMASK_32(last_page, first_page);
+	unsigned int last_page = subr_cfg->first_page +
+				 subr_cfg->nb_pages_cfged - 1;
+	uint32_t mask = GENMASK_32(last_page, subr_cfg->first_page);
 
 	for (i = 0; i < RISAB_NB_MAX_CID_SUPPORTED; i++) {
-		if (risab_d->subr_cfg[reg_idx].plist[i])
+		if (subr_cfg->plist[i])
 			io_clrsetbits32(base + _RISAB_CIDxPRIVCFGR(i), mask,
-					risab_d->subr_cfg[reg_idx].plist[i]);
+					subr_cfg->plist[i]);
 	}
 }
 
@@ -306,14 +299,14 @@ static void apply_rif_config(struct stm32_risab_pdata *risab_d)
 	}
 
 	for (i = 0; i < risab_d->nb_regions_cfged; i++) {
-		set_block_dprivcfgr(risab_d, i);
+		set_block_dprivcfgr(risab_d, &risab_d->subr_cfg[i]);
 
 		/* Delegate RIF configuration or not */
 		if (!is_tdcid)
 			DMSG("Cannot set %s CID configuration for region %u",
 			     risab_d->risab_name, i);
 		else
-			set_cidcfgr(risab_d, i);
+			set_cidcfgr(risab_d, &risab_d->subr_cfg[i]);
 
 		if (!regs_access_granted(risab_d, i))
 			panic();
@@ -324,14 +317,14 @@ static void apply_rif_config(struct stm32_risab_pdata *risab_d)
 		 * to apply. Start by default setting security configuration
 		 * for all blocks.
 		 */
-		set_block_seccfgr(risab_d, i);
+		set_block_seccfgr(risab_d, &risab_d->subr_cfg[i]);
 
 		/* Grant page access to some CIDs, in read and/or write */
-		set_read_conf(risab_d, i);
-		set_write_conf(risab_d, i);
+		set_read_conf(risab_d, &risab_d->subr_cfg[i]);
+		set_write_conf(risab_d, &risab_d->subr_cfg[i]);
 
 		/* For each granted CID define privilege access per page */
-		set_cid_priv_conf(risab_d, i);
+		set_cid_priv_conf(risab_d, &risab_d->subr_cfg[i]);
 	}
 
 	clk_disable(risab_d->clock);
@@ -562,13 +555,13 @@ static TEE_Result stm32_risab_pm_resume(struct stm32_risab_pdata *risab)
 
 	for (i = 0; i < risab->nb_regions_cfged; i++) {
 		/* Restoring RISAB RIF configuration */
-		set_block_dprivcfgr(risab, i);
+		set_block_dprivcfgr(risab, &risab->subr_cfg[i]);
 
 		if (!is_tdcid)
 			DMSG("Cannot set %s CID configuration for region %zu",
 			     risab->risab_name, i);
 		else
-			set_cidcfgr(risab, i);
+			set_cidcfgr(risab, &risab->subr_cfg[i]);
 
 		if (!regs_access_granted(risab, i))
 			continue;
@@ -578,10 +571,10 @@ static TEE_Result stm32_risab_pm_resume(struct stm32_risab_pdata *risab)
 		 * configuration is inconsistent with these desired rights
 		 * to apply.
 		 */
-		set_block_seccfgr(risab, i);
-		set_read_conf(risab, i);
-		set_write_conf(risab, i);
-		set_cid_priv_conf(risab, i);
+		set_block_seccfgr(risab, &risab->subr_cfg[i]);
+		set_read_conf(risab, &risab->subr_cfg[i]);
+		set_write_conf(risab, &risab->subr_cfg[i]);
+		set_cid_priv_conf(risab, &risab->subr_cfg[i]);
 	}
 
 	return TEE_SUCCESS;
