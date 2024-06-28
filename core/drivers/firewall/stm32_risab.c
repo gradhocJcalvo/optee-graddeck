@@ -525,10 +525,12 @@ static TEE_Result parse_dt(const void *fdt, int node,
 	return TEE_SUCCESS;
 }
 
-static void set_srswiad_conf(struct stm32_risab_pdata *risab_d)
+static void configure_srwiad(struct stm32_risab_pdata *risab_d)
 {
 	if (risab_d->srwiad)
 		io_setbits32(risab_base(risab_d), _RISAB_CR_SRWIAD);
+	else
+		io_clrbits32(risab_base(risab_d), _RISAB_CR_SRWIAD);
 };
 
 static void clean_iac_regs(struct stm32_risab_pdata *risab_d)
@@ -805,7 +807,7 @@ static TEE_Result stm32_risab_pm_resume(struct stm32_risab_pdata *risab)
 	if (is_tdcid) {
 		if (risab->base.pa == RISAB6_BASE)
 			set_vderam_syscfg(risab);
-		set_srswiad_conf(risab);
+		configure_srwiad(risab);
 		clean_iac_regs(risab);
 	}
 
@@ -921,7 +923,7 @@ static TEE_Result stm32_risab_probe(const void *fdt, int node,
 		if (risab_d->base.pa == RISAB6_BASE)
 			set_vderam_syscfg(risab_d);
 		clean_iac_regs(risab_d);
-		set_srswiad_conf(risab_d);
+		configure_srwiad(risab_d);
 	}
 
 	apply_rif_config(risab_d);
