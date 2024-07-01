@@ -126,6 +126,10 @@ endif()
 target_compile_definitions(framework
                            PUBLIC FWK_LOG_LEVEL=FWK_LOG_LEVEL_${SCP_LOG_LEVEL})
 
+if(SCP_ENABLE_LOG_PREFIX)
+    target_compile_definitions(framework PUBLIC "FWK_LOG_LEVEL_PREFIX")
+endif()
+
 #
 # Generate `<fwk_module_idx.h>` and `<fwk_module_list.c>` based on the list of
 # modules we have been given. While we're at it, we add these modules as

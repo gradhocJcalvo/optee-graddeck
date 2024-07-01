@@ -200,6 +200,22 @@
 #define FWK_LOG_LEVEL_CRIT 4
 #define FWK_LOG_LEVEL_DISABLED 5
 
+#ifdef FWK_LOG_LEVEL_PREFIX
+#define FWK_PREFIX_TRACE "[TRACE] "
+#define FWK_LOG_PREFIX_DEBUG "[DEBUG] "
+#define FWK_LOG_PREFIX_INFO "[INFO] "
+#define FWK_LOG_PREFIX_WARN "[WARN] "
+#define FWK_LOG_PREFIX_ERR "[ERR] "
+#define FWK_LOG_PREFIX_CRIT "[CRIT] "
+#else
+#define FWK_PREFIX_TRACE NULL
+#define FWK_LOG_PREFIX_DEBUG NULL
+#define FWK_LOG_PREFIX_INFO NULL
+#define FWK_LOG_PREFIX_WARN NULL
+#define FWK_LOG_PREFIX_ERR NULL
+#define FWK_LOG_PREFIX_CRIT NULL
+#endif
+
 /*!
  * \}
  */
@@ -226,7 +242,7 @@
  */
 
 #ifdef FWK_TRACE_ENABLE
-#    define FWK_TRACE(...) fwk_log_printf(__VA_ARGS__)
+#    define FWK_TRACE(...) fwk_log_printf(FWK_PREFIX_TRACE, __VA_ARGS__)
 #else
 #    define FWK_TRACE(...)
 #endif
@@ -240,7 +256,7 @@
  */
 
 #if FWK_LOG_LEVEL <= FWK_LOG_LEVEL_DEBUG
-#    define FWK_LOG_DEBUG(...) fwk_log_printf(__VA_ARGS__)
+#    define FWK_LOG_DEBUG(...) fwk_log_printf(FWK_LOG_PREFIX_DEBUG, __VA_ARGS__)
 #else
 #    define FWK_LOG_DEBUG(...)
 #endif
@@ -254,7 +270,7 @@
  */
 
 #if FWK_LOG_LEVEL <= FWK_LOG_LEVEL_INFO
-#    define FWK_LOG_INFO(...) fwk_log_printf(__VA_ARGS__)
+#    define FWK_LOG_INFO(...) fwk_log_printf(FWK_LOG_PREFIX_INFO, __VA_ARGS__)
 #else
 #    define FWK_LOG_INFO(...)
 #endif
@@ -268,7 +284,7 @@
  */
 
 #if FWK_LOG_LEVEL <= FWK_LOG_LEVEL_WARN
-#    define FWK_LOG_WARN(...) fwk_log_printf(__VA_ARGS__)
+#    define FWK_LOG_WARN(...) fwk_log_printf(FWK_LOG_PREFIX_WARN, __VA_ARGS__)
 #else
 #    define FWK_LOG_WARN(...)
 #endif
@@ -282,7 +298,7 @@
  */
 
 #if FWK_LOG_LEVEL <= FWK_LOG_LEVEL_ERROR
-#    define FWK_LOG_ERR(...) fwk_log_printf(__VA_ARGS__)
+#    define FWK_LOG_ERR(...) fwk_log_printf(FWK_LOG_PREFIX_ERR, __VA_ARGS__)
 #else
 #    define FWK_LOG_ERR(...)
 #endif
@@ -296,7 +312,7 @@
  */
 
 #if FWK_LOG_LEVEL <= FWK_LOG_LEVEL_CRIT
-#    define FWK_LOG_CRIT(...) fwk_log_printf(__VA_ARGS__)
+#    define FWK_LOG_CRIT(...) fwk_log_printf(FWK_LOG_PREFIX_CRIT, __VA_ARGS__)
 #else
 #    define FWK_LOG_CRIT(...)
 #endif
@@ -306,10 +322,12 @@
  *
  * \brief Log a message with a specified filter level.
  *
+ * \param[in] level_string Log level identifier.
  * \param[in] format Format string.
  * \param[in] ... Associated parameters.
  */
-void fwk_log_printf(const char *format, ...) FWK_PRINTF(1, 2);
+void fwk_log_printf(const char* level_string,
+                    const char *format, ...) FWK_PRINTF(2, 3);
 
 /*!
  * \internal
