@@ -1080,8 +1080,9 @@ stm32_clk_oscillators_wait_lse_ready(struct clk_stm32_priv *priv __unused,
 	int ret = 0;
 
 	if (stm32_rcc_has_access_by_id(RCC_RIF_OSCILLATORS)) {
-		if (osci->freq != 0U)
-			ret = stm32_gate_wait_ready(osc_data->gate_id, true);
+		if (osci->freq != 0U &&
+		    stm32_gate_wait_ready(osc_data->gate_id, true))
+			ret = -1;
 	}
 
 	return ret;
@@ -1863,7 +1864,10 @@ static int clk_stm32_pll_set_mux(struct clk_stm32_priv *priv __unused,
 	int mux = (src & MUX_ID_MASK) >> MUX_ID_SHIFT;
 	int sel = (src & MUX_SEL_MASK) >> MUX_SEL_SHIFT;
 
-	return stm32_mux_set_parent(mux, sel);
+	if (stm32_mux_set_parent(mux, sel))
+		return -1;
+
+	return 0;
 }
 
 static int clk_stm32_pll1_init(struct clk_stm32_priv *priv,
@@ -2191,7 +2195,8 @@ static int stm32_clk_configure_mux(struct clk_stm32_priv *priv __unused,
 		sem_taken = true;
 	}
 
-	ret = stm32_mux_set_parent(mux, sel);
+	if (stm32_mux_set_parent(mux, sel))
+		ret = -1;
 
 	if (sem_taken) {
 		if (stm32_rif_release_semaphore(rifsc_base +
