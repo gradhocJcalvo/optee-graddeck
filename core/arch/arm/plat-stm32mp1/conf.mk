@@ -347,7 +347,7 @@ endif
 # Provisioning support for BSEC shadow OTP is dedicated to insecure
 # development configuration only.
 ifeq ($(CFG_STM32MP_PROVISIONING),y)
-$(call force,CFG_WARN_INSECURE,y,Required by CFG_STM32MP_PROVISIONING)
+$(call force,CFG_INSECURE,y,Required by CFG_STM32MP_PROVISIONING)
 endif
 
 #SAES and CRYP cannot be register at the same time in the crypto framework

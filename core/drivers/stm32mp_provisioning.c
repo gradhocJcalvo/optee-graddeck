@@ -6,7 +6,7 @@
  * to provision BSEC/BSEC3 shadow cells with data read from OP-TEE OS
  * DTB but without any insurance that the OP-TEE driver are initialized
  * after this provisioning sequence. Therefore the driver initialization
- * prints a warning trace or panics upon CFG_WARN_INSECURE value.
+ * prints a warning trace or panics upon CFG_INSECURE value.
  */
 
 #include <arm.h>
@@ -216,7 +216,7 @@ static TEE_Result provisioning_probe(void)
 	provisioning_init();
 
 	if (!SLIST_EMPTY(&shadow_otp_head)) {
-		if (IS_ENABLED(CFG_WARN_INSECURE))
+		if (IS_ENABLED(CFG_INSECURE))
 			IMSG("WARNING: Embeds insecure stm32mp_provisioning driver");
 		else
 			panic("Embeds insecure stm32mp_provisioning data");

@@ -182,7 +182,7 @@ static TEE_Result init_debug(void)
 		return res;
 
 	if (state != BSEC_STATE_SEC_CLOSED) {
-		if (IS_ENABLED(CFG_WARN_INSECURE))
+		if (IS_ENABLED(CFG_INSECURE))
 			IMSG("WARNING: All debug access are allowed");
 
 		res = stm32_bsec_write_debug_conf(BSEC3_DEBUG_ALL);

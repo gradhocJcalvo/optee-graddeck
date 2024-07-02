@@ -267,7 +267,7 @@ CFG_PKCS11_TA ?= y
 # configuration only.
 CFG_STM32MP_PROVISIONING ?= y
 ifeq ($(CFG_STM32MP_PROVISIONING),y)
-$(call force,CFG_WARN_INSECURE,y,Required by CFG_STM32MP_PROVISIONING)
+$(call force,CFG_INSECURE,y,Required by CFG_STM32MP_PROVISIONING)
 endif
 
 # Optional behavior upon receiving illegal access events
