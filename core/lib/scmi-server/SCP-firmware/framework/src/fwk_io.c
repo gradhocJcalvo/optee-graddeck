@@ -388,7 +388,7 @@ int fwk_io_vprintf(
         return FWK_E_STATE;
     }
 
-    buffer = fwk_mm_alloc_notrap(sizeof(buffer[0]), (size_t)(length + 1));
+    buffer = fwk_mm_alloc_notrap((size_t)(length + 1), sizeof(buffer[0]));
     if (buffer == NULL) { /* Not enough memory for the string buffer */
         return FWK_E_NOMEM;
     }
