@@ -1548,9 +1548,6 @@ static void stm32_tamp_configure_pin(uint32_t id, struct gpio *gpio, bool out,
 			break;
 		}
 	}
-
-	/* TAMPER pins are always secure (without effect, but keep coherency) */
-	stm32_gpio_set_secure_cfg(bank, pin, true);
 }
 
 static TEE_Result
