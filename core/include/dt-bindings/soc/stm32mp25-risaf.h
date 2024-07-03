@@ -15,9 +15,10 @@
 
 /* RISAF encryption modes */
 #define RIF_ENC_DIS		0x0
-#if defined(CFG_STM32MP21)
-#define RIF_ENC_MCE_EN		0x1 /* Side-channel attack protection */
-#endif /* defined(CFG_STM32MP21) */
+#define RIF_ENC_MCE_EN		0x1 /*
+				     * STM32MP21 only,
+				     * side-channel attack protection.
+				     */
 #define RIF_ENC_EN		0x2
 
 #define DT_RISAF_EN_SHIFT	4
