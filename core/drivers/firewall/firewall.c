@@ -83,7 +83,7 @@ TEE_Result firewall_dt_get_by_name(const void *fdt, int node, const char *name,
 {
 	int index = 0;
 
-	index = fdt_stringlist_search(fdt, node, "access-controllers-names",
+	index = fdt_stringlist_search(fdt, node, "access-controller-names",
 				      name);
 	if (index == -FDT_ERR_NOTFOUND)
 		return TEE_ERROR_ITEM_NOT_FOUND;
