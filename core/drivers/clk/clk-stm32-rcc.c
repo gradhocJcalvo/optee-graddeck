@@ -64,7 +64,6 @@ static TEE_Result stm32mp_rcc_probe(const void *fdt, int node,
 	}
 
 	if (rcc_pinctrl) {
-		stm32_pinctrl_set_secure_cfg(rcc_pinctrl, true);
 		res = pinctrl_apply_state(rcc_pinctrl);
 		if (res)
 			return res;
