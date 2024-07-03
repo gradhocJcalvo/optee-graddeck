@@ -112,15 +112,6 @@
 					 (BIT((cid)) << \
 					  _RISAF_REG_CIDCFGR_WRENC_SHIFT))
 
-/* Device Tree related definitions */
-#define DT_RISAF_REG_ID_MASK		U(0xF)
-#define DT_RISAF_EN_MASK		BIT(DT_RISAF_EN_SHIFT)
-#define DT_RISAF_SEC_MASK		BIT(DT_RISAF_SEC_SHIFT)
-#define DT_RISAF_ENC_MASK		GENMASK_32(7, 6)
-#define DT_RISAF_PRIV_MASK		GENMASK_32(15, 8)
-#define DT_RISAF_READ_MASK		GENMASK_32(23, 16)
-#define DT_RISAF_WRITE_MASK		GENMASK_32(31, 24)
-
 #define _RISAF_GET_REGION_ID(cfg)	((cfg) & DT_RISAF_REG_ID_MASK)
 #if defined(CFG_STM32MP21)
 #define _RISAF_GET_REGION_CFG(cfg) \

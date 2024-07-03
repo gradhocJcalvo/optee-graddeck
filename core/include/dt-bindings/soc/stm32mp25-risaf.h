@@ -27,6 +27,14 @@
 #define DT_RISAF_READ_SHIFT	16
 #define DT_RISAF_WRITE_SHIFT	24
 
+#define DT_RISAF_REG_ID_MASK		U(0xF)
+#define DT_RISAF_EN_MASK		BIT(DT_RISAF_EN_SHIFT)
+#define DT_RISAF_SEC_MASK		BIT(DT_RISAF_SEC_SHIFT)
+#define DT_RISAF_ENC_MASK		GENMASK_32(7, 6)
+#define DT_RISAF_PRIV_MASK		GENMASK_32(15, 8)
+#define DT_RISAF_READ_MASK		GENMASK_32(23, 16)
+#define DT_RISAF_WRITE_MASK		GENMASK_32(31, 24)
+
 #define RISAFPROT(risaf_region, cid_read_list, cid_write_list, cid_priv_list, sec, enc, enabled) \
 	(((cid_write_list) << DT_RISAF_WRITE_SHIFT) | \
 	 ((cid_read_list) << DT_RISAF_READ_SHIFT) | \
