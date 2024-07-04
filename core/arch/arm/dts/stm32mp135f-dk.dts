@@ -163,6 +163,10 @@
 	>;
 };
 
+&gpioa {
+	st,protreg = < (TZPROT(6)) >;
+};
+
 &gpiob {
 	st,protreg = < (TZPROT(9)) >;
 };
