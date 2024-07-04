@@ -28,9 +28,10 @@ static TEE_Result pmic_regu_pm(enum pm_op op, uint32_t pm_hint,
 			       const struct pm_callback_handle *pm_handle)
 {
 	struct regulator *regulator = pm_handle->handle;
+	unsigned int pwrlvl = PM_HINT_PLATFORM_STATE(pm_hint);
 
 	if (op == PM_OP_SUSPEND)
-		return stm32_pmic2_apply_pm_state(regulator, pm_hint);
+		return stm32_pmic2_apply_pm_state(regulator, pwrlvl);
 
 	return TEE_SUCCESS;
 }
