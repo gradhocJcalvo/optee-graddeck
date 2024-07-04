@@ -19,7 +19,6 @@ struct stm32_uart_pdata {
 	bool secure;
 	struct clk *clock;
 	struct pinctrl_state *pinctrl;
-	struct pinctrl_state *pinctrl_sleep;
 };
 
 /*

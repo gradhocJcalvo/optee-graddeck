@@ -198,9 +198,6 @@ static TEE_Result parse_dt(void *fdt, int node, struct stm32_uart_pdata *pd)
 	res = pinctrl_get_state_by_name(fdt, node, "default", &pd->pinctrl);
 	if (res)
 		return res;
-	res = pinctrl_get_state_by_name(fdt, node, "sleep", &pd->pinctrl_sleep);
-	if (res)
-		return res;
 
 	fdt_fill_device_info(fdt, &info, node);
 
