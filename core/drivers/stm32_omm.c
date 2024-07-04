@@ -76,7 +76,7 @@ struct stm32_omm_pdata {
 	struct pinctrl_state *pinctrl_s;
 	struct stm32_ospi_pdata ospi_d[OSPI_NB];
 	struct stm32_mm_region region;
-	struct firewall_query *firewall_confs[OSPI_NB_RISUP];
+	struct firewall_alt_conf *firewall_conf;
 	vaddr_t base;
 	uint32_t mux;
 	uint32_t cssel_ovr;
@@ -128,12 +128,10 @@ static TEE_Result stm32_omm_parse_fdt(const void *fdt, int node)
 	if (res && res != TEE_ERROR_ITEM_NOT_FOUND)
 		return res;
 
-	for (i = 0; i < OSPI_NB_RISUP; i++) {
-		res = firewall_dt_get_by_index(fdt, node, i,
-					       &omm_d->firewall_confs[i]);
-		if (res)
-			return res;
-	}
+	res = firewall_dt_get_alternate_conf(fdt, node, "default",
+					     &omm_d->firewall_conf);
+	if (res)
+		return res;
 
 	omm_d->mux = fdt_read_uint32_default(fdt, node, "st,omm-mux", 0);
 	omm_d->req2ack = fdt_read_uint32_default(fdt, node,
@@ -328,17 +326,13 @@ static void stm32_omm_configure(void)
 
 static void stm32_omm_setup(void)
 {
-	unsigned int i = 0;
-
 	stm32_omm_set_mm();
 	stm32_omm_configure();
 	if (omm_d->pinctrl_d)
 		pinctrl_apply_state(omm_d->pinctrl_d);
 
-	for (i = 0; i < OSPI_NB_RISUP; i++) {
-		if (firewall_set_configuration(omm_d->firewall_confs[i]))
-			panic();
-	}
+	if (firewall_set_alternate_conf(omm_d->firewall_conf))
+		panic();
 }
 
 static void stm32_omm_suspend(void)
