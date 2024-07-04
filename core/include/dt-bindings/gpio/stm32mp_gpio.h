@@ -11,4 +11,7 @@
 /* Macro to define the security for GPIO */
 #define TZPROT(id) (1 << (id))
 
+/* GPIO phandle argument bitmask for a non-secure GPIO */
+#define GPIO_STM32_NSEC		(1 << 31)
+
 #endif
