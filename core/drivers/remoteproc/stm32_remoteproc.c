@@ -16,9 +16,9 @@
 #include <libfdt.h>
 #include <mm/core_memprot.h>
 #include <mm/core_mmu.h>
-#if defined(CFG_STM32MP25) || defined(CFG_STM32MP23)
+#if defined(CFG_STM32MP25) || defined(CFG_STM32MP23) || defined(CFG_STM32MP21)
 #include <stm32_sysconf.h>
-#endif /* defined(CFG_STM32MP25) || defined(CFG_STM32MP23) */
+#endif
 
 #define TIMEOUT_US_1MS	U(1000)
 
@@ -104,7 +104,7 @@ void *stm32_rproc_get(uint32_t rproc_id)
 	return rproc;
 }
 
-#if defined(CFG_STM32MP25) || defined(CFG_STM32MP23)
+#if defined(CFG_STM32MP25) || defined(CFG_STM32MP23) || defined(CFG_STM32MP21)
 /* Re-apply default access right on the memory regions */
 static TEE_Result
 stm32_rproc_release_mems_access(struct stm32_rproc_instance *rproc)
@@ -204,7 +204,7 @@ static TEE_Result stm32mp2_rproc_start(struct stm32_rproc_instance *rproc)
 					   mems[i].size))
 			continue;
 
-#if defined(CFG_STM32MP25) || defined(CFG_STM32MP23)
+#if defined(CFG_STM32MP25) || defined(CFG_STM32MP23) || defined(CFG_STM32MP21)
 		if (rproc->tzen) {
 			stm32mp_syscfg_write(A35SSC_M33_INITSVTOR_CR,
 					     rproc->boot_addr, INITVTOR_MASK);
@@ -218,7 +218,7 @@ static TEE_Result stm32mp2_rproc_start(struct stm32_rproc_instance *rproc)
 		}
 		boot_addr_valid = true;
 		break;
-#endif /* defined(CFG_STM32MP25) || defined(CFG_STM32MP23) */
+#endif
 	}
 
 	if (!boot_addr_valid) {
@@ -270,11 +270,11 @@ static TEE_Result rproc_stop(struct stm32_rproc_instance *rproc)
 	if (res)
 		return res;
 
-#if defined(CFG_STM32MP25) || defined(CFG_STM32MP23)
+#if defined(CFG_STM32MP25) || defined(CFG_STM32MP23) || defined(CFG_STM32MP21)
 	/* Disable the TrustZone */
 	stm32mp_syscfg_write(A35SSC_M33_TZEN_CR, 0,
 			     A35SSC_M33_TZEN_CR_CFG_SECEXT);
-#endif /* defined(CFG_STM32MP25) || defined(CFG_STM32MP23) */
+#endif
 
 	rproc->boot_addr = 0;
 	rproc->tzen = false;
@@ -630,7 +630,7 @@ static void stm32_rproc_cleanup(struct stm32_rproc_instance *rproc)
 
 static void stm32_rproc_a35ss_cfg(struct stm32_rproc_instance *rproc __unused)
 {
-#if defined(CFG_STM32MP25) || defined(CFG_STM32MP23)
+#if defined(CFG_STM32MP25) || defined(CFG_STM32MP23) || defined(CFG_STM32MP21)
 	stm32mp_syscfg_write(A35SSC_M33CFG_ACCESS_CR, rproc->m33_cr_right,
 			     A35SSC_M33_TZEN_CR_M33CFG_SEC |
 			     A35SSC_M33_TZEN_CR_M33CFG_PRIV);
@@ -638,7 +638,7 @@ static void stm32_rproc_a35ss_cfg(struct stm32_rproc_instance *rproc __unused)
 	stm32mp_syscfg_write(A35SSC_M33_TZEN_CR, 0,
 			     A35SSC_M33_TZEN_CR_CFG_SECEXT);
 
-#endif /* defined(CFG_STM32MP25) || defined(CFG_STM32MP23) */
+#endif
 }
 
 static TEE_Result stm32mp25_rproc_pm(enum pm_op op, unsigned int pm_hint,
@@ -663,10 +663,10 @@ static TEE_Result stm32_rproc_probe(const void *fdt, int node,
 	if (!rproc)
 		return TEE_ERROR_OUT_OF_MEMORY;
 
-#if defined(CFG_STM32MP25) || defined(CFG_STM32MP23)
+#if defined(CFG_STM32MP25) || defined(CFG_STM32MP23) || defined(CFG_STM32MP21)
 	rproc->m33_cr_right = A35SSC_M33_TZEN_CR_M33CFG_SEC |
 			      A35SSC_M33_TZEN_CR_M33CFG_PRIV;
-#endif /* defined(CFG_STM32MP25) || defined(CFG_STM32MP23) */
+#endif
 
 	rproc->cdata = comp_data;
 	rproc->fdt = fdt;
@@ -690,7 +690,7 @@ static TEE_Result stm32_rproc_probe(const void *fdt, int node,
 	if (res)
 		goto err;
 
-#if defined(CFG_STM32MP25) || defined(CFG_STM32MP23)
+#if defined(CFG_STM32MP25) || defined(CFG_STM32MP23) || defined(CFG_STM32MP21)
 	if (rproc->cdata->ns_loading) {
 		/*
 		 * The remote firmware will be loaded by the non secure
@@ -700,7 +700,7 @@ static TEE_Result stm32_rproc_probe(const void *fdt, int node,
 		rproc->m33_cr_right = A35SSC_M33_TZEN_CR_M33CFG_PRIV;
 	}
 	stm32_rproc_a35ss_cfg(rproc);
-#endif /* defined(CFG_STM32MP25) || defined(CFG_STM32MP23) */
+#endif
 
 	if (!rproc->cdata->ns_loading)
 		SLIST_INSERT_HEAD(&rproc_list, rproc, link);
