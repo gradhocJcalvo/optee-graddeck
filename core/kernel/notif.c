@@ -234,6 +234,7 @@ void notif_deliver_atomic_event(enum notif_event ev)
 {
 	uint32_t old_itr_status = 0;
 	struct notif_driver *nd = NULL;
+	bool run_bottom_half = false;
 
 	assert(ev == NOTIF_EVENT_STARTED);
 
@@ -246,9 +247,14 @@ void notif_deliver_atomic_event(enum notif_event ev)
 	notif_started = true;
 
 	SLIST_FOREACH(nd, &notif_driver_head, link)
-		if (nd->atomic_cb)
-			nd->atomic_cb(nd, ev);
+		if (nd->atomic_cb && nd->atomic_cb(nd, ev))
+			run_bottom_half = true;
 
+	if (run_bottom_half) {
+		bit_set(notif_values, NOTIF_VALUE_DO_BOTTOM_HALF);
+		interrupt_raise_pi(interrupt_get_main_chip(),
+				   CFG_CORE_ASYNC_NOTIF_GIC_INTID);
+	}
 out:
 	cpu_spin_unlock_xrestore(&notif_lock, old_itr_status);
 }
