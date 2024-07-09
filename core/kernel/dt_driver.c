@@ -261,7 +261,7 @@ dt_driver_get_provider_by_phandle(uint32_t phandle, enum dt_driver_type type)
 static TEE_Result device_from_provider_prop(struct dt_driver_provider *prv,
 					    const void *fdt, int phandle_node,
 					    const uint32_t *prop,
-					    void *device_ref)
+					    void *device_ref, int consumer_node)
 {
 	TEE_Result res = TEE_ERROR_GENERIC;
 	struct dt_pargs *pargs = NULL;
@@ -275,6 +275,7 @@ static TEE_Result device_from_provider_prop(struct dt_driver_provider *prv,
 	pargs->fdt = fdt;
 	pargs->phandle_node = phandle_node;
 	pargs->args_count = prv->provider_cells;
+	pargs->consumer_node = consumer_node;
 	for (n = 0; n < prv->provider_cells; n++)
 		pargs->args[n] = fdt32_to_cpu(prop[n]);
 
@@ -304,8 +305,8 @@ TEE_Result dt_driver_device_from_parent(const void *fdt, int nodeoffset,
 		return TEE_ERROR_DEFER_DRIVER_INIT;
 	}
 
-	return device_from_provider_prop(prv, fdt, nodeoffset, NULL,
-					 device_ref);
+	return device_from_provider_prop(prv, fdt, parent, NULL, device_ref,
+					 nodeoffset);
 }
 
 TEE_Result dt_driver_device_from_node_idx_prop_phandle(const char *prop_name,
@@ -317,8 +318,8 @@ TEE_Result dt_driver_device_from_node_idx_prop_phandle(const char *prop_name,
 						       void *device_ref)
 {
 	int len = 0;
+	int phandle_node = -1;
 	const uint32_t *prop = NULL;
-	int phandle_node_unused = -1;
 	struct dt_driver_provider *prv = NULL;
 
 	prop = fdt_getprop(fdt, nodeoffs, prop_name, &len);
@@ -341,8 +342,11 @@ TEE_Result dt_driver_device_from_node_idx_prop_phandle(const char *prop_name,
 	if ((prop_index + 1) * sizeof(*prop) > (size_t)len)
 		return TEE_ERROR_ITEM_NOT_FOUND;
 
-	return device_from_provider_prop(prv, fdt, phandle_node_unused,
-					 prop + prop_index, device_ref);
+	phandle_node = fdt_node_offset_by_phandle(fdt, phandle);
+
+	return device_from_provider_prop(prv, fdt, phandle_node,
+					 prop + prop_index, device_ref,
+					 nodeoffs);
 }
 
 TEE_Result dt_driver_device_from_node_idx_prop(const char *prop_name,
@@ -358,6 +362,7 @@ TEE_Result dt_driver_device_from_node_idx_prop(const char *prop_name,
 	int phandle_node = -1;
 	uint32_t phandle = 0;
 	const uint32_t *prop = NULL;
+	int consumer_node = nodeoffset;
 	struct dt_driver_provider *prv = NULL;
 
 	prop = fdt_getprop(fdt, nodeoffset, prop_name, &len);
@@ -396,6 +401,8 @@ TEE_Result dt_driver_device_from_node_idx_prop(const char *prop_name,
 			prv = dt_driver_get_provider_by_node(nodeoffset, type);
 		} else {
 			prv = dt_driver_get_provider_by_phandle(phandle, type);
+			if (prv)
+				phandle_node = prv->nodeoffset;
 		}
 
 		if (prv) {
@@ -437,7 +444,8 @@ TEE_Result dt_driver_device_from_node_idx_prop(const char *prop_name,
 		idx32++;
 
 		return device_from_provider_prop(prv, fdt, phandle_node,
-						 prop + idx32, device_ref);
+						 prop + idx32, device_ref,
+						 consumer_node);
 	}
 
 	return TEE_ERROR_ITEM_NOT_FOUND;
