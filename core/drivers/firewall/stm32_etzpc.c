@@ -17,7 +17,6 @@
 #include <drivers/stm32mp_dt_bindings.h>
 #include <initcall.h>
 #include <io.h>
-#include <keep.h>
 #include <kernel/boot.h>
 #include <kernel/dt.h>
 #include <kernel/panic.h>
