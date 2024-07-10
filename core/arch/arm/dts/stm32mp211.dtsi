@@ -726,8 +726,8 @@
 		pinctrl: pinctrl@44240000 {
 			#address-cells = <1>;
 			#size-cells = <1>;
-			compatible = "st,stm32mp257-pinctrl";
-			ranges = <0 0x44240000 0xa0400>;
+			compatible = "st,stm32mp215-pinctrl";
+			ranges = <0 0x44240000 0x80400>;
 
 			gpioa: gpio@44240000 {
 				gpio-controller;
@@ -884,10 +884,10 @@
 			};
 		};
 
-		pinctrl_z: pinctrl-z@46200000 {
+		pinctrl_z: pinctrl@46200000 {
 			#address-cells = <1>;
 			#size-cells = <1>;
-			compatible = "st,stm32mp257-z-pinctrl";
+			compatible = "st,stm32mp215-z-pinctrl";
 			ranges = <0 0x46200000 0x400>;
 
 			gpioz: gpio@46200000 {
