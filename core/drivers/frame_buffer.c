@@ -6,6 +6,7 @@
 #include <assert.h>
 #include <compiler.h>
 #include <drivers/frame_buffer.h>
+#include <kernel/cache_helpers.h>
 #include <util.h>
 
 size_t frame_buffer_get_image_size(struct frame_buffer *fb __unused,
@@ -25,6 +26,9 @@ void frame_buffer_clear(struct frame_buffer *fb, uint32_t color)
 
 	for (n = 0; n < fb->width * fb->height; n++)
 		base[n] = color;
+
+	/* Flush the cache to avoid graphic artifact */
+	dcache_clean_range(base, fb->width * fb->height * sizeof(uint32_t));
 }
 
 void frame_buffer_set_image(struct frame_buffer *fb, size_t xpos, size_t ypos,
@@ -44,4 +48,7 @@ void frame_buffer_set_image(struct frame_buffer *fb, size_t xpos, size_t ypos,
 		for (x = 0; x < width && (x + xpos) < fb->width; x++)
 			base[x + xpos + (y + ypos) * fb->width] =
 				img[x + y * width];
+
+	/* Flush the cache to avoid graphic artifact */
+	dcache_clean_range(base, fb->width * fb->height * sizeof(uint32_t));
 }
