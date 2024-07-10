@@ -218,6 +218,9 @@ ifeq ($(CFG_REMOTEPROC_PTA),y)
 CFG_IN_TREE_EARLY_TAS += remoteproc/80a4c275-0a47-4905-8285-1486a9771a08
 # Embed public part of this key in OP-TEE OS
 RPROC_SIGN_KEY ?= keys/default.pem
+# Increase the RESERVED VA SPACE to be able to map reserved-memory regions
+# assigned to the remote processor.
+CFG_RESERVED_VASPACE_SIZE = 32 * 1024 * 1024
 endif
 
 # Default enable HWRNG PTA support
