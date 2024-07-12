@@ -234,21 +234,13 @@ out:
 	return res;
 }
 
-static int cmp_int_value(const void *a, const void *b)
-{
-	const int *ia = a;
-	const int *ib = b;
-
-	return CMP_TRILEAN(*ia, *ib);
-}
-
 static size_t refine_levels_array(size_t count, int *levels_uv,
 				  int min_uv, int max_uv)
 {
 	size_t n = 0;
 	size_t m = 0;
 
-	qsort(levels_uv, count, sizeof(*levels_uv), cmp_int_value);
+	qsort_int(levels_uv, count);
 
 	/* Remove duplicates and return optimized count */
 	for (n = 1; n < count; n++) {
