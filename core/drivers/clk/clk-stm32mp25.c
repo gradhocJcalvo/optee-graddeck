@@ -5,7 +5,6 @@
 
 #include <assert.h>
 #include <config.h>
-#include <libfdt.h>
 #include <drivers/clk.h>
 #include <drivers/clk_dt.h>
 #include <drivers/stm32_bsec.h>
@@ -13,12 +12,13 @@
 #include <drivers/stm32mp25_rcc.h>
 #include <dt-bindings/clock/stm32mp25-clks.h>
 #include <dt-bindings/clock/stm32mp25-clksrc.h>
-#include <kernel/boot.h>
-#include <kernel/delay.h>
-#include <kernel/pm.h>
 #include <initcall.h>
 #include <io.h>
+#include <kernel/boot.h>
+#include <kernel/delay.h>
 #include <kernel/dt.h>
+#include <kernel/pm.h>
+#include <libfdt.h>
 #include <mm/core_memprot.h>
 #include <stdio.h>
 #include <stm32_sysconf.h>
