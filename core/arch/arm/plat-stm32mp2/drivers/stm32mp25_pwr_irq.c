@@ -65,6 +65,24 @@ static inline vaddr_t pwr_wkupcr_base(uint32_t pin)
 	return stm32_pwr_base() + PWR_WKUPCR1 + pin * 4;
 }
 
+/* WAKEUP pins */
+#define GPIO_BANK(port)	((port) - 'A')
+#define GPIO_PORT(bank)	((bank) + 'A')
+
+struct stm32_pwr_pin_map {
+	uint8_t bank;
+	uint8_t pin;
+};
+
+static const struct stm32_pwr_pin_map pin_map[PWR_NB_WAKEUPPINS] = {
+	{ .bank = GPIO_BANK('A'), .pin = 0, },
+	{ .bank = GPIO_BANK('H'), .pin = 5, },
+	{ .bank = GPIO_BANK('G'), .pin = 1, },
+	{ .bank = GPIO_BANK('I'), .pin = 6, },
+	{ .bank = GPIO_BANK('G'), .pin = 2, },
+	{ .bank = GPIO_BANK('G'), .pin = 3, },
+};
+
 static enum itr_return pwr_it_call_handler(struct pwr_wkup_data *priv,
 					   uint32_t pin)
 {
@@ -269,9 +287,10 @@ static TEE_Result stm32mp25_pwr_itr_add(const void *fdt, int wp_node,
 	struct pwr_wkup_data *priv = pwr_wkup_d;
 	int it = hdl->it;
 	struct gpio *gpio = NULL;
-	char prop_name[PWR_IRQ_MAX_PROP_LENGTH] = { };
 	uint32_t exceptions = 0;
 	bool itr_free = false;
+	unsigned int bank = 0;
+	unsigned int pin = 0;
 
 	VERBOSE_PWR("Pwr IRQ add");
 
@@ -294,12 +313,18 @@ static TEE_Result stm32mp25_pwr_itr_add(const void *fdt, int wp_node,
 	if (hdl->flags & PWR_WKUP_FLAG_THREADED)
 		priv->threaded[it] = true;
 
-	snprintf(prop_name, PWR_IRQ_MAX_PROP_LENGTH, "wakeup%d", it + 1);
-
-	res = gpio_dt_get_by_index(fdt, wp_node, 0, prop_name, &gpio);
+	res = gpio_dt_get_by_index(fdt, wp_node, it, "wakeup", &gpio);
 	if (res) {
 		priv->hdl[it] = NULL;
 		return res;
+	}
+	bank = stm32_gpio_chip_bank_id(gpio->chip);
+	pin = gpio->pin;
+	if (bank != pin_map[it].bank || pin != pin_map[it].pin) {
+		EMSG("Invalid PWR WKUP%d on GPIO%c%"PRIu8" expected GPIO%c%"PRIu8,
+		     it + 1, GPIO_PORT(bank), pin, GPIO_PORT(pin_map[it].bank),
+		     pin_map[it].pin);
+		panic();
 	}
 
 	stm32mp25_pwr_itr_disable(it);
