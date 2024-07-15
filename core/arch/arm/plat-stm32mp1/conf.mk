@@ -450,6 +450,9 @@ $(call force,CFG_DRIVERS_RTC,y)
 $(call force,CFG_RTC_PTA,y)
 endif
 
+# Support for STM32MP OSTL legacy SCMI messages
+CFG_STM32_OTSL_SCMI_CLOCK_SUPPORT ?= n
+
 # Enable Early TA NVMEM for provisioning management
 CFG_TA_STM32MP_NVMEM ?= y
 ifeq ($(CFG_TA_STM32MP_NVMEM),y)

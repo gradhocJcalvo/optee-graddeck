@@ -13,7 +13,7 @@
 
 #include <mod_clock.h>
 
-#define SCMI_PROTOCOL_VERSION_CLOCK UINT32_C(0x10000)
+#define SCMI_PROTOCOL_VERSION_CLOCK UINT32_C(0x30000)
 
 /*
  * Identifiers for the type of request being processed
@@ -182,9 +182,34 @@ struct scmi_clock_rate_set_p2a {
 #define SCMI_CLOCK_CONFIG_SET_ENABLE_MASK \
     (UINT32_C(0x1) << SCMI_CLOCK_CONFIG_SET_ENABLE_POS)
 
+#define SCMI_CLOCK_CONFIG_SET_EXT_TYPE_MASK		0x00FF0000
+#define SCMI_CLOCK_CONFIG_SET_EXT_TYPE_POS		16
+
+#define SCMI_CLOCK_EXTENDED_CONFIG_TYPE_UNUSED		0
+#define SCMI_CLOCK_EXTENDED_CONFIG_TYPE_DUTY_CYCLE	1
+#define SCMI_CLOCK_EXTENDED_CONFIG_TYPE_PHASE		2
+
+#define SCMI_CLOCK_CONFIG_SET_EXT_TYPE_UNUSED \
+    (SCMI_CLOCK_EXTENDED_CONFIG_TYPE_UNUSED << \
+     SCMI_CLOCK_CONFIG_SET_EXT_TYPE_POS)
+
+#define SCMI_CLOCK_CONFIG_SET_EXT_TYPE_DUTY_CYCLE \
+    (SCMI_CLOCK_EXTENDED_CONFIG_TYPE_DUTY_CYCLE << \
+     SCMI_CLOCK_CONFIG_SET_EXT_TYPE_POS)
+
+#define SCMI_CLOCK_CONFIG_SET_EXT_TYPE_PHASE \
+    (SCMI_CLOCK_EXTENDED_CONFIG_TYPE_PHASE << \
+     SCMI_CLOCK_CONFIG_SET_EXT_TYPE_POS)
+
 struct scmi_clock_config_set_a2p {
     uint32_t clock_id;
     uint32_t attributes;
+};
+
+struct scmi_clock_config_set_v2_a2p {
+    uint32_t clock_id;
+    uint32_t attributes;
+    uint32_t extended_config_val;
 };
 
 struct scmi_clock_config_set_p2a {
@@ -287,32 +312,62 @@ struct scmi_clock_rate_change_request_notify_p2a {
 };
 
 /*
- * Clock get duty cycle
+ * Clock get config
+ */
+#define SCMI_CLOCK_CONFIG_GET_EXT_TYPE_MASK		GENMASK_32(7, 0)
+
+struct scmi_clock_config_get_a2p {
+    uint32_t clock_id;
+    uint32_t flags;
+};
+
+struct scmi_clock_config_get_p2a {
+    int32_t status;
+    uint32_t attributes;
+    uint32_t config;
+    uint32_t extended_config_val;
+};
+
+#ifdef CFG_STM32_OTSL_SCMI_CLOCK_SUPPORT
+/*
+ * OSTLv4/v5 Clock get duty cycle message (deprecated)
  */
 
-struct scmi_clock_duty_cycle_get_a2p {
+struct scmi_clock_ostl_duty_cycle_get_a2p {
     uint32_t clock_id;
 };
 
-struct scmi_clock_duty_cycle_get_p2a {
+struct scmi_clock_ostl_duty_cycle_get_p2a {
     int32_t status;
     uint32_t numerator;
     uint32_t denominator;
 };
 
 /*
- * Clock get round rate
+ * OSTLv4/v5 Clock get round rate messsage (deprecated)
  */
 
-struct scmi_clock_round_rate_get_a2p {
+struct scmi_clock_ostl_round_rate_get_a2p {
     uint32_t flags;
     uint32_t clock_id;
     uint32_t rate[2];
 };
 
-struct scmi_clock_round_rate_get_p2a {
+struct scmi_clock_ostl_round_rate_get_p2a {
     int32_t status;
     uint32_t rate[2];
 };
 
+/*
+ * Clock possible parent
+ * Currently not supported but input message structure is defined
+ * to address OSTLv4/v5 SCMI_CLOCK_ROUND_RATE_GET command issue.
+ */
+
+struct scmi_clock_possible_parent_a2p {
+    uint32_t clock_id;
+    uint32_t skip_parents;
+};
+
+#endif
 #endif /* INTERNAL_SCMI_CLOCK_H */

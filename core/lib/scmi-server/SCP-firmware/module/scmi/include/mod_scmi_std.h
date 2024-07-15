@@ -156,18 +156,30 @@ enum scmi_perf_command_id {
  * \brief SCMI Clock Protocol Message IDs
  */
 enum scmi_clock_command_id {
+    /* Commands introduced in SCMI clock protocol v1.0 */
     MOD_SCMI_CLOCK_ATTRIBUTES = 0x003,
     MOD_SCMI_CLOCK_DESCRIBE_RATES = 0x004,
     MOD_SCMI_CLOCK_RATE_SET = 0x005,
     MOD_SCMI_CLOCK_RATE_GET = 0x006,
     MOD_SCMI_CLOCK_CONFIG_SET = 0x007,
+    /* Commands introduced in SCMI clock protocol v2.0 */
     MOD_SCMI_CLOCK_NAME_GET = 0x008,
     MOD_SCMI_CLOCK_RATE_NOTIFY = 0x009,
     MOD_SCMI_CLOCK_RATE_CHANGE_REQUESTED_NOTIFY = 0x00A,
-    MOD_SCMI_CLOCK_DUTY_CYCLE_GET = 0x00B,
-    MOD_SCMI_CLOCK_ROUND_RATE_GET = 0x00C,
+    /* Commands introduced in SCMI clock protocol v3.0 */
+    MOD_SCMI_CLOCK_CONFIG_GET = 0x00B,
+    MOD_SCMI_CLOCK_POSSIBLE_PARENT_GET = 0x00c,
+    MOD_SCMI_CLOCK_PARENT_SET = 0x00d,
+    MOD_SCMI_CLOCK_PARENT_GET = 0x00e,
+    MOD_SCMI_CLOCK_GET_PERMISSIONS = 0x00f,
     MOD_SCMI_CLOCK_COMMAND_COUNT
 };
+
+#ifdef CFG_STM32_OTSL_SCMI_CLOCK_SUPPORT
+/* OSTLv4/v5 specific commands (deprecated since OSTLv6) */
+#define MOD_SCMI_CLOCK_DUTY_CYCLE_GET	0x00B
+#define MOD_SCMI_CLOCK_ROUND_RATE_GET	0x00C
+#endif
 
 /*!
  * \brief SCMI Sensor Protocol
