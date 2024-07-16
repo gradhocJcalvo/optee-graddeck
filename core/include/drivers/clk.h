@@ -86,7 +86,7 @@ struct clk_duty {
  * @get_parent: Get the current parent index of the clock
  * @set_rate: Set the clock rate
  * @get_rate: Get the clock rate
- * @get_rates_array: Get the supported clock rates as array
+ * @get_rates_array: Get the supported clock rates as array in increasing order
  * @get_rates_steps: Get support clock rates by min/max/step representation
  * @determine_rate: Given a target rate as input, returns the closest rate
  *		actually supported by the clock, and optionally the parent clock
@@ -247,7 +247,7 @@ TEE_Result clk_get_parent_idx(struct clk *clk, struct clk *parent,
 TEE_Result clk_set_parent(struct clk *clk, struct clk *parent);
 
 /**
- * clk_get_rates_array - Get supported rates as an array
+ * clk_get_rates_array - Get supported rates as an increasing frequencies array
  *
  * @clk: Clock for which the rates are requested
  * @start_index: start index of requested rates
