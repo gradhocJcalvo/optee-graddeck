@@ -192,7 +192,6 @@ struct stm32_osci_dt_cfg {
 
 struct stm32_clk_opp_cfg {
 	uint32_t frq;
-	uint32_t src;
 	struct stm32_pll_dt_cfg pll_cfg;
 };
 
@@ -1322,10 +1321,6 @@ static int stm32_clk_parse_fdt_opp(const void *fdt, int node,
 						       "hz",
 						       UINT32_MAX);
 
-		opp_cfg->src = fdt_read_uint32_default(fdt, subnode,
-						       "st,clksrc",
-						       UINT32_MAX);
-
 		ret = clk_stm32_parse_pll_fdt(fdt, subnode, &opp_cfg->pll_cfg);
 		if (ret < 0)
 			return ret;
@@ -1608,8 +1603,7 @@ static void clk_stm32_debug_display_opp_cfg(const char *opp_name,
 		if (opp_cfg->frq == 0UL || opp_cfg->frq == UINT32_MAX)
 			break;
 
-		printf("frequency = %"PRIu32" src = %#"PRIx32" ", opp_cfg->frq,
-		       opp_cfg->src);
+		printf("frequency = %"PRIu32, opp_cfg->frq);
 
 		clk_stm32_debug_display_pll_cfg(PLL1_ID, &opp_cfg->pll_cfg);
 
@@ -3111,15 +3105,17 @@ static TEE_Result clk_cpu1_determine_rate(struct clk *clk,
 	struct stm32_clk_opp_cfg *opp = NULL;
 	unsigned long rate = req->rate;
 	struct clk *parent = NULL;
-	int index = 0;
 
 	opp = clk_stm32_get_opp_config(pdata->opp->cpu1_opp, rate);
 	if (!opp)
 		return TEE_ERROR_ITEM_NOT_FOUND;
 
-	index = (opp->src & MUX_SEL_MASK) >> MUX_SEL_SHIFT;
-
-	parent = clk_get_parent_by_index(clk, index);
+	/*
+	 * PLL1 is always the source of the ck_cpu1 for OPP description.
+	 * ck_flexgen_63 is used for OPP switch.
+         * Therefore compute the rate based on parent 0 that is always PLL1.
+	 */
+	parent = clk_get_parent_by_index(clk, 0);
 
 	req->best_parent = parent;
 	req->best_parent_rate = req->rate;
