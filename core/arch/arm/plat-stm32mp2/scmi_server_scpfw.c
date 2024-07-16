@@ -280,7 +280,7 @@ static struct stm32_scmi_clk stm32_scmi_clock[] = {
 	CLOCK_CELL(CK_SCMI_TSDBG, CK_KER_TSDBG, "ck_ker_tsdbg", true),
 	CLOCK_CELL(CK_SCMI_KER_ETR, CK_KER_ETR, "ck_icn_m_etr", true),
 	CLOCK_CELL(CK_SCMI_BUS_STM, CK_BUS_STM, "ck_icn_p_stm", true),
-	CLOCK_CELL(CK_SCMI_KER_STM, CK_BUS_STM, "ck_icn_s_stm", true),
+	CLOCK_CELL(CK_SCMI_KER_STM, CK_KER_STM, "ck_icn_s_stm", true),
 };
 
 #else /* CFG_STM32MP21 */
@@ -426,7 +426,7 @@ static struct stm32_scmi_clk stm32_scmi_clock[] = {
 	CLOCK_CELL(CK_SCMI_PLL2, PLL2_CK, "ck_pll2", true),
 	CLOCK_CELL(CK_SCMI_PLL3, PLL3_CK, "ck_pll3", false),
 	CLOCK_CELL(CK_SCMI_LPSRAM1, CK_BUS_LPSRAM1, "ck_icn_lpsram1", true),
-	CLOCK_CELL(CK_SCMI_LPSRAM2, CK_BUS_LPSRAM2, "ck_icn_lpsram2 ", true),
+	CLOCK_CELL(CK_SCMI_LPSRAM2, CK_BUS_LPSRAM2, "ck_icn_lpsram2", true),
 	CLOCK_CELL(CK_SCMI_LPSRAM3, CK_BUS_LPSRAM3, "ck_icn_lpsram3", true),
 	CLOCK_CELL(CK_SCMI_VDERAM, CK_BUS_VDERAM, "ck_icn_s_vderam", true),
 	CLOCK_CELL(CK_SCMI_SYSRAM, CK_BUS_SYSRAM, "ck_icn_s_sysram", true),
@@ -438,7 +438,7 @@ static struct stm32_scmi_clk stm32_scmi_clock[] = {
 	CLOCK_CELL(CK_SCMI_TSDBG, CK_KER_TSDBG, "ck_ker_tsdbg", true),
 	CLOCK_CELL(CK_SCMI_KER_ETR, CK_KER_ETR, "ck_icn_m_etr", true),
 	CLOCK_CELL(CK_SCMI_BUS_STM, CK_BUS_STM, "ck_icn_p_stm", true),
-	CLOCK_CELL(CK_SCMI_KER_STM, CK_BUS_STM, "ck_icn_s_stm", true),
+	CLOCK_CELL(CK_SCMI_KER_STM, CK_KER_STM, "ck_icn_s_stm", true),
 };
 #endif
 
