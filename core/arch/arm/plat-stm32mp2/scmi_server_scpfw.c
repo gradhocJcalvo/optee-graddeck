@@ -512,7 +512,35 @@ static TEE_Result plat_scmi_clk_get_rates_steps(struct clk *clk,
 	return TEE_SUCCESS;
 }
 
+static TEE_Result plat_scmi_clk_get_rates_array(struct clk *clk, size_t index,
+						unsigned long *rates,
+						size_t *nb_elts)
+{
+	struct stm32_scmi_clk *scmi_clk = clk->priv;
+
+	if (!nb_elts)
+		return TEE_ERROR_BAD_PARAMETERS;
+
+	if (scmi_clk->change_rate)
+		return clk_get_rates_array(clk->parent, index, rates, nb_elts);
+
+	if (!rates || !*nb_elts) {
+		*nb_elts = 1;
+		return TEE_SUCCESS;
+	}
+
+	if (index)
+		return TEE_ERROR_BAD_PARAMETERS;
+
+	assert(rates);
+	*rates = clk_get_rate(clk->parent);
+	*nb_elts = 1;
+
+	return TEE_SUCCESS;
+}
+
 static const struct clk_ops plat_scmi_clk_ops = {
+	.get_rates_array = plat_scmi_clk_get_rates_array,
 	.get_rates_steps = plat_scmi_clk_get_rates_steps,
 };
 
