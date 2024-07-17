@@ -1968,7 +1968,7 @@ static unsigned long clk_stm32_composite_round_rate(struct clk *clk,
 		return 0UL;
 
 	div = MIN(UDIV_ROUND_NEAREST((uint64_t)prate, rate),
-		  MASK_WIDTH_SHIFT(divider->width, 0));
+		  MASK_WIDTH_SHIFT(divider->width, 0) + 1);
 
 	return UDIV_ROUND_NEAREST((uint64_t)prate, div);
 }
