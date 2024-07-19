@@ -613,10 +613,6 @@
 	clock-error-detect;
 };
 
-&rtc {
-	status = "okay";
-};
-
 &saes {
 	status = "okay";
 };
@@ -665,7 +661,6 @@
 };
 
 &tamp {
-	status = "okay";
 	st,tamp-passive-nb-sample = <4>;
 	st,tamp-passive-sample-clk-div = <16384>;
 	wakeup-source;

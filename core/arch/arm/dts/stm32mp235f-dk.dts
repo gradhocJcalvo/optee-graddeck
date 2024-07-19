@@ -405,10 +405,6 @@
 	status = "okay";
 };
 
-&rtc {
-	status = "okay";
-};
-
 &saes {
 	status = "okay";
 };
@@ -449,7 +445,6 @@
 };
 
 &tamp {
-	status = "okay";
 	wakeup-source;
 	wakeup-parent = <&exti2>;
 	st,tamp-passive-precharge = <2>;

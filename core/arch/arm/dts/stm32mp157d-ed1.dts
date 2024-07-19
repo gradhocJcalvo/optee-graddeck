@@ -369,10 +369,6 @@
 	status = "okay";
 };
 
-&rtc {
-	status = "okay";
-};
-
 &timers15 {
 	status = "okay";
 
