@@ -372,7 +372,6 @@
 			clocks = <&rcc RTCAPB>, <&rcc RTC>;
 			clock-names = "pclk", "rtc_ck";
 			interrupts-extended = <&exti 19 IRQ_TYPE_LEVEL_HIGH>;
-			status = "disabled";
 		};
 
 		bsec: efuse@5c005000 {
@@ -435,7 +434,6 @@
 			clocks = <&rcc RTCAPB>;
 			ranges;
 			st,backup-zones = <10 5 17>;
-			status = "disabled";
 
 			nvram: nvram@5c00a100 {
 				compatible = "st,stm32mp15-tamp-nvram";
