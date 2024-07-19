@@ -402,6 +402,66 @@ static struct stm32_gpio_bank *stm32_gpio_get_bank(unsigned int bank_id)
 	panic();
 }
 
+#ifdef CFG_STM32_RIF
+static bool pin_is_accessible(struct stm32_gpio_bank *bank, unsigned int pin)
+{
+	TEE_Result res = TEE_ERROR_GENERIC;
+	bool accessible = false;
+	uint32_t cidcfgr = 0;
+
+	if (!bank->rif_cfg)
+		return true;
+
+	if (clk_enable(bank->clock))
+		panic();
+
+	cidcfgr = io_read32(bank->base + GPIO_CIDCFGR(pin));
+
+	if (!(cidcfgr & _CIDCFGR_CFEN)) {
+		/* Resource can be accessed when CID filtering is disabled */
+		accessible = true;
+	} else if (SCID_OK(cidcfgr, GPIO_CIDCFGR_SCID_MASK, RIF_CID1)) {
+		/* Resource can be accessed if CID1 is statically allowed */
+		accessible = true;
+	} else if (SEM_EN_AND_OK(cidcfgr, RIF_CID1)) {
+		/* We must acquire the semaphore to access the resource */
+		res = stm32_rif_acquire_semaphore(bank->base + GPIO_SEMCR(pin),
+						  GPIO_MAX_CID_SUPPORTED);
+		if (res == TEE_SUCCESS)
+			accessible = true;
+		else
+			EMSG("Failed to acquire semaphore on GPIO %c%u",
+			     'A' + bank->bank_id, pin);
+	}
+
+	clk_disable(bank->clock);
+
+	return accessible;
+}
+#else
+static bool pin_is_accessible(struct stm32_gpio_bank *bank __unused,
+			      unsigned int pin __unused)
+{
+	return true;
+}
+#endif
+
+static bool pin_is_secure(struct stm32_gpio_bank *bank, unsigned int pin)
+{
+	bool secure = false;
+
+	if (bank->rif_cfg || bank->sec_support) {
+		if (clk_enable(bank->clock))
+			panic();
+
+		secure = io_read32(bank->base + GPIO_SECR_OFFSET) & BIT(pin);
+
+		clk_disable(bank->clock);
+	}
+
+	return secure;
+}
+
 /* Save to output @cfg the current GPIO (@bank_id/@pin) configuration */
 static void get_gpio_cfg(uint32_t bank_id, uint32_t pin, struct gpio_cfg *cfg)
 {
@@ -491,8 +551,10 @@ static void set_gpio_cfg(uint32_t bank_id, uint32_t pin, struct gpio_cfg *cfg)
 
 /* Count pins described in the DT node and get related data if possible */
 static int get_pinctrl_from_fdt(const void *fdt, int node,
+				int consumer_node __maybe_unused,
 				struct stm32_pinctrl *pinctrl, size_t count)
 {
+	struct stm32_gpio_bank *bank_ref = NULL;
 	const fdt32_t *cuint = NULL;
 	const fdt32_t *slewrate = NULL;
 	int len = 0;
@@ -500,6 +562,7 @@ static int get_pinctrl_from_fdt(const void *fdt, int node,
 	uint32_t speed = GPIO_OSPEED_LOW;
 	uint32_t pull = GPIO_PUPD_NO_PULL;
 	size_t found = 0;
+	bool do_panic = false;
 
 	cuint = fdt_getprop(fdt, node, "pinmux", &len);
 	if (!cuint)
@@ -592,10 +655,31 @@ static int get_pinctrl_from_fdt(const void *fdt, int node,
 			ref->cfg.pupd = pull;
 			ref->cfg.od = odata;
 			ref->cfg.af = alternate;
+
+			bank_ref = stm32_gpio_get_bank(bank);
+
+			if (pin >= bank_ref->ngpios) {
+				EMSG("node %s requests pin %c%u that does not exist",
+				     fdt_get_name(fdt, consumer_node, NULL),
+				     bank + 'A', pin);
+				do_panic = true;
+			} else if (!pin_is_accessible(bank_ref, pin)) {
+				EMSG("node %s requests pin %c%u which access is denied",
+				     fdt_get_name(fdt, consumer_node, NULL),
+				     bank + 'A', pin);
+				do_panic = true;
+			} else if (!pin_is_secure(bank_ref, pin)) {
+				IMSG("WARNING: node %s requests pinctrl with non-secure pin %c%u, check st,protreg in GPIO bank node",
+				     fdt_get_name(fdt, consumer_node, NULL),
+				     bank + 'A', pin);
+			}
 		}
 
 		found++;
 	}
+
+	if (do_panic)
+		panic();
 
 	return (int)found;
 }
@@ -627,16 +711,21 @@ static TEE_Result stm32_gpio_get_dt(struct dt_pargs *pargs, void *data,
 				    struct gpio **out_gpio)
 {
 	TEE_Result res = TEE_ERROR_GENERIC;
+	const char *consumer_name __maybe_unused = NULL;
 	struct stm32_gpio_pm_state *reg_state = NULL;
 	struct stm32_gpio_pm_state *state = NULL;
 	struct stm32_gpio_bank *bank = data;
 	struct gpio *gpio = NULL;
 	unsigned int shift_1b = 0;
 	unsigned int shift_2b = 0;
+	bool gpio_secure = true;
 	uint32_t exceptions = 0;
 	uint32_t otype = 0;
 	uint32_t pupd = 0;
 	uint32_t mode = 0;
+
+	consumer_name = fdt_get_name(pargs->fdt, pargs->consumer_node,
+				     NULL);
 
 	res = gpio_dt_alloc_pin(pargs, &gpio);
 	if (res)
@@ -648,6 +737,9 @@ static TEE_Result stm32_gpio_get_dt(struct dt_pargs *pargs, void *data,
 		return TEE_ERROR_GENERIC;
 	}
 
+	if (gpio->dt_flags & GPIO_STM32_NSEC)
+		gpio_secure = false;
+
 	state = calloc(1, sizeof(*state));
 	if (!state) {
 		free(gpio);
@@ -658,13 +750,33 @@ static TEE_Result stm32_gpio_get_dt(struct dt_pargs *pargs, void *data,
 		if (reg_state->gpio_pinctrl.bank == bank->bank_id &&
 		    reg_state->gpio_pinctrl.pin == gpio->pin) {
 			EMSG("node %s: GPIO %c%u is used by another device",
-			     fdt_get_name(pargs->fdt, pargs->consumer_node,
-					  NULL),
-			     bank->bank_id + 'A', gpio->pin);
+			     consumer_name, bank->bank_id + 'A', gpio->pin);
 			free(state);
 			free(gpio);
 			return TEE_ERROR_GENERIC;
 		}
+	}
+
+	if (!pin_is_accessible(bank, gpio->pin)) {
+		EMSG("node %s requests pin on GPIO %c%u which access is denied",
+		     consumer_name, bank->bank_id + 'A', gpio->pin);
+		panic();
+	}
+
+	if (gpio_secure && !(bank->rif_cfg || bank->sec_support)) {
+		EMSG("node %s requests secure GPIO %c%u that cannot be secured",
+		     consumer_name, bank->bank_id + 'A', gpio->pin);
+		panic();
+	}
+
+	if (gpio_secure != pin_is_secure(bank, gpio->pin)) {
+		IMSG("WARNING: node %s requests %s GPIO %c%u but pin is %s. Check st,protreg in GPIO bank node %s",
+		     consumer_name, gpio_secure ? "secure" : "non-secure",
+		     bank->bank_id + 'A', gpio->pin,
+		     pin_is_secure(bank, gpio->pin) ? "secure" : "non-secure",
+		     fdt_get_name(pargs->fdt, pargs->phandle_node, NULL));
+		if (!IS_ENABLED(CFG_INSECURE))
+			panic();
 	}
 
 	state->gpio_pinctrl.pin = gpio->pin;
@@ -1184,6 +1296,26 @@ static TEE_Result stm32_pinctrl_conf_apply(struct pinconf *conf)
 	struct stm32_pinctrl *p = ref->pinctrl;
 	size_t pin_count = ref->count;
 	size_t n = 0;
+	bool error = false;
+
+	for (n = 0; n < pin_count; n++) {
+		struct stm32_gpio_bank *bank = stm32_gpio_get_bank(p[n].bank);
+
+		if (pin_is_secure(bank, p[n].pin))
+			continue;
+
+		if (IS_ENABLED(CFG_INSECURE)) {
+			IMSG("WARNING: apply pinctrl with non-secure pin %c%u",
+			     p[n].bank + 'A', p[n].pin);
+		} else {
+			EMSG("Apply pinctrl with non-secure pin %c%u",
+			     p[n].bank + 'A', p[n].pin);
+			error = true;
+		}
+	}
+
+	if (error)
+		return TEE_ERROR_GENERIC;
 
 	for (n = 0; n < pin_count; n++)
 		set_gpio_cfg(p[n].bank, p[n].pin, &p[n].cfg);
@@ -1283,7 +1415,9 @@ static TEE_Result stm32_pinctrl_dt_get(struct dt_pargs *pargs,
 	fdt_for_each_subnode(pinmux_node, fdt, pinctrl_node) {
 		int found = 0;
 
-		found = get_pinctrl_from_fdt(fdt, pinmux_node, pinctrl + count,
+		found = get_pinctrl_from_fdt(fdt, pinmux_node,
+					     pargs->consumer_node,
+					     pinctrl + count,
 					     pin_count - count);
 		if (found <= 0 && found > ((int)pin_count - count)) {
 			/* We can't recover from an error here so let's panic */
