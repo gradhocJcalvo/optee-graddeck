@@ -93,8 +93,10 @@
 					 RIFSC_RISC_SCID_MASK | \
 					 RIFSC_RISC_SEML_MASK)
 
-#define RIFSC_RIMC_MODE_MASK		BIT(2)
+#define RIFSC_RIMC_CIDSEL_MASK		BIT(2)
+#define RIFSC_RIMC_CIDSEL_SHIFT		U(2)
 #define RIFSC_RIMC_MCID_MASK		GENMASK_32(6, 4)
+#define RIFSC_RIMC_MCID_SHIFT		U(4)
 #define RIFSC_RIMC_MSEC_MASK		BIT(8)
 #define RIFSC_RIMC_MPRIV_MASK		BIT(9)
 
@@ -120,7 +122,130 @@ struct rifsc_platdata {
 	struct rimu_cfg *rimu;
 	int nrimu;
 	bool is_tdcid;
+	bool errata_ahbrisab;
 };
+
+struct rimu_risup_pairs {
+	uint32_t rimu_id;
+	uint32_t risup_id;
+};
+
+#if defined(CFG_STM32MP25) || defined(CFG_STM32MP23)
+static const struct rimu_risup_pairs rimu_risup[] = {
+	[0] = {
+		.rimu_id = 0,
+		.risup_id = 0,
+	},
+	[1] = {
+		.rimu_id = 1,
+		.risup_id = STM32MP25_RIFSC_SDMMC1_ID,
+	},
+	[2] = {
+		.rimu_id = 2,
+		.risup_id = STM32MP25_RIFSC_SDMMC2_ID,
+	},
+	[3] = {
+		.rimu_id = 3,
+		.risup_id = STM32MP25_RIFSC_SDMMC3_ID,
+	},
+	[4] = {
+		.rimu_id = 4,
+		.risup_id = STM32MP25_RIFSC_USB3DR_ID,
+	},
+	[5] = {
+		.rimu_id = 5,
+		.risup_id = STM32MP25_RIFSC_USBH_ID,
+	},
+	[6] = {
+		.rimu_id = 6,
+		.risup_id = STM32MP25_RIFSC_ETH1_ID,
+	},
+	[7] = {
+		.rimu_id = 7,
+		.risup_id = STM32MP25_RIFSC_ETH2_ID,
+	},
+	[8] = {
+		.rimu_id = 8,
+		.risup_id = STM32MP25_RIFSC_PCIE_ID,
+	},
+	[9] = {
+		.rimu_id = 9,
+		.risup_id = STM32MP25_RIFSC_GPU_ID,
+	},
+	[10] = {
+		.rimu_id = 10,
+		.risup_id = STM32MP25_RIFSC_DCMIPP_ID,
+	},
+	[11] = {
+		.rimu_id = 11,
+		.risup_id = 0,
+	},
+	[12] = {
+		.rimu_id = 12,
+		.risup_id = 0,
+	},
+	[13] = {
+		.rimu_id = 13,
+		.risup_id = 0,
+	},
+	[14] = {
+		.rimu_id = 14,
+		.risup_id = STM32MP25_RIFSC_VDEC_ID,
+	},
+	[15] = {
+		.rimu_id = 15,
+		.risup_id = STM32MP25_RIFSC_VENC_ID,
+	},
+};
+#endif /* defined(CFG_STM32MP25) || defined(CFG_STM32MP23) */
+#if defined(CFG_STM32MP21)
+static const struct rimu_risup_pairs rimu_risup[] = {
+	[0] = {
+		.rimu_id = 0,
+		.risup_id = 0,
+	},
+	[1] = {
+		.rimu_id = 1,
+		.risup_id = STM32MP21_RIFSC_SDMMC1_ID,
+	},
+	[2] = {
+		.rimu_id = 2,
+		.risup_id = STM32MP21_RIFSC_SDMMC2_ID,
+	},
+	[3] = {
+		.rimu_id = 3,
+		.risup_id = STM32MP21_RIFSC_SDMMC3_ID,
+	},
+	[4] = {
+		.rimu_id = 4,
+		.risup_id = STM32MP21_RIFSC_OTG_HS_ID,
+	},
+	[5] = {
+		.rimu_id = 5,
+		.risup_id = STM32MP21_RIFSC_USBH_ID,
+	},
+	[6] = {
+		.rimu_id = 6,
+		.risup_id = STM32MP21_RIFSC_ETH1_ID,
+	},
+	[7] = {
+		.rimu_id = 7,
+		.risup_id = STM32MP21_RIFSC_ETH2_ID,
+	},
+	[10] = {
+		.rimu_id = 10,
+		.risup_id = STM32MP21_RIFSC_DCMIPP_ID,
+	},
+	[11] = {
+		.rimu_id = 11,
+		.risup_id = 0,
+	},
+	[12] = {
+		.rimu_id = 12,
+		.risup_id = 0,
+	},
+};
+#endif /* defined(CFG_STM32MP21) */
 
 static struct rifsc_driver_data rifsc_drvdata;
 static struct rifsc_platdata rifsc_pdata;
@@ -293,6 +418,9 @@ static TEE_Result stm32_rifsc_parse_fdt(const void *fdt, int node,
 			return res;
 	}
 
+	rifsc_pdata.errata_ahbrisab = fdt_getprop(fdt, node,
+						  "st,errata-ahbrisab", NULL);
+
 	return TEE_SUCCESS;
 }
 
@@ -383,6 +511,75 @@ static TEE_Result stm32_risup_setup(struct rifsc_platdata *pdata)
 	return TEE_SUCCESS;
 }
 
+/*
+ * Errata: When CID filtering is enabled on one of RISAB 3/4/5 instances, we
+ * forbid the use of CID0 for any initiator on the bus to handle spurious CID0
+ * transactions on these RAMs.
+ */
+static void stm32_rimu_errata_ahbrisab(struct rifsc_platdata *pdata,
+				       struct rimu_cfg *rimu)
+{
+	unsigned int i = 0;
+
+	if (!pdata->errata_ahbrisab)
+		return;
+
+	for (i = 0; i < ARRAY_SIZE(rimu_risup); i++) {
+		if (rimu->id == rimu_risup[i].rimu_id) {
+			rimu->risup_id = rimu_risup[i].risup_id;
+			break;
+		}
+	}
+
+	if (rimu->attr & RIFSC_RIMC_CIDSEL_MASK) {
+		/* No inheritance mode for this RIMU */
+		if ((rimu->attr & RIFSC_RIMC_MCID_MASK) >>
+		    RIFSC_RIMC_MCID_SHIFT == RIF_CID0) {
+			EMSG("A CID should be set for RIMU %u", rimu->id);
+			if (!IS_ENABLED(CFG_INSECURE))
+				panic();
+			}
+	} else {
+		struct risup_cfg *risup = NULL;
+		uint32_t risup_cidcfgr = 0;
+		int j = 0;
+
+		/* Handle RIMU with no inheritance mode */
+		if (!rimu->risup_id) {
+			EMSG("RIMU%u cannot be set in inheritance mode",
+			     rimu->id);
+			if (!IS_ENABLED(CFG_INSECURE))
+				panic();
+			return;
+		}
+
+		for (j = 0; j < pdata->nrisup; j++) {
+			if (rimu->risup_id == pdata->risup[j].id) {
+				risup = &pdata->risup[j];
+				break;
+			}
+		}
+
+		if (!risup)
+			panic();
+
+		risup_cidcfgr = io_read32(pdata->base +
+					  _RIFSC_RISC_PER0_CIDCFGR +
+					  _OFFSET_PERX_CIDCFGR * risup->id);
+
+		if (!(risup_cidcfgr & RIFSC_RISC_CIDCFGR_CFEN_MASK) ||
+		    (!(risup_cidcfgr & RIFSC_RISC_CIDCFGR_SEM_EN_MASK) &&
+		     ((risup_cidcfgr & RIFSC_RISC_CIDCFGR_SCID_MASK) >>
+		      RIFSC_RISC_CIDCFGR_SCID_SHIFT) == RIF_CID0) ||
+		    (risup_cidcfgr & RIFSC_RISC_CIDCFGR_SEM_EN_MASK &&
+		     risup_cidcfgr & BIT(RIFSC_RISC_CIDCFGR_SEML_SHIFT))) {
+			EMSG("RIMU%u in inheritance mode with CID0", rimu->id);
+			if (!IS_ENABLED(CFG_INSECURE))
+				panic();
+		}
+	}
+}
+
 static TEE_Result stm32_rimu_cfg(struct rifsc_platdata *pdata,
 				 struct rimu_cfg *rimu)
 {
@@ -391,6 +588,8 @@ static TEE_Result stm32_rimu_cfg(struct rifsc_platdata *pdata,
 
 	if (!rimu || rimu->id >= drv_data->nb_rimu)
 		return TEE_ERROR_BAD_PARAMETERS;
+
+	stm32_rimu_errata_ahbrisab(pdata, rimu);
 
 	if (drv_data->rif_en)
 		io_write32(pdata->base + offset, rimu->attr);
