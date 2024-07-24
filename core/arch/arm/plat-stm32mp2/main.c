@@ -208,8 +208,9 @@ early_init_late(init_debug);
 #endif /* CFG_STM32_BSEC3 */
 
 #ifdef CFG_STM32_CPU_OPP
-bool stm32mp_supports_cpu_opp(uint32_t opp_id)
+bool stm32mp_supports_cpu_opp(uint32_t opp_id __maybe_unused)
 {
+#ifdef CFG_STM32_BSEC3
 	static uint32_t part_number;
 	uint32_t otp = 0;
 	size_t bit_len = 0;
@@ -229,6 +230,9 @@ bool stm32mp_supports_cpu_opp(uint32_t opp_id)
 		id = BIT(0);
 
 	return (opp_id & id) == id;
+#else
+	return false;
+#endif
 }
 #endif /* CFG_STM32_CPU_OPP */
 
