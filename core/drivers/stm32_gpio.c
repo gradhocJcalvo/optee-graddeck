@@ -170,6 +170,7 @@ struct stm32_pinctrl_array {
  * @rif_cfg: RIF configuration data
  * @sec_support: True if bank supports pin security protection, else false
  * @ready: True if configuration is applied, else false
+ * @is_tdcid: True if OP-TEE runs as Trusted Domain CID
  * @link: Link in bank list
  */
 struct stm32_gpio_bank {
@@ -183,6 +184,7 @@ struct stm32_gpio_bank {
 	uint32_t seccfgr;
 	bool sec_support;
 	bool ready;
+	bool is_tdcid;
 	STAILQ_ENTRY(stm32_gpio_bank) link;
 };
 
@@ -738,6 +740,9 @@ static TEE_Result apply_rif_config(struct stm32_gpio_bank *bank)
 	uint32_t cidcfgr = 0;
 	unsigned int i = 0;
 
+	if (!bank->rif_cfg)
+		return TEE_SUCCESS;
+
 	if (clk_enable(bank->clock))
 		panic();
 
@@ -746,16 +751,13 @@ static TEE_Result apply_rif_config(struct stm32_gpio_bank *bank)
 			continue;
 
 		/*
-		 * Whatever the TDCID state, try to clear the configurable part
-		 * of the CIDCFGR register.
-		 * If TDCID, register will be cleared, if not, the clear will
-		 * be ignored.
 		 * When TDCID, OP-TEE should be the one to set the CID filtering
 		 * configuration. Clearing previous configuration prevents
 		 * undesired events during the only legitimate configuration.
 		 */
-		io_clrbits32(bank->base + GPIO_CIDCFGR(i),
-			     GPIO_CIDCFGR_CONF_MASK);
+		if (bank->is_tdcid)
+			io_clrbits32(bank->base + GPIO_CIDCFGR(i),
+				     GPIO_CIDCFGR_CONF_MASK);
 
 		cidcfgr = io_read32(bank->base + GPIO_CIDCFGR(i));
 
@@ -777,6 +779,9 @@ static TEE_Result apply_rif_config(struct stm32_gpio_bank *bank)
 			bank->rif_cfg->priv_conf[0]);
 	io_clrsetbits32(bank->base + GPIO_SECR_OFFSET, GPIO_SECCFGR_MASK,
 			bank->rif_cfg->sec_conf[0]);
+
+	if (!bank->is_tdcid)
+		goto out;
 
 	for (i = 0; i < bank->ngpios; i++) {
 		if (!(BIT(i) & bank->rif_cfg->access_mask[0]))
@@ -871,8 +876,18 @@ static void stm32_parse_gpio_rif_conf(struct stm32_gpio_bank *bank,
 	const fdt32_t *cuint = NULL;
 
 	cuint = fdt_getprop(fdt, node, "st,protreg", &lenp);
-	if (!cuint)
-		panic("No RIF configuration available");
+	if (!cuint) {
+		DMSG("No RIF configuration available");
+		return;
+	}
+
+	bank->rif_cfg = calloc(1, sizeof(*bank->rif_cfg));
+	if (!bank->rif_cfg)
+		panic();
+
+	bank->rif_cfg->sec_conf = calloc(1, sizeof(uint32_t));
+	if (!bank->rif_cfg->sec_conf)
+		panic();
 
 	nb_rif_conf = MIN((unsigned int)(lenp / sizeof(uint32_t)),
 			  bank->ngpios);
@@ -918,6 +933,12 @@ static TEE_Result dt_stm32_gpio_bank(const void *fdt, int node,
 	if (!bank)
 		return TEE_ERROR_OUT_OF_MEMORY;
 
+	if (compat->secure_extended) {
+		res = stm32_rifsc_check_tdcid(&bank->is_tdcid);
+		if (res)
+			return res;
+	}
+
 	/*
 	 * Do not rely *only* on the "reg" property to get the address,
 	 * but consider also the "ranges" translation property
@@ -954,21 +975,6 @@ static TEE_Result dt_stm32_gpio_bank(const void *fdt, int node,
 	}
 
 	if (compat->secure_extended) {
-		bank->rif_cfg = calloc(1, sizeof(*bank->rif_cfg));
-		if (!bank->rif_cfg) {
-			free(bank);
-			return TEE_ERROR_OUT_OF_MEMORY;
-		}
-
-		bank->rif_cfg->sec_conf = calloc(1, sizeof(uint32_t));
-		if (!bank->rif_cfg->sec_conf) {
-			free(bank->rif_cfg);
-			free(bank);
-			return TEE_ERROR_OUT_OF_MEMORY;
-		}
-	}
-
-	if (bank->rif_cfg) {
 		/* RIF configuration */
 		bank->base = io_pa_or_va_secure(&pa_va, blen);
 
@@ -1236,12 +1242,7 @@ static TEE_Result stm32_gpio_sec_config_resume(void)
 
 	STAILQ_FOREACH(bank, &bank_list, link) {
 		if (bank->rif_cfg) {
-			bool is_tdcid = false;
-
-			if (stm32_rifsc_check_tdcid(&is_tdcid))
-				panic();
-
-			if (!is_tdcid)
+			if (!bank->is_tdcid)
 				continue;
 
 			bank->rif_cfg->access_mask[0] = GENMASK_32(bank->ngpios,
@@ -1262,12 +1263,7 @@ static TEE_Result stm32_gpio_sec_config_suspend(void)
 
 	STAILQ_FOREACH(bank, &bank_list, link) {
 		if (bank->rif_cfg) {
-			bool is_tdcid = false;
-
-			if (stm32_rifsc_check_tdcid(&is_tdcid))
-				panic();
-
-			if (is_tdcid)
+			if (bank->is_tdcid)
 				stm32_gpio_save_rif_config(bank);
 		} else {
 			stm32_gpio_get_conf_sec(bank);
@@ -1316,6 +1312,9 @@ static TEE_Result apply_sec_cfg(void)
 			if (res) {
 				EMSG("Failed to set GPIO RIF, bank %u",
 				     bank->bank_id);
+				STAILQ_REMOVE(&bank_list, bank, stm32_gpio_bank,
+					      link);
+				free(bank);
 				return res;
 			}
 		} else {
@@ -1358,7 +1357,7 @@ static TEE_Result stm32_pinctrl_probe(const void *fdt, int node,
 	res = pinctrl_register_provider(fdt, node, stm32_pinctrl_dt_get,
 					(void *)compat_data);
 	if (res)
-		return res;
+		panic();
 #endif
 
 	return TEE_SUCCESS;
