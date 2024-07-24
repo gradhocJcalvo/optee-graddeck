@@ -119,6 +119,7 @@ struct rifsc_platdata {
 	int nrisup;
 	struct rimu_cfg *rimu;
 	int nrimu;
+	bool is_tdcid;
 };
 
 static struct rifsc_driver_data rifsc_drvdata;
@@ -277,14 +278,20 @@ static TEE_Result stm32_rifsc_parse_fdt(const void *fdt, int node,
 
 	pdata->base = io_pa_or_va_secure(&base, reg_size);
 
+	res = stm32_rifsc_check_tdcid(&rifsc_pdata.is_tdcid);
+	if (res)
+		panic();
+
 	res = stm32_rifsc_dt_conf_risup(fdt, node, &pdata->nrisup,
 					&pdata->risup);
-	if (res)
+	if (res && res != TEE_ERROR_ITEM_NOT_FOUND)
 		return res;
 
-	res = stm32_rifsc_dt_conf_rimu(fdt, node, pdata);
-	if (res)
-		return res;
+	if (rifsc_pdata.is_tdcid) {
+		res = stm32_rifsc_dt_conf_rimu(fdt, node, pdata);
+		if (res && res != TEE_ERROR_ITEM_NOT_FOUND)
+			return res;
+	}
 
 	return TEE_SUCCESS;
 }
@@ -311,15 +318,19 @@ static TEE_Result stm32_risup_cfg(struct rifsc_platdata *pdata,
 					    _RIFSC_RISC_PRIVCFGR0 + offset,
 					    BIT(shift), risup->priv << shift);
 
-	if (drv_data->rif_en)
-		io_write32(pdata->base + _RIFSC_RISC_PER0_CIDCFGR +
-			   cidcfgr_offset, risup->cid_attr);
+	if (rifsc_pdata.is_tdcid) {
+		if (drv_data->rif_en)
+			io_write32(pdata->base + _RIFSC_RISC_PER0_CIDCFGR +
+				   cidcfgr_offset, risup->cid_attr);
 
-	/* Lock configuration for this RISUP */
-	if (risup->lock) {
-		DMSG("Locking RIF conf for peripheral n°%"PRIu32, risup->id);
-		io_setbits32_stm32shregs(pdata->base + _RIFSC_RISC_RCFGLOCKR0 +
-					 offset, BIT(shift));
+		/* Lock configuration for this RISUP */
+		if (risup->lock) {
+			DMSG("Locking RIF conf for peripheral n°%"PRIu32,
+			     risup->id);
+			io_setbits32_stm32shregs(pdata->base +
+						 _RIFSC_RISC_RCFGLOCKR0 +
+						 offset, BIT(shift));
+		}
 	}
 
 	/*
@@ -578,15 +589,9 @@ static TEE_Result stm32_rifsc_acquire_access(struct firewall_query *firewall)
 
 static TEE_Result stm32_rifsc_set_config(struct firewall_query *firewall)
 {
-	TEE_Result res = TEE_ERROR_GENERIC;
 	struct rimu_cfg rimu = { };
-	bool is_tdcid = false;
 	unsigned int id = 0;
 	uint32_t conf = 0;
-
-	res = stm32_rifsc_check_tdcid(&is_tdcid);
-	if (res)
-		return res;
 
 	if (!firewall || firewall->arg_count != 1)
 		return TEE_ERROR_BAD_PARAMETERS;
@@ -609,7 +614,7 @@ static TEE_Result stm32_rifsc_set_config(struct firewall_query *firewall)
 		risup.lock = (BIT(RIF_LOCK_SHIFT) & conf) != 0;
 		risup.cid_attr = _RIF_FLD_GET(RIF_PERx_CID, conf);
 
-		if (!is_tdcid) {
+		if (!rifsc_pdata.is_tdcid) {
 			cidcfgr = io_read32(rifsc_pdata.base +
 					    _OFFSET_PERX_CIDCFGR * risup.id +
 					    _RIFSC_RISC_PER0_CIDCFGR);
@@ -626,7 +631,7 @@ static TEE_Result stm32_rifsc_set_config(struct firewall_query *firewall)
 		return stm32_risup_cfg(&rifsc_pdata, &risup);
 	}
 
-	if (!is_tdcid)
+	if (!rifsc_pdata.is_tdcid)
 		return TEE_ERROR_ACCESS_DENIED;
 
 	rimu.id = _RIF_FLD_GET(RIMUPROT_RIMC_M_ID, conf) - RIMU_ID_OFFSET;
@@ -782,9 +787,11 @@ static TEE_Result stm32_rifsc_probe(const void *fdt, int node,
 	if (res)
 		return res;
 
-	res = stm32_rimu_setup(&rifsc_pdata);
-	if (res)
-		return res;
+	if (rifsc_pdata.is_tdcid) {
+		res = stm32_rimu_setup(&rifsc_pdata);
+		if (res)
+			return res;
+	}
 
 	stm32_rifsc_glock_config(fdt, node, &rifsc_pdata);
 
