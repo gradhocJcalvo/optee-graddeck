@@ -844,6 +844,9 @@ static bool stm32_rcc_has_access_by_id(int id)
 
 	cid_reg_value = io_read32(rcc_base + RCC_R0CIDCFGR + 0x8 * id);
 
+	if (!(cid_reg_value & RCC_CIDCFGR_CFEN))
+		return true;
+
 	/*
 	 * First check conditions for semaphore mode, which does not
 	 * take into account static CID.
@@ -852,9 +855,6 @@ static bool stm32_rcc_has_access_by_id(int id)
 		/* Static CID is irrelevant if semaphore mode */
 		return cid_reg_value & BIT(master + RCC_SEMWL_SHIFT);
 	}
-
-	if (!(cid_reg_value & RCC_CIDCFGR_CFEN))
-		return true;
 
 	/*
 	 * Coherency check with the CID configuration
