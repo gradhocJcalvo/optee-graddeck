@@ -3089,12 +3089,16 @@ static const struct clk_ops clk_stm32_rif_gate_ops = {
 	.restore_context = clk_stm32_rif_gate_pm_restore,
 };
 
-static TEE_Result clk_stm32_rif_gate_dbg_enable(struct clk *clk)
+static TEE_Result clk_stm32_rif_gate_dbg_enable(struct clk *clk __maybe_unused)
 {
+#ifdef CFG_STM32_BSEC3
 	if (!stm32_bsec_self_hosted_debug_is_enabled())
 		return TEE_ERROR_ACCESS_DENIED;
 
 	return clk_stm32_rif_gate_enable(clk);
+#else
+	return TEE_SUCCESS;
+#endif
 }
 
 static const struct clk_ops  clk_stm32_rif_gate_dbg_ops = {
