@@ -85,7 +85,7 @@ struct pwr_pdata {
 	vaddr_t base;
 	int interrupt;
 	uint8_t nb_ressources;
-	struct rif_conf_data conf_data;
+	struct rif_conf_data *conf_data;
 };
 
 static struct pwr_pdata *pwr_d;
@@ -102,7 +102,7 @@ vaddr_t stm32_pwr_base(void)
 	return pwr_d->base;
 }
 
-static TEE_Result apply_rif_config(void)
+static TEE_Result apply_rif_config(bool is_tdcid)
 {
 	TEE_Result res = TEE_ERROR_ACCESS_DENIED;
 	uint32_t cidcfgr = 0;
@@ -113,27 +113,31 @@ static TEE_Result apply_rif_config(void)
 	unsigned int wio_offset = 0;
 	unsigned int i = 0;
 
+	if (!pwr_d->conf_data)
+		return TEE_SUCCESS;
+
 	for (i = 0; i < _PWR_NB_RESSOURCES; i++) {
-		if (!(BIT(i) & pwr_d->conf_data.access_mask[0]))
+		if (!(BIT(i) & pwr_d->conf_data->access_mask[0]))
 			continue;
 
 		/*
-		 * Whatever the TDCID state, try to clear the configurable part
-		 * of the CIDCFGR register.
-		 * If TDCID, register will be cleared, if not, the clear will
-		 * be ignored.
 		 * When TDCID, OP-TEE should be the one to set the CID filtering
 		 * configuration. Clearing previous configuration prevents
 		 * undesired events during the only legitimate configuration.
 		 */
 		if (i < _PWR_NB_NS_RESSOURCES) {
-			io_clrbits32(pwr_d->base + _PWR_R_CIDCFGR(i),
-				     _PWR_CIDCFGR_R_CONF_MASK);
+			if (is_tdcid)
+				io_clrbits32(pwr_d->base + _PWR_R_CIDCFGR(i),
+					     _PWR_CIDCFGR_R_CONF_MASK);
+
 			cidcfgr = io_read32(pwr_d->base + _PWR_R_CIDCFGR(i));
 		} else {
 			wio_offset = i - _PWR_NB_NS_RESSOURCES + 1;
-			io_clrbits32(pwr_d->base + _PWR_WIO_CIDCFGR(wio_offset),
-				     _PWR_CIDCFGR_W_CONF_MASK);
+			if (is_tdcid)
+				io_clrbits32(pwr_d->base +
+					     _PWR_WIO_CIDCFGR(wio_offset),
+					     _PWR_CIDCFGR_W_CONF_MASK);
+
 			cidcfgr = io_read32(pwr_d->base +
 					    _PWR_WIO_CIDCFGR(wio_offset));
 		}
@@ -158,12 +162,12 @@ static TEE_Result apply_rif_config(void)
 	}
 
 	/* Separate non-shareable resources RIF configuration */
-	r_priv = pwr_d->conf_data.priv_conf[0] & _PWR_R_PRIVCFGR_MASK;
-	r_sec = pwr_d->conf_data.sec_conf[0] & _PWR_R_SECCFGR_MASK;
+	r_priv = pwr_d->conf_data->priv_conf[0] & _PWR_R_PRIVCFGR_MASK;
+	r_sec = pwr_d->conf_data->sec_conf[0] & _PWR_R_SECCFGR_MASK;
 
-	wio_priv = (pwr_d->conf_data.priv_conf[0] & _PWR_WIO_PRIVCFGR_C_MASK) >>
-		   _PWR_NB_NS_RESSOURCES;
-	wio_sec = (pwr_d->conf_data.sec_conf[0] & _PWR_WIO_SECCFGR_C_MASK) >>
+	wio_priv = (pwr_d->conf_data->priv_conf[0] &
+		    _PWR_WIO_PRIVCFGR_C_MASK) >> _PWR_NB_NS_RESSOURCES;
+	wio_sec = (pwr_d->conf_data->sec_conf[0] & _PWR_WIO_SECCFGR_C_MASK) >>
 		  _PWR_NB_NS_RESSOURCES;
 
 	/* Security and privilege RIF configuration */
@@ -177,20 +181,20 @@ static TEE_Result apply_rif_config(void)
 			wio_sec);
 
 	for (i = 0; i < _PWR_NB_RESSOURCES; i++) {
-		if (!(BIT(i) & pwr_d->conf_data.access_mask[0]))
+		if (!(BIT(i) & pwr_d->conf_data->access_mask[0]))
 			continue;
 
 		if (i < _PWR_NB_NS_RESSOURCES) {
 			io_clrsetbits32(pwr_d->base + _PWR_R_CIDCFGR(i),
 					_PWR_CIDCFGR_R_CONF_MASK,
-					pwr_d->conf_data.cid_confs[i]);
+					pwr_d->conf_data->cid_confs[i]);
 			cidcfgr = io_read32(pwr_d->base + _PWR_R_CIDCFGR(i));
 		} else {
 			wio_offset = i - _PWR_NB_NS_RESSOURCES + 1;
 			io_clrsetbits32(pwr_d->base +
 					_PWR_WIO_CIDCFGR(wio_offset),
 					_PWR_CIDCFGR_W_CONF_MASK,
-					pwr_d->conf_data.cid_confs[i]);
+					pwr_d->conf_data->cid_confs[i]);
 			cidcfgr = io_read32(pwr_d->base +
 					    _PWR_WIO_CIDCFGR(wio_offset));
 		}
@@ -211,26 +215,26 @@ static TEE_Result apply_rif_config(void)
 	if (IS_ENABLED(CFG_TEE_CORE_DEBUG)) {
 		/* Check that RIF config are applied, panic otherwise */
 		if ((io_read32(pwr_d->base + _PWR_RPRIVCFGR) &
-		     pwr_d->conf_data.access_mask[0]) != r_priv) {
+		     pwr_d->conf_data->access_mask[0]) != r_priv) {
 			EMSG("pwr r resources priv conf is incorrect");
 			panic();
 		}
 
 		if ((io_read32(pwr_d->base + _PWR_WIOPRIVCFGR) &
-		     (pwr_d->conf_data.access_mask[0] >>
+		     (pwr_d->conf_data->access_mask[0] >>
 		      _PWR_NB_NS_RESSOURCES)) != wio_priv) {
 			EMSG("pwr wio resources priv conf is incorrect");
 			panic();
 		}
 
 		if ((io_read32(pwr_d->base + _PWR_RSECCFGR) &
-		     pwr_d->conf_data.access_mask[0]) != r_sec) {
+		     pwr_d->conf_data->access_mask[0]) != r_sec) {
 			EMSG("pwr r resources sec conf is incorrect");
 			panic();
 		}
 
 		if ((io_read32(pwr_d->base + _PWR_WIOSECCFGR) &
-		     (pwr_d->conf_data.access_mask[0] >>
+		     (pwr_d->conf_data->access_mask[0] >>
 		      _PWR_NB_NS_RESSOURCES)) != wio_sec) {
 			EMSG("pwr wio resources sec conf is incorrect");
 			panic();
@@ -253,26 +257,33 @@ static void parse_dt(const void *fdt, int node)
 	pwr_d->base = io_pa_or_va_secure(&addr, info.reg_size);
 
 	cuint = fdt_getprop(fdt, node, "st,protreg", &lenp);
-	if (!cuint)
-		panic("No RIF configuration available");
+	if (!cuint) {
+		DMSG("No RIF configuration available");
+		goto skip_rif;
+	}
 
 	pwr_d->nb_ressources = (unsigned int)(lenp / sizeof(uint32_t));
 	assert(pwr_d->nb_ressources <= _PWR_NB_RESSOURCES);
 
-	pwr_d->conf_data.cid_confs = calloc(_PWR_NB_RESSOURCES,
-					    sizeof(uint32_t));
-	pwr_d->conf_data.sec_conf = calloc(1, sizeof(uint32_t));
-	pwr_d->conf_data.priv_conf = calloc(1, sizeof(uint32_t));
-	pwr_d->conf_data.access_mask = calloc(1, sizeof(uint32_t));
-	if (!pwr_d->conf_data.cid_confs || !pwr_d->conf_data.sec_conf ||
-	    !pwr_d->conf_data.priv_conf || !pwr_d->conf_data.access_mask)
+	pwr_d->conf_data = calloc(1, sizeof(*pwr_d->conf_data));
+	if (!pwr_d->conf_data)
+		panic();
+
+	pwr_d->conf_data->cid_confs = calloc(_PWR_NB_RESSOURCES,
+					     sizeof(uint32_t));
+	pwr_d->conf_data->sec_conf = calloc(1, sizeof(uint32_t));
+	pwr_d->conf_data->priv_conf = calloc(1, sizeof(uint32_t));
+	pwr_d->conf_data->access_mask = calloc(1, sizeof(uint32_t));
+	if (!pwr_d->conf_data->cid_confs || !pwr_d->conf_data->sec_conf ||
+	    !pwr_d->conf_data->priv_conf || !pwr_d->conf_data->access_mask)
 		panic("Missing memory capacity for PWR RIF configuration");
 
 	for (i = 0; i < pwr_d->nb_ressources; i++)
-		stm32_rif_parse_cfg(fdt32_to_cpu(cuint[i]), &pwr_d->conf_data,
+		stm32_rif_parse_cfg(fdt32_to_cpu(cuint[i]), pwr_d->conf_data,
 				    _PWR_NB_MAX_CID_SUPPORTED,
 				    _PWR_NB_RESSOURCES);
 
+skip_rif:
 #ifdef CFG_STM32_PWR_IRQ
 	if (info.interrupt == DT_INFO_INVALID_INTERRUPT)
 		panic("No interrupt defined in PWR");
@@ -285,9 +296,14 @@ static TEE_Result stm32mp_pwr_probe(const void *fdt, int node,
 				    const void *compat_data __unused)
 {
 	TEE_Result res = TEE_ERROR_GENERIC;
+	bool is_tdcid = false;
 	int subnode = 0;
 
 	FMSG("PWR probe");
+
+	res = stm32_rifsc_check_tdcid(&is_tdcid);
+	if (res)
+		return res;
 
 	pwr_d = calloc(1, sizeof(*pwr_d));
 	if (!pwr_d)
@@ -295,13 +311,20 @@ static TEE_Result stm32mp_pwr_probe(const void *fdt, int node,
 
 	parse_dt(fdt, node);
 
-	res = apply_rif_config();
+	res = apply_rif_config(is_tdcid);
 	if (res)
 		panic("Failed to apply rif_config");
 
 #ifdef CFG_STM32_PWR_IRQ
 	res = stm32mp25_pwr_irq_probe(fdt, node, pwr_d->interrupt);
 	if (res) {
+		if (pwr_d->conf_data) {
+			free(pwr_d->conf_data->access_mask);
+			free(pwr_d->conf_data->cid_confs);
+			free(pwr_d->conf_data->priv_conf);
+			free(pwr_d->conf_data->sec_conf);
+		}
+		free(pwr_d->conf_data);
 		free(pwr_d);
 		pwr_d = NULL;
 		return res;
