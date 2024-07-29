@@ -153,7 +153,7 @@ struct rtc_device {
 	struct rtc_compat compat;
 	struct clk *pclk;
 	struct clk *rtc_ck;
-	struct rif_conf_data conf_data;
+	struct rif_conf_data *conf_data;
 	unsigned int nb_res;
 	uint8_t flags;
 };
@@ -583,9 +583,12 @@ static void apply_rif_config(bool is_tdcid)
 	uint32_t access_mask_reg = 0;
 	unsigned int i = 0;
 
+	if (!rtc_dev.conf_data)
+		return;
+
 	/* Build access mask for RTC_SECCFGR and RTC_PRIVCFGR */
 	for (i = 0; i < RTC_NB_RIF_RESOURCES; i++) {
-		if (rtc_dev.conf_data.access_mask[0] & BIT(i)) {
+		if (rtc_dev.conf_data->access_mask[0] & BIT(i)) {
 			if (i <= RTC_RES_TIMESTAMP)
 				access_mask_reg |= BIT(i);
 			else
@@ -594,7 +597,7 @@ static void apply_rif_config(bool is_tdcid)
 	}
 
 	for (i = 0; i < RTC_NB_RIF_RESOURCES; i++) {
-		if (!(BIT(i) & rtc_dev.conf_data.access_mask[0]))
+		if (!(BIT(i) & rtc_dev.conf_data->access_mask[0]))
 			continue;
 
 		/*
@@ -608,7 +611,7 @@ static void apply_rif_config(bool is_tdcid)
 	}
 
 	/* Security RIF configuration */
-	seccfgr = rtc_dev.conf_data.sec_conf[0];
+	seccfgr = rtc_dev.conf_data->sec_conf[0];
 
 	/* Check if all resources must be secured */
 	if (seccfgr == RTC_RIF_FULL_SECURED) {
@@ -627,7 +630,7 @@ static void apply_rif_config(bool is_tdcid)
 			RTC_SECCFGR_MASK & access_mask_reg, seccfgr);
 
 	/* Privilege RIF configuration */
-	privcfgr = rtc_dev.conf_data.priv_conf[0];
+	privcfgr = rtc_dev.conf_data->priv_conf[0];
 
 	/* Check if all resources must be privileged */
 	if (privcfgr == RTC_RIF_FULL_PRIVILEGED) {
@@ -649,7 +652,7 @@ static void apply_rif_config(bool is_tdcid)
 		return;
 
 	for (i = 0; i < RTC_NB_RIF_RESOURCES; i++) {
-		if (!(BIT(i) & rtc_dev.conf_data.access_mask[0]))
+		if (!(BIT(i) & rtc_dev.conf_data->access_mask[0]))
 			continue;
 		/*
 		 * When at least one resource has CID filtering enabled,
@@ -658,11 +661,11 @@ static void apply_rif_config(bool is_tdcid)
 		 */
 		io_clrsetbits32(base + RTC_CIDCFGR(i),
 				RTC_CIDCFGR_CONF_MASK,
-				rtc_dev.conf_data.cid_confs[i]);
+				rtc_dev.conf_data->cid_confs[i]);
 	}
 }
 
-static TEE_Result parse_dt(const void *fdt, int node, const void *compat_data)
+static TEE_Result parse_dt(const void *fdt, int node)
 {
 	TEE_Result res = TEE_ERROR_GENERIC;
 	struct dt_node_info dt_info = { };
@@ -686,33 +689,37 @@ static TEE_Result parse_dt(const void *fdt, int node, const void *compat_data)
 	if (!rtc_dev.rtc_ck)
 		return res;
 
-	rtc_dev.compat = *(struct rtc_compat *)compat_data;
-
 	if (!rtc_dev.compat.has_rif_support)
 		return res;
 
 	cuint = fdt_getprop(fdt, node, "st,protreg", &lenp);
-	if (!cuint)
-		panic("No RIF configuration available");
+	if (!cuint) {
+		DMSG("No RIF configuration available");
+		return TEE_SUCCESS;
+	}
+
+	rtc_dev.conf_data = calloc(1, sizeof(*rtc_dev.conf_data));
+	if (!rtc_dev.conf_data)
+		panic();
 
 	rtc_dev.nb_res = (unsigned int)(lenp / sizeof(uint32_t));
 	assert(rtc_dev.nb_res <= RTC_NB_RIF_RESOURCES);
 
-	rtc_dev.conf_data.cid_confs = calloc(RTC_NB_RIF_RESOURCES,
-					     sizeof(uint32_t));
-	rtc_dev.conf_data.sec_conf = calloc(1, sizeof(uint32_t));
-	rtc_dev.conf_data.priv_conf = calloc(1, sizeof(uint32_t));
-	rtc_dev.conf_data.access_mask = calloc(1, sizeof(uint32_t));
-	if (!rtc_dev.conf_data.cid_confs ||
-	    !rtc_dev.conf_data.sec_conf ||
-	    !rtc_dev.conf_data.priv_conf ||
-	    !rtc_dev.conf_data.access_mask)
+	rtc_dev.conf_data->cid_confs = calloc(RTC_NB_RIF_RESOURCES,
+					      sizeof(uint32_t));
+	rtc_dev.conf_data->sec_conf = calloc(1, sizeof(uint32_t));
+	rtc_dev.conf_data->priv_conf = calloc(1, sizeof(uint32_t));
+	rtc_dev.conf_data->access_mask = calloc(1, sizeof(uint32_t));
+	if (!rtc_dev.conf_data->cid_confs ||
+	    !rtc_dev.conf_data->sec_conf ||
+	    !rtc_dev.conf_data->priv_conf ||
+	    !rtc_dev.conf_data->access_mask)
 		panic("Not enough memory capacity for RTC RIF config");
 
 	for (i = 0; i < rtc_dev.nb_res; i++) {
 		rif_conf = fdt32_to_cpu(cuint[i]);
 
-		stm32_rif_parse_cfg(rif_conf, &rtc_dev.conf_data,
+		stm32_rif_parse_cfg(rif_conf, rtc_dev.conf_data,
 				    RTC_NB_MAX_CID_SUPPORTED,
 				    RTC_NB_RIF_RESOURCES);
 	}
@@ -726,13 +733,15 @@ static TEE_Result stm32_rtc_probe(const void *fdt, int node,
 	TEE_Result res = TEE_ERROR_GENERIC;
 	bool is_tdcid = false;
 
+	rtc_dev.compat = *(struct rtc_compat *)compat_data;
+
 	if (rtc_dev.compat.has_rif_support) {
 		res = stm32_rifsc_check_tdcid(&is_tdcid);
 		if (res)
 			return res;
 	}
 
-	res = parse_dt(fdt, node, compat_data);
+	res = parse_dt(fdt, node);
 	if (res) {
 		memset(&rtc_dev, 0, sizeof(rtc_dev));
 		return res;
@@ -749,7 +758,7 @@ static TEE_Result stm32_rtc_probe(const void *fdt, int node,
 	if (rtc_dev.compat.has_rif_support) {
 		res = clk_enable(rtc_dev.pclk);
 		if (res)
-			return res;
+			panic("Could not enable RTC bus clock");
 
 		apply_rif_config(is_tdcid);
 
