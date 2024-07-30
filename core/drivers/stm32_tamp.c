@@ -525,19 +525,18 @@ static enum itr_return stm32_tamp_it_handler(struct itr_handler *h);
 static void apply_rif_config(void)
 {
 	vaddr_t base = io_pa_or_va(&stm32_tamp.pdata.base, 1);
-	bool is_tdcid = false;
 	uint32_t seccfgr = 0;
 	uint32_t privcfgr = 0;
 	uint32_t access_mask_sec_reg = 0;
 	uint32_t access_mask_priv_reg = 0;
 	unsigned int i = 0;
 
-	if (stm32_rifsc_check_tdcid(&is_tdcid))
-		panic();
+	if (!stm32_tamp.pdata.conf_data)
+		return;
 
 	/* Build access masks for _TAMP_PRIVCFGR and _TAMP_SECCFGR */
 	for (i = 0; i < TAMP_RIF_RESOURCES; i++) {
-		if (BIT(i) & stm32_tamp.pdata.conf_data.access_mask[0]) {
+		if (BIT(i) & stm32_tamp.pdata.conf_data->access_mask[0]) {
 			switch (i) {
 			case 0:
 				access_mask_sec_reg |= _TAMP_SECCFGR_TAMPSEC;
@@ -564,14 +563,14 @@ static void apply_rif_config(void)
 	 * configuration. Clearing previous configuration prevents
 	 * undesired events during the only legitimate configuration.
 	 */
-	if (is_tdcid) {
+	if (stm32_tamp.pdata.is_tdcid) {
 		for (i = 0; i < TAMP_RIF_RESOURCES; i++)
-			if (BIT(i) & stm32_tamp.pdata.conf_data.access_mask[0])
+			if (BIT(i) & stm32_tamp.pdata.conf_data->access_mask[0])
 				io_clrbits32(base + _TAMP_CIDCFGR(i),
 					     _TAMP_CIDCFGR_CONF_MASK);
 	}
 
-	seccfgr = stm32_tamp.pdata.conf_data.sec_conf[0];
+	seccfgr = stm32_tamp.pdata.conf_data->sec_conf[0];
 	seccfgr = (seccfgr & _TAMP_SECCFGR_RIF_TAMP_SEC ?
 		   _TAMP_SECCFGR_TAMPSEC : 0) |
 		  (seccfgr & _TAMP_SECCFGR_RIF_COUNT_1 ?
@@ -579,7 +578,7 @@ static void apply_rif_config(void)
 		  (seccfgr & _TAMP_SECCFGR_RIF_COUNT_2 ?
 		   _TAMP_SECCFGR_CNT2SEC : 0);
 
-	privcfgr = stm32_tamp.pdata.conf_data.priv_conf[0];
+	privcfgr = stm32_tamp.pdata.conf_data->priv_conf[0];
 	privcfgr = (privcfgr & _TAMP_PRIVCFGR_RIF_TAMP_PRIV ?
 		    _TAMP_PRIVCFG_TAMPPRIV : 0) |
 		   (privcfgr & _TAMP_PRIVCFGR_RIF_R1 ?
@@ -594,16 +593,16 @@ static void apply_rif_config(void)
 			_TAMP_SECCFGR_BUT_BKP_MASK & access_mask_priv_reg,
 			seccfgr);
 
-	if (!is_tdcid)
+	if (!stm32_tamp.pdata.is_tdcid)
 		return;
 
 	for (i = 0; i < TAMP_RIF_RESOURCES; i++) {
-		if (!(BIT(i) & stm32_tamp.pdata.conf_data.access_mask[0]))
+		if (!(BIT(i) & stm32_tamp.pdata.conf_data->access_mask[0]))
 			continue;
 
 		io_clrsetbits32(base + _TAMP_CIDCFGR(i),
 				_TAMP_CIDCFGR_CONF_MASK,
-				stm32_tamp.pdata.conf_data.cid_confs[i]);
+				stm32_tamp.pdata.conf_data->cid_confs[i]);
 	}
 }
 
@@ -1932,7 +1931,6 @@ static TEE_Result stm32_tamp_parse_fdt(struct stm32_tamp_platdata *pdata,
 {
 	TEE_Result res = TEE_ERROR_GENERIC;
 	struct dt_node_info dt_tamp = {};
-	bool is_tdcid = false;
 
 	fdt_fill_device_info(fdt, &dt_tamp, node);
 
@@ -1945,7 +1943,7 @@ static TEE_Result stm32_tamp_parse_fdt(struct stm32_tamp_platdata *pdata,
 	pdata->compat = (struct stm32_tamp_compat *)compat;
 
 	if (stm32_tamp.pdata.compat->tags & TAMP_HAS_RIF_SUPPORT) {
-		res = stm32_rifsc_check_tdcid(&is_tdcid);
+		res = stm32_rifsc_check_tdcid(&pdata->is_tdcid);
 		if (res)
 			return res;
 	}
@@ -1981,26 +1979,33 @@ static TEE_Result stm32_tamp_parse_fdt(struct stm32_tamp_platdata *pdata,
 		int lenp = 0;
 
 		cuint = fdt_getprop(fdt, node, "st,protreg", &lenp);
-		if (!cuint)
-			panic("No RIF configuration available");
+		if (!cuint) {
+			DMSG("No RIF configuration available");
+			return TEE_SUCCESS;
+		}
+
+		pdata->conf_data = calloc(1, sizeof(*pdata->conf_data));
+		if (!pdata->conf_data)
+			panic();
 
 		pdata->nb_resources = (unsigned int)(lenp / sizeof(uint32_t));
 		assert(pdata->nb_resources <= TAMP_RIF_RESOURCES);
 
-		pdata->conf_data.cid_confs = calloc(TAMP_RIF_RESOURCES,
-						    sizeof(uint32_t));
-		pdata->conf_data.sec_conf = calloc(1, sizeof(uint32_t));
-		pdata->conf_data.priv_conf = calloc(1, sizeof(uint32_t));
-		pdata->conf_data.access_mask = calloc(1, sizeof(uint32_t));
-		if (!pdata->conf_data.cid_confs || !pdata->conf_data.sec_conf ||
-		    !pdata->conf_data.priv_conf ||
-		    !pdata->conf_data.access_mask)
+		pdata->conf_data->cid_confs = calloc(TAMP_RIF_RESOURCES,
+						     sizeof(uint32_t));
+		pdata->conf_data->sec_conf = calloc(1, sizeof(uint32_t));
+		pdata->conf_data->priv_conf = calloc(1, sizeof(uint32_t));
+		pdata->conf_data->access_mask = calloc(1, sizeof(uint32_t));
+		if (!pdata->conf_data->cid_confs ||
+		    !pdata->conf_data->sec_conf ||
+		    !pdata->conf_data->priv_conf ||
+		    !pdata->conf_data->access_mask)
 			panic("Not enough memory capacity for TAMP RIF config");
 
 		for (i = 0; i < pdata->nb_resources; i++) {
 			rif_conf = fdt32_to_cpu(cuint[i]);
 
-			stm32_rif_parse_cfg(rif_conf, &pdata->conf_data,
+			stm32_rif_parse_cfg(rif_conf, pdata->conf_data,
 					    TAMP_NB_MAX_CID_SUPPORTED,
 					    TAMP_RIF_RESOURCES);
 		}
@@ -2080,7 +2085,7 @@ static TEE_Result stm32_tamp_probe(const void *fdt, int node,
 	if (stm32_tamp.pdata.compat->tags & TAMP_HAS_RIF_SUPPORT) {
 		apply_rif_config();
 
-		if (stm32_tamp.pdata.bkpregs_conf) {
+		if (stm32_tamp.pdata.is_tdcid) {
 			res = stm32_tamp_apply_bkpr_rif_conf();
 			if (res)
 				goto err;
@@ -2107,7 +2112,8 @@ static TEE_Result stm32_tamp_probe(const void *fdt, int node,
 					 _TAMP_PRIVCFG_BKPWPRIV);
 	}
 
-	if (stm32_tamp.pdata.bkpregs_conf) {
+	if (!(stm32_tamp.pdata.compat->tags & TAMP_HAS_RIF_SUPPORT) ||
+	    stm32_tamp.pdata.is_tdcid) {
 		res = stm32_tamp_set_secure_bkpregs();
 		if (res)
 			goto err;
@@ -2153,10 +2159,10 @@ static TEE_Result stm32_tamp_probe(const void *fdt, int node,
 err:
 	if (stm32_tamp.pdata.compat->tags & TAMP_HAS_RIF_SUPPORT) {
 		free(stm32_tamp.pdata.bkpregs_conf->rif_offsets);
-		free(stm32_tamp.pdata.conf_data.cid_confs);
-		free(stm32_tamp.pdata.conf_data.sec_conf);
-		free(stm32_tamp.pdata.conf_data.priv_conf);
-		free(stm32_tamp.pdata.conf_data.access_mask);
+		free(stm32_tamp.pdata.conf_data->cid_confs);
+		free(stm32_tamp.pdata.conf_data->sec_conf);
+		free(stm32_tamp.pdata.conf_data->priv_conf);
+		free(stm32_tamp.pdata.conf_data->access_mask);
 	}
 
 	if (stm32_tamp.itr)

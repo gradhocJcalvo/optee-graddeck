@@ -116,7 +116,7 @@ struct stm32_tamp_platdata {
 	struct io_pa_va base;
 	struct clk *clock;
 	struct stm32_tamp_compat *compat;
-	struct rif_conf_data conf_data;
+	struct rif_conf_data *conf_data;
 	struct stm32_bkpregs_conf *bkpregs_conf;
 	struct stm32_exti_pdata *exti;
 	int it;
@@ -127,6 +127,7 @@ struct stm32_tamp_platdata {
 	uint32_t out_pins;
 	bool is_wakeup_source;
 	bool mask_pot_reset;
+	bool is_tdcid;
 };
 
 #endif /* __DRIVERS_STM32_TAMP_H__ */
