@@ -284,8 +284,10 @@ static void stm32_exti_rif_parse_dt(struct stm32_exti_pdata *exti,
 		DMSG("No global lock on RIF configuration");
 
 	cuint = fdt_getprop(fdt, node, "st,protreg", &len);
-	if (!cuint)
-		panic("No RIF configuration available");
+	if (!cuint) {
+		DMSG("No RIF configuration available");
+		return;
+	}
 
 	exti->e_cids = calloc(stm32_exti_nbevents(exti), sizeof(uint32_t));
 	exti->c_cids = calloc(stm32_exti_nbcpus(exti), sizeof(uint32_t));
@@ -331,6 +333,9 @@ static TEE_Result stm32_exti_rif_apply(const struct stm32_exti_pdata *exti)
 	bool is_tdcid = false;
 	uint32_t event = 0;
 	unsigned int i = 0;
+
+	if (!exti->e_cids)
+		return TEE_SUCCESS;
 
 	res = stm32_rifsc_check_tdcid(&is_tdcid);
 	if (res)
