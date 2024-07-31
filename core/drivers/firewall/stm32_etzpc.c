@@ -440,11 +440,122 @@ stm32_etzpc_acquire_memory_access(struct firewall_query *firewall,
 	return TEE_ERROR_ACCESS_DENIED;
 }
 
-static TEE_Result stm32_etzpc_configure(struct firewall_query *firewall)
+static TEE_Result stm32_etzpc_configure_memory(struct firewall_query *firewall,
+					       paddr_t paddr, size_t size)
 {
 	struct etzpc_device *etzpc_dev = firewall->ctrl->priv;
 	enum etzpc_decprot_attributes attr = ETZPC_DECPROT_MAX;
 	unsigned int total_sz = 0;
+	uint32_t id = 0;
+
+	if (firewall->arg_count != 1)
+		return TEE_ERROR_BAD_PARAMETERS;
+
+	id = firewall->args[0] & ETZPC_ID_MASK;
+
+	if (id < etzpc_dev->ddata->num_per_sec &&
+	    (id == STM32MP1_ETZPC_SRAM1_ID || id == STM32MP1_ETZPC_SRAM2_ID ||
+#if defined(CFG_STM32MP15)
+	     id == STM32MP1_ETZPC_SRAM4_ID || id == STM32MP1_ETZPC_RETRAM_ID ||
+#endif /* defined(CFG_STM32MP15) */
+	     id == STM32MP1_ETZPC_SRAM3_ID)) {
+		uint32_t mode = 0;
+
+		/*
+		* Internal RAM configuration, we assume the configuration is as
+		* follows:
+		* firewall->args[0]: Memory configuration to apply, with memory
+		* size replacing mode field.
+		*/
+		switch (id) {
+		case (STM32MP1_ETZPC_SRAM1_ID):
+			if (paddr != SRAM1_BASE || size != SRAM1_SIZE)
+				return TEE_ERROR_BAD_PARAMETERS;
+			break;
+		case (STM32MP1_ETZPC_SRAM2_ID):
+			if (paddr != SRAM2_BASE || size != SRAM2_SIZE)
+				return TEE_ERROR_BAD_PARAMETERS;
+			break;
+		case (STM32MP1_ETZPC_SRAM3_ID):
+			if (paddr != SRAM3_BASE || size != SRAM3_SIZE)
+				return TEE_ERROR_BAD_PARAMETERS;
+			break;
+#if defined(CFG_STM32MP15)
+		case (STM32MP1_ETZPC_SRAM4_ID):
+			if (paddr != SRAM4_BASE || size != SRAM4_SIZE)
+				return TEE_ERROR_BAD_PARAMETERS;
+			break;
+		case (STM32MP1_ETZPC_RETRAM_ID):
+			if (paddr != RETRAM_BASE || size != RETRAM_SIZE)
+				return TEE_ERROR_BAD_PARAMETERS;
+			break;
+#endif /* defined(CFG_STM32MP15) */
+		default:
+			panic();
+		}
+
+		mode = (firewall->args[0] & ETZPC_MODE_MASK) >>
+		       ETZPC_MODE_SHIFT;
+		attr = etzpc_binding2decprot(mode);
+
+		if (decprot_is_locked(etzpc_dev, id)) {
+			EMSG("Internal RAM configuration locked");
+			return TEE_ERROR_ACCESS_DENIED;
+		}
+
+		etzpc_do_configure_decprot(etzpc_dev, id, attr);
+		if (firewall->args[0] & ETZPC_LOCK_MASK)
+			etzpc_do_lock_decprot(etzpc_dev, id);
+
+		return TEE_SUCCESS;
+	} else if (id == ETZPC_TZMA0_ID || id == ETZPC_TZMA1_ID) {
+		unsigned int tzma_id = 0;
+
+		/*
+		* TZMA configuration, we assume the configuration is as
+		* follows:
+		* firewall->args[0]: Firewall configuration to apply
+		*/
+		switch (id) {
+		case ETZPC_TZMA0_ID:
+			if (paddr != ROM_BASE || size > ROM_SIZE)
+				return TEE_ERROR_BAD_PARAMETERS;
+
+			tzma_id = 0;
+			break;
+		case ETZPC_TZMA1_ID:
+			if (paddr != SYSRAM_BASE || size > SYSRAM_SIZE)
+				return TEE_ERROR_BAD_PARAMETERS;
+
+			tzma_id = 1;
+			break;
+		default:
+			return TEE_ERROR_BAD_PARAMETERS;
+		}
+
+		if (!IS_ALIGNED(size, SMALL_PAGE_SIZE))
+			return TEE_ERROR_BAD_PARAMETERS;
+
+		if (tzma_is_locked(etzpc_dev, tzma_id)) {
+			EMSG("TZMA configuration locked");
+			return TEE_ERROR_ACCESS_DENIED;
+		}
+
+		total_sz = ROUNDUP_DIV(size, SMALL_PAGE_SIZE);
+		etzpc_do_configure_tzma(etzpc_dev, tzma_id, total_sz);
+	} else {
+		EMSG("Unknown firewall ID: %"PRIu32, id);
+
+		return TEE_ERROR_BAD_PARAMETERS;
+	}
+
+	return TEE_SUCCESS;
+}
+
+static TEE_Result stm32_etzpc_configure(struct firewall_query *firewall)
+{
+	struct etzpc_device *etzpc_dev = firewall->ctrl->priv;
+	enum etzpc_decprot_attributes attr = ETZPC_DECPROT_MAX;
 	uint32_t id = 0;
 
 	if (firewall->arg_count != 1)
@@ -478,45 +589,6 @@ static TEE_Result stm32_etzpc_configure(struct firewall_query *firewall)
 		etzpc_do_configure_decprot(etzpc_dev, id, attr);
 		if (firewall->args[0] & ETZPC_LOCK_MASK)
 			etzpc_do_lock_decprot(etzpc_dev, id);
-
-		return TEE_SUCCESS;
-	} else if (id == ETZPC_TZMA0_ID || id == ETZPC_TZMA1_ID) {
-		unsigned int tzma_id = 0;
-		size_t memory_size = (firewall->args[0] & ETZPC_MODE_MASK) >>
-				     ETZPC_MODE_SHIFT;
-
-		/*
-		 * TZMA configuration, we assume the configuration is as
-		 * follows:
-		 * firewall->args[0]: Memory configuration to apply, with memory
-		 * size replacing mode field.
-		 */
-		switch (id) {
-		case ETZPC_TZMA0_ID:
-			if (memory_size > ROM_SIZE)
-				return TEE_ERROR_BAD_PARAMETERS;
-
-			tzma_id = 0;
-			break;
-		case ETZPC_TZMA1_ID:
-			if (memory_size > SYSRAM_SIZE)
-				return TEE_ERROR_BAD_PARAMETERS;
-
-			tzma_id = 1;
-			break;
-		default:
-			return TEE_ERROR_BAD_PARAMETERS;
-		}
-
-		assert(IS_ALIGNED(memory_size, SMALL_PAGE_SIZE));
-
-		if (tzma_is_locked(etzpc_dev, tzma_id)) {
-			EMSG("TZMA configuration locked");
-			return TEE_ERROR_ACCESS_DENIED;
-		}
-
-		total_sz = ROUNDUP_DIV(memory_size, SMALL_PAGE_SIZE);
-		etzpc_do_configure_tzma(etzpc_dev, tzma_id, total_sz);
 	} else {
 		EMSG("Unknown firewall ID: %"PRIu32, id);
 
@@ -717,6 +789,7 @@ static TEE_Result init_etzpc_from_dt(struct etzpc_device *etzpc_dev,
 
 static const struct firewall_controller_ops firewall_ops = {
 	.set_conf = stm32_etzpc_configure,
+	.set_memory_conf = stm32_etzpc_configure_memory,
 	.check_access = stm32_etzpc_check_access,
 	.acquire_access = stm32_etzpc_acquire_access,
 	.acquire_memory_access = stm32_etzpc_acquire_memory_access,

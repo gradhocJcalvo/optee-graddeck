@@ -334,8 +334,7 @@ static TEE_Result init_stm32mp1_drivers(void)
 {
 	struct dt_driver_provider *prov = NULL;
 	TEE_Result res = TEE_ERROR_GENERIC;
-	uint32_t query_arg[1] = { ETZPC_TZMA1_ID |
-				  SYSRAM_SEC_SIZE << ETZPC_MODE_SHIFT };
+	uint32_t query_arg[1] = { };
 	struct firewall_query firewall = {
 		.args = query_arg,
 		.arg_count = 1,
@@ -353,7 +352,9 @@ static TEE_Result init_stm32mp1_drivers(void)
 	firewall.ctrl = dt_driver_provider_priv_data(prov);
 
 	/* Secure SYSRAM */
-	res = firewall_set_configuration(&firewall);
+	*query_arg = ETZPC_TZMA1_ID;
+	res = firewall_set_memory_configuration(&firewall, SYSRAM_BASE,
+						SYSRAM_SEC_SIZE);
 	if (res)
 		panic("Unable to secure SYSRAM");
 
