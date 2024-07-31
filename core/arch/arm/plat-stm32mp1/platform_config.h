@@ -100,7 +100,6 @@
 #define PWR_BASE			0x50001000
 #define QSPI_BASE			0x58003000
 #define RCC_BASE			0x50000000
-#define RETRAM_BASE			0x38000000ul
 #ifdef CFG_STM32MP13
 #define RNG1_BASE			0x54004000
 #endif
@@ -110,10 +109,6 @@
 #define RTC_BASE			0x5c004000
 #ifdef CFG_STM32MP15
 #define SPI6_BASE			0x5c001000
-#define SRAM1_BASE			0x30000000
-#define SRAM2_BASE			0x30020000
-#define SRAM3_BASE			0x30040000
-#define SRAM4_BASE			0x30050000
 #endif
 #define STGEN_BASE			0x5c008000
 #define SYSCFG_BASE			0x50020000
@@ -315,14 +310,30 @@
 #endif
 
 #ifdef CFG_STM32MP15
-#define SRAM1_SIZE			0x20000
-#define SRAM2_SIZE			0x20000
-#define SRAM3_SIZE			0x10000
-#define SRAM4_SIZE			0x10000
-#endif
+/* SRAM layout*/
+#define SRAM1_BASE			U(0x30000000)
+#define SRAM1_SIZE			U(0x20000)
+#define SRAM2_BASE			U(0x30020000)
+#define SRAM2_SIZE			U(0x20000)
+#define SRAM3_BASE			U(0x30040000)
+#define SRAM3_SIZE			U(0x10000)
+#define SRAM4_BASE			U(0x30050000)
+#define SRAM4_SIZE			U(0x10000)
 
 /* RETRAM layout */
+#define RETRAM_BASE			U(0x38000000)
 #define RETRAM_SIZE			U(0x10000)
+#endif
+
+#ifdef CFG_STM32MP13
+/* SRAM layout*/
+#define SRAM1_BASE			U(0x30000000)
+#define SRAM1_SIZE			U(0x4000)
+#define SRAM2_BASE			U(0x30004000)
+#define SRAM2_SIZE			U(0x2000)
+#define SRAM3_BASE			U(0x30006000)
+#define SRAM3_SIZE			U(0x2000)
+#endif
 
 /* MCUSRAM layout */
 #define MCUSRAM_SIZE			U(0x60000)
