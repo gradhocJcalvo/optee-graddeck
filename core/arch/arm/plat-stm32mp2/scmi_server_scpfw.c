@@ -561,13 +561,6 @@ static TEE_Result plat_scmi_reset_assert_level(struct rstctrl *rstctrl,
 
 	assert(index >= 0 && (size_t)index < ARRAY_SIZE(stm32_scmi_reset));
 
-#ifdef CFG_STM32MP_REMOTEPROC
-	reset_id = stm32_scmi_reset[index].reset_id;
-	if ((reset_id == C2_R || reset_id == C2_HOLDBOOT_R) &&
-	    stm32_rproc_reset_grant_access(STM32MP2_M33_RPROC_ID))
-		return TEE_ERROR_ACCESS_DENIED;
-#endif
-
 	return rstctrl_assert_to(stm32_scmi_reset[index].rstctrl_be, to_us);
 }
 
@@ -578,13 +571,6 @@ static TEE_Result plat_scmi_reset_deassert_level(struct rstctrl *rstctrl,
 	unsigned long __maybe_unused reset_id = 0;
 
 	assert(index >= 0 && (size_t)index < ARRAY_SIZE(stm32_scmi_reset));
-
-#ifdef CFG_STM32MP_REMOTEPROC
-	reset_id = stm32_scmi_reset[index].reset_id;
-	if ((reset_id == C2_R || reset_id == C2_HOLDBOOT_R) &&
-	    stm32_rproc_reset_grant_access(STM32MP2_M33_RPROC_ID))
-		return TEE_ERROR_ACCESS_DENIED;
-#endif
 
 	return rstctrl_deassert_to(stm32_scmi_reset[index].rstctrl_be, to_us);
 }
