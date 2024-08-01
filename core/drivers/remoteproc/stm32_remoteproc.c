@@ -128,7 +128,6 @@ void *stm32_rproc_get(uint32_t rproc_id)
 	return rproc;
 }
 
-#if defined(CFG_STM32MP25) || defined(CFG_STM32MP23) || defined(CFG_STM32MP21)
 /* Re-apply default access right on the memory regions */
 static TEE_Result
 stm32_rproc_release_mems_access(struct stm32_rproc_instance *rproc)
@@ -190,26 +189,6 @@ err:
 
 	return res;
 }
-#else
-/* Re-apply default access right  on the memory regions */
-static TEE_Result
-stm32_rproc_release_mems_access(struct stm32_rproc_instance *rproc __unused)
-{
-	/* To implement for the stm32mp1 */
-
-	return TEE_SUCCESS;
-}
-
-/* Get the exclusive access on the memory regions */
-static TEE_Result
-stm32_rproc_get_mems_access(struct stm32_rproc_instance *rproc __unused)
-{
-	/* To implement for the stm32mp1 */
-	IMSG("Warning: the remoteproc memories are not protected by firewall");
-
-	return TEE_SUCCESS;
-}
-#endif
 
 static TEE_Result stm32mp2_rproc_start(struct stm32_rproc_instance *rproc)
 {
