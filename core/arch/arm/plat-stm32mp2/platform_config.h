@@ -109,9 +109,11 @@
 
 /*
  * BSEC: 368 available OTPs, the other are masked
+ * - OEM FSBL keys 360 to 367 (programmable but not readable)
  * - ECIES key: 368 to 375 (only readable by bootrom)
  * - HWKEY: 376 to 383 (never reloadable or readable)
  */
+#define OEM_KEY_FIRST_OTP		360
 #define STM32MP2_OTP_MAX_ID		0x16FU
 #define STM32MP2_UPPER_OTP_START	0x100U
 

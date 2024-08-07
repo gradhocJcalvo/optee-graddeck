@@ -152,9 +152,6 @@
 #define OTP_SECURE_BOOT			18U
 #define OTP_CLOSED_SECURE		GENMASK_32(3, 0)
 
-/* OEM Keys are stored from OEM_KEY_FIRST_OTP to OTP bsec_dev.max_id (367) */
-#define OEM_KEY_FIRST_OTP		360
-
 struct nvmem_cell {
 	char *name;
 	uint32_t phandle;
