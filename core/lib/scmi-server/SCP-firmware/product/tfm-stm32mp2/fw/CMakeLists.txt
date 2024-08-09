@@ -27,3 +27,9 @@ target_sources(
     ${SCP_FIRMWARE_TARGET}
     PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/config_all.c"
 )
+
+#
+# Ensure TF-M build-system does not override requested C standard.
+#
+
+add_compile_options(-std=gnu11)
