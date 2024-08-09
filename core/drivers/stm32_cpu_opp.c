@@ -751,7 +751,7 @@ stm32_cpu_opp_init(const void *fdt, int node, const void *compat_data __unused)
 #ifdef CFG_STM32MP15
 	cpu_voltage = regulator_get_voltage(cpu_opp.regul);
 
-	if (stm32mp1_clk_compute_all_pll1_settings(cpu_voltage))
+	if (stm32mp1_clk_compute_all_pll1_settings(fdt, node, cpu_voltage))
 		panic();
 #endif
 
