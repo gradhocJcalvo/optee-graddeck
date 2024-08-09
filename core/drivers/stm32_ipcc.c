@@ -237,7 +237,7 @@ static void apply_rif_config(struct ipcc_pdata *ipcc_d)
 		if (!is_cid_configured &&
 		    (BIT(0) & ipcc_d->conf_data->cid_confs[i])) {
 			is_cid_configured = true;
-			if (i == IPCC_NB_MAX_RIF_CHAN - 1)
+			if (i > 0)
 				panic("Inconsistent IPCC CID filtering RIF configuration");
 		}
 
@@ -267,7 +267,7 @@ static void apply_rif_config(struct ipcc_pdata *ipcc_d)
 		if (!is_cid_configured &&
 		    (BIT(0) & ipcc_d->conf_data->cid_confs[i])) {
 			is_cid_configured = true;
-			if (i == (IPCC_NB_MAX_RIF_CHAN * 2) - 1)
+			if (i > IPCC_NB_MAX_RIF_CHAN)
 				panic("Inconsistent IPCC CID filtering RIF configuration");
 		}
 
