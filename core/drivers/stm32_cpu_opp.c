@@ -710,41 +710,18 @@ static TEE_Result stm32_cpu_opp_get_dt_subnode(const void *fdt, int node)
 	return TEE_SUCCESS;
 }
 
-static TEE_Result get_cpu_parent(const void *fdt)
-{
-	TEE_Result res = TEE_ERROR_GENERIC;
-	const struct fdt_property *prop = NULL;
-	int node = fdt_path_offset(fdt, "/cpus/cpu@0");
-
-	if (node < 0) {
-		EMSG("cannot find /cpus/cpu@0 node");
-		panic();
-	}
-
-	res = clk_dt_get_by_index(fdt, node, 0, &cpu_opp.clock);
-	if (res)
-		return res;
-
-	prop = fdt_get_property(fdt, node, "operating-points-v2", NULL);
-	if (!prop) {
-		EMSG("OPP table not defined by CPU");
-		return TEE_ERROR_GENERIC;
-	}
-
-	res = regulator_dt_get_supply(fdt, node, "cpu", &cpu_opp.regul);
-	if (res)
-		return res;
-
-	return TEE_SUCCESS;
-}
-
 static TEE_Result
-stm32_cpu_opp_init(const void *fdt, int node, const void *compat_data __unused)
+stm32_cpu_opp_init(const void *fdt, int cpu_node, int node,
+		   const void *compat_data __unused)
 {
 	TEE_Result res = TEE_SUCCESS;
 	uint16_t __maybe_unused cpu_voltage = 0;
 
-	res = get_cpu_parent(fdt);
+	res = clk_dt_get_by_index(fdt, cpu_node, 0, &cpu_opp.clock);
+	if (res)
+		return res;
+
+	res = regulator_dt_get_supply(fdt, cpu_node, "cpu", &cpu_opp.regul);
 	if (res)
 		return res;
 
@@ -765,13 +742,58 @@ stm32_cpu_opp_init(const void *fdt, int node, const void *compat_data __unused)
 	return TEE_SUCCESS;
 }
 
-static const struct dt_device_match stm32_cpu_opp_match_table[] = {
-	{ .compatible = "operating-points-v2" },
+static TEE_Result
+stm32_cpu_init(const void *fdt, int node, const void *compat_data __unused)
+{
+	const fdt32_t *cuint = NULL;
+	int opp_node = 0;
+	int len = 0;
+	uint32_t phandle = 0;
+
+	cuint = fdt_getprop(fdt, node, "operating-points-v2", &len);
+	if (!cuint || len != sizeof(uint32_t)) {
+		DMSG("Missing operating-points-v2");
+		return TEE_SUCCESS;
+	}
+
+	phandle = fdt32_to_cpu(*cuint);
+	opp_node = fdt_node_offset_by_phandle(fdt, phandle);
+
+	return stm32_cpu_opp_init(fdt, node, opp_node, compat_data);
+}
+
+static const struct dt_device_match stm32_cpu_match_table[] = {
+	{ .compatible = "arm,cortex-a7" },
+	{ .compatible = "arm,cortex-a35" },
 	{ }
 };
 
-DEFINE_DT_DRIVER(stm32_opp_dt_driver) = {
-	.name = "stm32-cpu-opp",
-	.match_table = stm32_cpu_opp_match_table,
-	.probe = &stm32_cpu_opp_init,
+DEFINE_DT_DRIVER(stm32_cpu_dt_driver) = {
+	.name = "stm32-cpu",
+	.match_table = stm32_cpu_match_table,
+	.probe = &stm32_cpu_init,
 };
+
+static TEE_Result stm32_cpu_initcall(void)
+{
+	TEE_Result res = TEE_ERROR_GENERIC;
+	const void *fdt = get_dt();
+	int node = fdt_path_offset(fdt, "/cpus/cpu@0");
+
+	if (node < 0) {
+		EMSG("cannot find /cpus/cpu@0 node");
+		panic();
+	}
+
+	res = dt_driver_maybe_add_probe_node(fdt, node);
+	if (res) {
+		EMSG("Failed on node %s with %#"PRIx32,
+		     fdt_get_name(fdt, node, NULL), res);
+		panic();
+	}
+
+	return TEE_SUCCESS;
+}
+
+driver_init(stm32_cpu_initcall);
+
