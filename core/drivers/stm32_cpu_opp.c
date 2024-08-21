@@ -108,7 +108,7 @@ static TEE_Result opp_set_voltage(struct regulator *regul, int volt_uv)
  * the function may adjust the input parameter volt_uv to a higher
  * supported value and still return true.
  */
-static bool opp_voltage_is_supported(struct regulator *regul, uint32_t *volt_uv)
+bool opp_voltage_is_supported(struct regulator *regul, uint32_t *volt_uv)
 {
 	const int target_volt_uv = *volt_uv;
 	int new_volt_uv = 0;

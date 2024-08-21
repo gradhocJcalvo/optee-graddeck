@@ -16,6 +16,8 @@ struct clk;
 size_t stm32_cpu_opp_count(void);
 #endif
 
+bool opp_voltage_is_supported(struct regulator *regul, uint32_t *volt_uv);
+
 /* Get level value identifying CPU operating point @opp_index */
 unsigned int stm32_cpu_opp_level(size_t opp_index);
 
