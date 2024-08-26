@@ -344,4 +344,6 @@ void __noreturn do_reset(const char *str);
 
 TEE_Result stm32_activate_internal_tamper(int id);
 
+bool stm32mp_allow_probe_shared_device(const void *fdt, int node);
+
 #endif /*__STM32_UTIL_H__*/

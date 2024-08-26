@@ -395,7 +395,8 @@ static TEE_Result stm32_etzpc_acquire_access(struct firewall_query *firewall)
 	id = firewall->args[0] & ETZPC_ID_MASK;
 	if (id < etzpc_dev->ddata->num_per_sec) {
 		attr = etzpc_do_get_decprot(etzpc_dev, id);
-		if (attr == ETZPC_DECPROT_MCU_ISOLATION)
+		if (attr != ETZPC_DECPROT_S_RW &&
+		    attr != ETZPC_DECPROT_NS_R_S_W)
 			return TEE_ERROR_ACCESS_DENIED;
 	} else {
 		return TEE_ERROR_BAD_PARAMETERS;
@@ -606,6 +607,72 @@ static void fdt_etzpc_conf_decprot(struct etzpc_device *dev,
 	clk_disable(dev->pdata.clk);
 }
 
+static TEE_Result
+stm32_etzpc_dt_probe_bus(const void *fdt, int node,
+			 struct firewall_controller *ctrl __maybe_unused)
+{
+	TEE_Result res = TEE_ERROR_GENERIC;
+	struct firewall_query *fw = NULL;
+	int subnode = 0;
+
+	DMSG("Populating %s firewall bus", ctrl->name);
+
+	fdt_for_each_subnode(subnode, fdt, node) {
+		unsigned int i = 0;
+
+		if (fdt_get_status(fdt, subnode) == DT_STATUS_DISABLED)
+			continue;
+
+		if (IS_ENABLED(CFG_INSECURE) &&
+		    stm32mp_allow_probe_shared_device(fdt, subnode)) {
+			DMSG("Skipping firewall attributes check for %s",
+			     fdt_get_name(fdt, subnode, NULL));
+			goto skip_check;
+		}
+
+		DMSG("Acquiring firewall access for %s when probing bus",
+		     fdt_get_name(fdt, subnode, NULL));
+
+		do {
+			/*
+			 * The access-controllers property is mandatory for
+			 * firewall bus devices
+			 */
+			res = firewall_dt_get_by_index(fdt, subnode, i, &fw);
+			if (res == TEE_ERROR_ITEM_NOT_FOUND) {
+				/* Stop when nothing more to parse */
+				break;
+			} else if (res) {
+				EMSG("%s: Error on node %s: %#"PRIx32,
+				     ctrl->name,
+				     fdt_get_name(fdt, subnode, NULL), res);
+				panic();
+			}
+
+			res = firewall_acquire_access(fw);
+			if (res) {
+				EMSG("%s: %s not accessible: %#"PRIx32,
+				     ctrl->name,
+				     fdt_get_name(fdt, subnode, NULL), res);
+				panic();
+			}
+
+			firewall_put(fw);
+			i++;
+		} while (true);
+
+skip_check:
+		res = dt_driver_maybe_add_probe_node(fdt, subnode);
+		if (res) {
+			EMSG("Failed on node %s with %#"PRIx32,
+			     fdt_get_name(fdt, subnode, NULL), res);
+			panic();
+		}
+	}
+
+	return TEE_SUCCESS;
+}
+
 static TEE_Result init_etzpc_from_dt(struct etzpc_device *etzpc_dev,
 				     const void *fdt, int node)
 {
@@ -689,7 +756,7 @@ static TEE_Result stm32_etzpc_probe(const void *fdt, int node,
 	if (res)
 		goto err;
 
-	res = firewall_dt_probe_bus(fdt, node, controller);
+	res = stm32_etzpc_dt_probe_bus(fdt, node, controller);
 	if (res)
 		goto err;
 

@@ -790,3 +790,28 @@ TEE_Result stm32_activate_internal_tamper(int id)
 
 	return res;
 };
+
+bool stm32mp_allow_probe_shared_device(const void *fdt, int node)
+{
+	static int uart_console_node = -1;
+	const char *compat = NULL;
+	static bool once;
+
+	if (!once) {
+		get_console_node_from_dt((void *)fdt, &uart_console_node,
+					 NULL, NULL);
+		once = true;
+	}
+
+	compat = fdt_stringlist_get(fdt, node, "compatible", 0, NULL);
+
+	/*
+	 * Allow OP-TEE console and MP15 I2C to be shared
+	 * with non-secure world
+	 */
+	if (node == uart_console_node ||
+	    !strcmp(compat, "st,stm32mp15-i2c-non-secure"))
+		return true;
+
+	return false;
+}
