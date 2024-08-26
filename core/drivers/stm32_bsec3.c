@@ -33,6 +33,9 @@
 #define BSEC_DENR			U(0xE20)
 #define BSEC_SR				U(0xE40)
 #define BSEC_OTPSR			U(0xE44)
+#define BSEC_DBGMCR			U(0xE8C)
+#define BSEC_AP_UNLOCK			U(0xE90)
+#define BSEC_DBGACR			U(0xEAC)
 #define BSEC_VERR			U(0xFF4)
 #define BSEC_IPIDR			U(0xFF8)
 
@@ -84,6 +87,10 @@
 #define BSEC_DENR_SPIDENM		BIT(10)
 #define BSEC_DENR_SPNIDENM		BIT(11)
 #define BSEC_DENR_CFGSDIS		BIT(12)
+
+/* Dummy value for ADAC emulation on BSEC_DBGMCR and BSEC_DBGACR */
+#define BSEC_DBGxCR_DUMMY_ADAC		U(0xB4B4B400)
+#define BSEC_AP_UNLOCK_DUMMY_ADAC	U(0x000000B4)
 
 #if (defined(CFG_STM32MP25) || defined(CFG_STM32MP23))
 #define BSEC_DENR_CP15SDIS_MASK		GENMASK_32(14, 13)
@@ -558,6 +565,16 @@ uint32_t stm32_bsec_read_debug_conf(void)
 bool stm32_bsec_self_hosted_debug_is_enabled(void)
 {
 	return stm32_bsec_read_debug_conf() & BSEC_DENR_DBGSWEN;
+}
+
+/*
+ * Dummy ADAC requires setting BSEC_DBGACR and BSEC_DBGMCR.
+ */
+void stm32_bsec_mp21_dummy_adac(void)
+{
+	io_write32(bsec_base() + BSEC_DBGACR, BSEC_DBGxCR_DUMMY_ADAC);
+	io_write32(bsec_base() + BSEC_DBGMCR, BSEC_DBGxCR_DUMMY_ADAC);
+	io_write32(bsec_base() + BSEC_AP_UNLOCK, BSEC_AP_UNLOCK_DUMMY_ADAC);
 }
 
 /*

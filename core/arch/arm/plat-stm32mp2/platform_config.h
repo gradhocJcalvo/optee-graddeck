@@ -83,7 +83,6 @@
 #define FMC_BASE			0x48200000
 #define PCIE_BASE			0x48400000
 #define A35SSC_BASE			0x48800000
-#define DBGMCU_BASE			0x4a010000
 #define GIC_BASE			0x4ac00000
 #define DDR_BASE			UL(0x80000000)
 
@@ -91,11 +90,13 @@
 
 #ifdef CFG_STM32MP21
 #define SRAM1_BASE			0x0e060000
+#define DBGMCU_BASE			0x440A0000
 #else
 #define SRAM1_BASE			0x0e040000
+#define DBGMCU_BASE			0x4a010000
 #endif
 
-/* DBGCMU */
+/* DBGMCU */
 #define DBGMCU_SIZE			0x10000
 
 /* GIC resources */

@@ -190,6 +190,11 @@ bool stm32_bsec_nsec_can_access_otp(uint32_t otp_id);
 bool stm32_bsec_self_hosted_debug_is_enabled(void);
 
 /*
+ * Program BSEC for dummy ADAC (open access to every AP).
+ */
+void stm32_bsec_mp21_dummy_adac(void);
+
+/*
  * Find and get OTP location from its name.
  * @name: sub-node name to look up.
  * @otp_id: pointer to output OTP number or NULL.

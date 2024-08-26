@@ -35,7 +35,8 @@
 #include <util.h>
 
 /* DBGMCU registers */
-#define DBGMCU_CR			U(0x4)
+#define DBGMCU_CR			U(0x004)
+#define DBGMCU_DBG_AUTH_DEV		U(0x104)
 
 #define DBGMCU_CR_DBG_SLEEP		BIT(0)
 #define DBGMCU_CR_DBG_STOP		BIT(1)
@@ -130,6 +131,13 @@ vaddr_t stm32_rcc_base(void)
 	return io_pa_or_va_secure(&base, 1);
 }
 
+static uintptr_t stm32_dbgmcu_base(void)
+{
+	static struct io_pa_va dbgmcu_base = { .pa = DBGMCU_BASE };
+
+	return io_pa_or_va_nsec(&dbgmcu_base, 1);
+}
+
 void boot_primary_init_intc(void)
 {
 	gic_init(GIC_BASE + GICC_OFFSET, GIC_BASE + GICD_OFFSET);
@@ -182,6 +190,8 @@ static TEE_Result init_debug(void)
 		return res;
 
 	if (state != BSEC_STATE_SEC_CLOSED) {
+		struct clk __maybe_unused *dbgmcu_clk = NULL;
+
 		if (IS_ENABLED(CFG_INSECURE))
 			IMSG("WARNING: All debug access are allowed");
 
@@ -193,6 +203,22 @@ static TEE_Result init_debug(void)
 		assert(dbg_clk);
 		if (clk_enable(dbg_clk))
 			panic("Could not enable debug clock");
+
+#if defined(CFG_STM32MP21)
+		dbgmcu_clk = stm32mp_rcc_clock_id_to_clk(CK_DBGMCU);
+
+		assert(dbgmcu_clk);
+		if (clk_enable(dbgmcu_clk))
+			panic("Could not enable DBGMCU clock");
+
+		stm32_bsec_mp21_dummy_adac();
+
+		/*
+		 * Write a dummy value to trigger the full visibility
+		 * of the debug port.
+		 */
+		io_write32(stm32_dbgmcu_base() + DBGMCU_DBG_AUTH_DEV, 1);
+#endif
 	}
 
 	if (stm32_bsec_self_hosted_debug_is_enabled()) {
@@ -420,13 +446,6 @@ static TEE_Result stm32_hse_monitoring(void)
 
 driver_init_late(stm32_hse_monitoring);
 #endif /* CFG_STM32_HSE_MONITORING */
-
-static uintptr_t stm32_dbgmcu_base(void)
-{
-	static struct io_pa_va dbgmcu_base = { .pa = DBGMCU_BASE };
-
-	return io_pa_or_va_nsec(&dbgmcu_base, 1);
-}
 
 /*
  * Handle low-power emulation mode
