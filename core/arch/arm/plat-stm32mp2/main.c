@@ -469,3 +469,21 @@ void stm32_debug_suspend(unsigned long a0)
 
 	clk_disable(dbgmcu_clk);
 }
+
+bool stm32mp_allow_probe_shared_device(const void *fdt, int node)
+{
+	static int uart_console_node = -1;
+	static bool once;
+
+	if (!once) {
+		get_console_node_from_dt((void *)fdt, &uart_console_node,
+					 NULL, NULL);
+		once = true;
+	}
+
+	/* Allow OP-TEE console to be shared with non-secure world */
+	if (node == uart_console_node)
+		return true;
+
+	return false;
+}

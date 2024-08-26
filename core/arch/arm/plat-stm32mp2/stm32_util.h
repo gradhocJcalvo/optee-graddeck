@@ -43,4 +43,6 @@ static inline bool stm32_stpmic2_is_present(void)
 
 void stm32_debug_suspend(unsigned long a0);
 
+bool stm32mp_allow_probe_shared_device(const void *fdt, int node);
+
 #endif /*__STM32_UTIL_H__*/
