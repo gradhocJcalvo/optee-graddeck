@@ -6,6 +6,7 @@
 #include <drivers/mailbox.h>
 #include <drivers/scmi.h>
 #include <drivers/scmi-msg.h>
+#include <drivers/stm32_cpu_opp.h>
 #include <drivers/stm32_remoteproc.h>
 #include <drivers/stm32mp_dt_bindings.h>
 #include <kernel/boot.h>
@@ -404,6 +405,11 @@ static TEE_Result optee_scmi_server_probe(const void *fdt, int parent_node,
 			scpfw_cfg.agent_config + agent_ctx->agent_id;
 		struct scpfw_channel_config *channel_cfg =
 			agent_cfg->channel_config + agent_ctx->channel_id;
+
+		res = optee_scmi_server_init_dvfs(fdt, 0, agent_cfg,
+						  channel_cfg);
+		if (res)
+			panic("Error during dvfs init");
 
 		SIMPLEQ_FOREACH(protocol_ctx, &agent_ctx->protocol_list, link) {
 			switch (protocol_ctx->protocol_id) {

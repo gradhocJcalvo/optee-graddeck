@@ -163,14 +163,6 @@ struct scpfw_config *scmi_scpfw_get_configuration(void);
 /* Release resources allocated to create SCP-firmware configuration data */
 void scmi_scpfw_release_configuration(void);
 
-/* Add a DVFS service in the SCMI server */
-TEE_Result scmi_scpfw_cfg_add_dvfs(unsigned int agent, unsigned int channel,
-				   unsigned int domain_id,
-				   struct regulator *regulator, struct clk *clk,
-				   unsigned int *dvfs_khz,
-				   unsigned int *dvfs_mv, size_t dvfs_count,
-				   size_t initial_index);
-
 /* SCP firmware SCMI server configuration entry point */
 void scpfw_configure(struct scpfw_config *cfg);
 

@@ -379,14 +379,28 @@ static int max_cpu_voltage(struct cpu_dvfs *dvfs, size_t count)
 	return max_mv;
 }
 
-static void setup_scp_server_resources(void)
+TEE_Result optee_scmi_server_init_dvfs(const void *fdt __unused,
+				       int node __unused,
+				       struct scpfw_agent_config *agent_cfg,
+				       struct scpfw_channel_config *channel_cfg)
 {
 	TEE_Result res = TEE_ERROR_GENERIC;
 	unsigned int *dvfs_khz = NULL;
 	unsigned int *dvfs_mv = NULL;
+	unsigned int *dvfs_opp_khz = NULL;
+	unsigned int *dvfs_opp_mv = NULL;
 	size_t opp = 0;
 	struct cpu_dvfs *sorted_dvfs = NULL;
 	unsigned int scpfw_default_opp_index = UINT_MAX;
+
+	assert(agent_cfg && channel_cfg);
+
+	/*
+	 * Platform currenty expect only non-secure Cortex-A
+	 * (aka agent 1/channel 0) exposes a CPU DFVS service.
+	 */
+	if (agent_cfg->agent_id != 1 || channel_cfg->channel_id != 0)
+		return TEE_SUCCESS;
 
 	/*
 	 * Sort operating points by increasing frequencies as expected by
@@ -412,8 +426,10 @@ static void setup_scp_server_resources(void)
 	};
 
 	res = clk_register(&cpu_opp.scp_clock);
-	if (res)
-		panic();
+	if (res) {
+		free(sorted_dvfs);
+		return res;
+	}
 
 	/* Setup a regulator for scp-firmare DVFS module PSU instance */
 	cpu_opp.scp_regulator = (struct regulator){
@@ -453,22 +469,46 @@ static void setup_scp_server_resources(void)
 
 	free(sorted_dvfs);
 
-	res = scmi_scpfw_cfg_add_dvfs(0 /*agent*/, 0 /*channel*/, 0 /*domain*/,
-				      &cpu_opp.scp_regulator,
-				      &cpu_opp.scp_clock,
-				      dvfs_khz, dvfs_mv, cpu_opp.opp_count,
-				      scpfw_default_opp_index);
-	if (res)
-		panic();
+	/*
+	 * Fill struct scmi_perfd
+	 *
+	 * Only perfd[0] will be filled
+	 */
+	dvfs_opp_khz = calloc(cpu_opp.opp_count, sizeof(*dvfs_opp_khz));
+	dvfs_opp_mv = calloc(cpu_opp.opp_count, sizeof(*dvfs_opp_mv));
+
+	channel_cfg->perfd_count = 1;
+	channel_cfg->perfd = calloc(channel_cfg->perfd_count,
+				    sizeof(*channel_cfg->perfd));
+
+	if (!dvfs_opp_khz || !dvfs_opp_mv || !channel_cfg->perfd) {
+		free(dvfs_opp_mv);
+		free(dvfs_opp_khz);
+		free(cpu_opp.scp_cpu_opp_levels_uv);
+		free(channel_cfg->perfd);
+
+		return TEE_ERROR_OUT_OF_MEMORY;
+	}
+	memcpy(dvfs_opp_mv, dvfs_mv, cpu_opp.opp_count * sizeof(*dvfs_opp_mv));
+	memcpy(dvfs_opp_khz, dvfs_khz,
+	       cpu_opp.opp_count * sizeof(*dvfs_opp_khz));
+
+	channel_cfg->perfd[0] = (struct scmi_perfd){
+		.name = "CPU DVFS",
+		.initial_opp = scpfw_default_opp_index,
+		.dvfs_opp_count = cpu_opp.opp_count,
+		.dvfs_opp_khz = dvfs_opp_khz,
+		.dvfs_opp_mv = dvfs_opp_mv,
+		.clk = &cpu_opp.scp_clock,
+		.regulator = &cpu_opp.scp_regulator,
+	};
 
 	free(dvfs_khz);
 	free(dvfs_mv);
+
+	return TEE_SUCCESS;
 }
 #else /*CFG_SCPFW_MOD_DVFS*/
-static void setup_scp_server_resources(void)
-{
-}
-
 TEE_Result stm32_cpu_opp_set_level(unsigned int level)
 {
 	unsigned int current_level = 0;
@@ -741,9 +781,6 @@ stm32_cpu_opp_init(const void *fdt, int cpu_node, int node,
 	res = stm32_cpu_opp_get_dt_subnode(fdt, node);
 	if (res)
 		return res;
-
-	if (IS_ENABLED(CFG_SCPFW_MOD_DVFS))
-		setup_scp_server_resources();
 
 	return TEE_SUCCESS;
 }
