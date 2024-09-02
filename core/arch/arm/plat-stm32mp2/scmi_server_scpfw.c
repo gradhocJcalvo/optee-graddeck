@@ -1,1000 +1,457 @@
 // SPDX-License-Identifier: BSD-2-Clause
 /*
- * Copyright (c) 2022-2024, STMicroelectronics
+ * Copyright (c) 2024, STMicroelectronics International N.V.
  */
-#include <assert.h>
-#include <compiler.h>
-#include <config.h>
-#include <confine_array_index.h>
-#include <drivers/clk.h>
-#include <drivers/clk_dt.h>
-#include <drivers/rstctrl.h>
-#include <drivers/scmi-msg.h>
+
+#include <drivers/mailbox.h>
 #include <drivers/scmi.h>
-#ifdef CFG_STM32_CPU_OPP
-#include <drivers/stm32_cpu_opp.h>
-#endif
+#include <drivers/scmi-msg.h>
 #include <drivers/stm32_remoteproc.h>
 #include <drivers/stm32mp_dt_bindings.h>
-#include <initcall.h>
+#include <kernel/boot.h>
+#include <kernel/dt.h>
+#include <kernel/dt_driver.h>
+#include <kernel/notif.h>
+#include <libfdt.h>
 #include <mm/core_memprot.h>
 #include <mm/core_mmu.h>
-#include <platform_config.h>
-#include <scmi_agent_configuration.h>
-#include <scmi_regulator_consumer.h>
 #include <scmi/scmi_server.h>
-#include <stdint.h>
-#include <speculation_barrier.h>
-#include <stm32_util.h>
-#include <string.h>
+#include <tee_api_types.h>
 #include <tee_api_defines.h>
-#include <util.h>
-
-#define TIMEOUT_US_1MS		1000
+#include <tee/cache.h>
 
 /*
- * struct stm32_scmi_clk - Data for the exposed clock
- * @clock_id: Clock identifier in RCC clock driver
- * @is_exposed: True if SMCI clock is exposed, false if it is not reachable
- * @name: Clock string ID exposed to channel
- * @enabled: State of the SCMI clock at initialization
- * @change_rate: SCMMI agent is allowed to change the rate
- * @clk: Clock device manipulated by the SCMI channel
- */
-struct stm32_scmi_clk {
-	unsigned long clock_id;
-	bool is_exposed;
-	const char *name;
-	bool enabled;
-	bool change_rate;
-	struct clk *clk;
-};
-
-/*
- * struct stm32_scmi_rd - Data for the exposed reset controller
- * @reset_id: Reset identifier in RCC reset driver
- * @is_exposed: True if SMCI reset is exposed, false if it is not reachable
- * @name: Reset string ID exposed to channel
- * @rstctrl: Reset controller manipulated by the SCMI channel
- * @rstctrl_be: Backend reset controller device
- */
-struct stm32_scmi_rd {
-	unsigned long reset_id;
-	bool is_exposed;
-	const char *name;
-	struct rstctrl *rstctrl;
-	struct rstctrl *rstctrl_be;
-};
-
-/*
- * struct stm32_scmi_perfd - Data for the exposed performance domains
- * @name: Performance domain string ID (aka name) exposed to channel
- */
-struct stm32_scmi_perfd {
-	const char *name;
-};
-
-/*
- * struct stm32_scmi_pd - Data for the exposed power domains
- * @name: Power domain name exposed to the channel
- * @clock_id: Clock identifier in RCC clock driver
- * @regu_name: Regulator node name in OP-TEE secure FDT
- */
-struct stm32_scmi_pd {
-	const char *name;
-	unsigned long clock_id;
-	const char *regu_name;
-};
-
-#define CLOCK_CELL(_scmi_id, _id, _name, _init_enabled) \
-	[_scmi_id] = { \
-		.clock_id = _id, \
-		.name = _name, \
-		.enabled = _init_enabled, \
-		.is_exposed = true, \
-	}
-
-#define CLOCK_CELL_RATES(_scmi_id, _id, _name, _init_enabled) \
-	[_scmi_id] = { \
-		.clock_id = _id, \
-		.name = _name, \
-		.enabled = _init_enabled, \
-		.change_rate = true, \
-		.is_exposed = true, \
-	}
-
-#define RESET_CELL(_scmi_id, _id, _name) \
-	[_scmi_id] = { \
-		.reset_id = _id, \
-		.name = _name, \
-		.is_exposed = true, \
-	}
-
-#define PERFD_CELL(_scmi_id, _name) \
-	[_scmi_id] = { \
-		.name = (_name), \
-	}
-
-#define PD_CELL(_scmi_id, _name, _clock_id, _regu_name) \
-	[_scmi_id] = { \
-		.name = (_name), \
-		.clock_id = (_clock_id), \
-		.regu_name = (_regu_name), \
-	}
-
-struct channel_resources {
-	struct stm32_scmi_clk *clock;
-	size_t clock_count;
-	struct stm32_scmi_rd *rd;
-	size_t rd_count;
-	struct stm32_scmi_perfd *perfd;
-	size_t perfd_count;
-	struct stm32_scmi_pd *pd;
-	size_t pd_count;
-};
-
-#ifdef CFG_STM32MP21
-static struct stm32_scmi_clk stm32_scmi_clock[] = {
-	/*
-	 * Some SCMI clocks are allowed to manipulate their rate:
-	 * FLXEGEN_10: SPI2
-	 * FLXEGEN_11: SPI3
-	 * FLEXGEN_16: SPI1
-	 * FLEXGEN_22: SAI1
-	 * FLEXGEN_23: SAI2
-	 * FLEXGEN_24: SAI3
-	 * FLEXGEN_25: SAI4
-	 * FLEXGEN_27: LTDC
-	 */
-	CLOCK_CELL(CK_SCMI_ICN_HS_MCU, CK_ICN_HS_MCU, "ck_icn_hs_mcu", true),
-
-	CLOCK_CELL(CK_SCMI_ICN_SDMMC, CK_ICN_SDMMC, "ck_icn_sdmmc", true),
-
-	CLOCK_CELL(CK_SCMI_ICN_DDR, CK_ICN_DDR, "ck_icn_ddr", true),
-	CLOCK_CELL(CK_SCMI_ICN_DISPLAY, CK_ICN_DISPLAY, "ck_icn_display", true),
-	CLOCK_CELL(CK_SCMI_ICN_HSL, CK_ICN_HSL, "ck_icn_hsl", true),
-	CLOCK_CELL(CK_SCMI_ICN_NIC, CK_ICN_NIC, "ck_icn_nic", true),
-
-	CLOCK_CELL(CK_SCMI_FLEXGEN_07, CK_FLEXGEN_07, "ck_flexgen_07", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_08, CK_FLEXGEN_08, "ck_flexgen_08", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_09, CK_FLEXGEN_09, "ck_flexgen_09", true),
-
-	CLOCK_CELL_RATES(CK_SCMI_FLEXGEN_10, CK_FLEXGEN_10, "ck_flexgen_10",
-			 true),
-	CLOCK_CELL_RATES(CK_SCMI_FLEXGEN_11, CK_FLEXGEN_11, "ck_flexgen_11",
-			 true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_12, CK_FLEXGEN_12, "ck_flexgen_12", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_13, CK_FLEXGEN_13, "ck_flexgen_13", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_14, CK_FLEXGEN_14, "ck_flexgen_14", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_15, CK_FLEXGEN_15, "ck_flexgen_15", true),
-	CLOCK_CELL_RATES(CK_SCMI_FLEXGEN_16, CK_FLEXGEN_16, "ck_flexgen_16",
-			 true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_17, CK_FLEXGEN_17, "ck_flexgen_17", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_18, CK_FLEXGEN_18, "ck_flexgen_18", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_19, CK_FLEXGEN_19, "ck_flexgen_19", true),
-
-	CLOCK_CELL(CK_SCMI_FLEXGEN_20, CK_FLEXGEN_20, "ck_flexgen_20", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_21, CK_FLEXGEN_21, "ck_flexgen_21", true),
-	CLOCK_CELL_RATES(CK_SCMI_FLEXGEN_22, CK_FLEXGEN_22, "ck_flexgen_22",
-			 true),
-	CLOCK_CELL_RATES(CK_SCMI_FLEXGEN_23, CK_FLEXGEN_23, "ck_flexgen_23",
-			 true),
-	CLOCK_CELL_RATES(CK_SCMI_FLEXGEN_24, CK_FLEXGEN_24, "ck_flexgen_24",
-			 true),
-	CLOCK_CELL_RATES(CK_SCMI_FLEXGEN_25, CK_FLEXGEN_25, "ck_flexgen_25",
-			 true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_26, CK_FLEXGEN_26, "ck_flexgen_26", true),
-	CLOCK_CELL_RATES(CK_SCMI_FLEXGEN_27, CK_FLEXGEN_27, "ck_flexgen_27",
-			 true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_28, CK_FLEXGEN_28, "ck_flexgen_28", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_29, CK_FLEXGEN_29, "ck_flexgen_29", true),
-
-	CLOCK_CELL(CK_SCMI_FLEXGEN_30, CK_FLEXGEN_30, "ck_flexgen_30", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_31, CK_FLEXGEN_31, "ck_flexgen_31", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_32, CK_FLEXGEN_32, "ck_flexgen_32", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_33, CK_FLEXGEN_33, "ck_flexgen_33", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_34, CK_FLEXGEN_34, "ck_flexgen_34", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_35, CK_FLEXGEN_35, "ck_flexgen_35", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_36, CK_FLEXGEN_36, "ck_flexgen_36", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_37, CK_FLEXGEN_37, "ck_flexgen_37", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_38, CK_FLEXGEN_38, "ck_flexgen_38", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_39, CK_FLEXGEN_39, "ck_flexgen_39", true),
-
-	CLOCK_CELL(CK_SCMI_FLEXGEN_40, CK_FLEXGEN_40, "ck_flexgen_40", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_41, CK_FLEXGEN_41, "ck_flexgen_41", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_42, CK_FLEXGEN_42, "ck_flexgen_42", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_43, CK_FLEXGEN_43, "ck_flexgen_43", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_44, CK_FLEXGEN_44, "ck_flexgen_44", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_45, CK_FLEXGEN_45, "ck_flexgen_45", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_46, CK_FLEXGEN_46, "ck_flexgen_46", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_47, CK_FLEXGEN_47, "ck_flexgen_47", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_48, CK_FLEXGEN_48, "ck_flexgen_48", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_49, CK_FLEXGEN_49, "ck_flexgen_49", true),
-
-	CLOCK_CELL(CK_SCMI_FLEXGEN_50, CK_FLEXGEN_50, "ck_flexgen_50", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_51, CK_FLEXGEN_51, "ck_flexgen_51", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_52, CK_FLEXGEN_52, "ck_flexgen_52", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_53, CK_FLEXGEN_53, "ck_flexgen_53", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_54, CK_FLEXGEN_54, "ck_flexgen_54", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_55, CK_FLEXGEN_55, "ck_flexgen_55", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_56, CK_FLEXGEN_56, "ck_flexgen_56", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_57, CK_FLEXGEN_57, "ck_flexgen_57", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_58, CK_FLEXGEN_58, "ck_flexgen_58", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_59, CK_FLEXGEN_59, "ck_flexgen_59", true),
-
-	CLOCK_CELL(CK_SCMI_FLEXGEN_60, CK_FLEXGEN_60, "ck_flexgen_60", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_61, CK_FLEXGEN_61, "ck_flexgen_61", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_62, CK_FLEXGEN_62, "ck_flexgen_62", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_63, CK_FLEXGEN_63, "ck_flexgen_63", true),
-
-	CLOCK_CELL(CK_SCMI_ICN_LS_MCU, CK_ICN_LS_MCU, "ck_icn_ls_mcu", true),
-	CLOCK_CELL(CK_SCMI_HSE, HSE_CK, "hse_ck", true),
-	CLOCK_CELL(CK_SCMI_LSE, LSE_CK, "lse_ck", true),
-	CLOCK_CELL(CK_SCMI_HSI, HSI_CK, "hsi_ck", true),
-	CLOCK_CELL(CK_SCMI_LSI, LSI_CK, "lsi_ck", true),
-	CLOCK_CELL(CK_SCMI_MSI, MSI_CK, "msi_ck", true),
-
-	CLOCK_CELL(CK_SCMI_RTCCK, RTC_CK, "rtc_ck", true),
-
-	CLOCK_CELL(CK_SCMI_ICN_APB1, CK_ICN_APB1, "ck_icn_apb1", true),
-	CLOCK_CELL(CK_SCMI_ICN_APB2, CK_ICN_APB2, "ck_icn_apb2", true),
-	CLOCK_CELL(CK_SCMI_ICN_APB3, CK_ICN_APB3, "ck_icn_apb3", true),
-	CLOCK_CELL(CK_SCMI_ICN_APB4, CK_ICN_APB4, "ck_icn_apb4", true),
-	CLOCK_CELL(CK_SCMI_ICN_APB5, CK_ICN_APB5, "ck_icn_apb5", true),
-
-	CLOCK_CELL(CK_SCMI_ICN_APBDBG, CK_ICN_APBDBG, "ck_icn_apbdbg", true),
-
-	CLOCK_CELL(CK_SCMI_TIMG1, TIMG1_CK, "timg1_ck", true),
-	CLOCK_CELL(CK_SCMI_TIMG2, TIMG2_CK, "timg2_ck", true),
-
-	CLOCK_CELL(CK_SCMI_BKPSRAM, CK_BUS_BKPSRAM, "ck_bus_bkpsram", true),
-	CLOCK_CELL(CK_SCMI_BSEC, CK_BUS_BSEC, "ck_bus_bsec", true),
-	CLOCK_CELL(CK_SCMI_BUS_ETR, CK_BUS_ETR, "ck_icn_p_etr", true),
-	CLOCK_CELL(CK_SCMI_FMC, CK_KER_FMC, "ck_ker_fmc", true),
-	CLOCK_CELL(CK_SCMI_GPIOA, CK_BUS_GPIOA, "ck_bus_gpioa", true),
-	CLOCK_CELL(CK_SCMI_GPIOB, CK_BUS_GPIOB, "ck_bus_gpiob", true),
-	CLOCK_CELL(CK_SCMI_GPIOC, CK_BUS_GPIOC, "ck_bus_gpioc", true),
-	CLOCK_CELL(CK_SCMI_GPIOD, CK_BUS_GPIOD, "ck_bus_gpiod", true),
-	CLOCK_CELL(CK_SCMI_GPIOE, CK_BUS_GPIOE, "ck_bus_gpioe", true),
-	CLOCK_CELL(CK_SCMI_GPIOF, CK_BUS_GPIOF, "ck_bus_gpiof", true),
-	CLOCK_CELL(CK_SCMI_GPIOG, CK_BUS_GPIOG, "ck_bus_gpiog", true),
-	CLOCK_CELL(CK_SCMI_GPIOH, CK_BUS_GPIOH, "ck_bus_gpioh", true),
-	CLOCK_CELL(CK_SCMI_GPIOI, CK_BUS_GPIOI, "ck_bus_gpioi", true),
-	CLOCK_CELL(CK_SCMI_GPIOZ, CK_BUS_GPIOZ, "ck_bus_gpioz", true),
-	CLOCK_CELL(CK_SCMI_HPDMA1, CK_BUS_HPDMA1, "ck_bus_hpdma1", true),
-	CLOCK_CELL(CK_SCMI_HPDMA2, CK_BUS_HPDMA2, "ck_bus_hpdma2", true),
-	CLOCK_CELL(CK_SCMI_HPDMA3, CK_BUS_HPDMA3, "ck_bus_hpdma3", true),
-	CLOCK_CELL(CK_SCMI_IPCC1, CK_BUS_IPCC1, "ck_bus_ipcc1", true),
-	CLOCK_CELL(CK_SCMI_RETRAM, CK_BUS_RETRAM, "ck_bus_retram", true),
-	CLOCK_CELL(CK_SCMI_RTC, CK_BUS_RTC, "ck_bus_rtc", true),
-	CLOCK_CELL(CK_SCMI_SRAM1, CK_BUS_SRAM1, "ck_bus_sram1", true),
-	CLOCK_CELL(CK_SCMI_SYSCPU1, CK_BUS_SYSCPU1, "ck_bus_syscpu1", true),
-	CLOCK_CELL(CK_SCMI_CPU1, CK_CPU1, "ck_cpu1", true),
-	CLOCK_CELL(CK_SCMI_HSE_DIV2, HSE_DIV2_CK, "hse_div2_ck", false),
-	CLOCK_CELL(CK_SCMI_PLL2, PLL2_CK, "ck_pll2", true),
-	CLOCK_CELL(CK_SCMI_SYSRAM, CK_BUS_SYSRAM, "ck_icn_s_sysram", true),
-	CLOCK_CELL(CK_SCMI_OSPI1, CK_KER_OSPI1, "ck_ker_ospi1", true),
-	CLOCK_CELL(CK_SCMI_TPIU, CK_KER_TPIU, "ck_ker_tpiu", true),
-	CLOCK_CELL(CK_SCMI_SYSDBG, CK_SYSDBG, "ck_sys_dbg", true),
-	CLOCK_CELL(CK_SCMI_SYSATB, CK_BUS_SYSATB, "ck_sys_atb", true),
-	CLOCK_CELL(CK_SCMI_TSDBG, CK_KER_TSDBG, "ck_ker_tsdbg", true),
-	CLOCK_CELL(CK_SCMI_KER_ETR, CK_KER_ETR, "ck_icn_m_etr", true),
-	CLOCK_CELL(CK_SCMI_BUS_STM, CK_BUS_STM, "ck_icn_p_stm", true),
-	CLOCK_CELL(CK_SCMI_KER_STM, CK_KER_STM, "ck_icn_s_stm", true),
-};
-
-#else /* CFG_STM32MP21 */
-
-static struct stm32_scmi_clk stm32_scmi_clock[] = {
-	/*
-	 * Some SCMI clocks are allowed to manipulate their rate:
-	 * FLXEGEN_10: SPI2 & SPI3
-	 * FLEXGEN_16: SPI1
-	 * FLEXGEN_24: SAI1
-	 * FLEXGEN_24: SAI2
-	 * FLEXGEN_25: SAI3 & SAI4
-	 * FLEXGEN_27: LTDC
-	 */
-	CLOCK_CELL(CK_SCMI_ICN_HS_MCU, CK_ICN_HS_MCU, "ck_icn_hs_mcu", true),
-
-	CLOCK_CELL(CK_SCMI_ICN_SDMMC, CK_ICN_SDMMC, "ck_icn_sdmmc", true),
-
-	CLOCK_CELL(CK_SCMI_ICN_DDR, CK_ICN_DDR, "ck_icn_ddr", true),
-	CLOCK_CELL(CK_SCMI_ICN_DISPLAY, CK_ICN_DISPLAY, "ck_icn_display", true),
-	CLOCK_CELL(CK_SCMI_ICN_HSL, CK_ICN_HSL, "ck_icn_hsl", true),
-	CLOCK_CELL(CK_SCMI_ICN_NIC, CK_ICN_NIC, "ck_icn_nic", true),
-	CLOCK_CELL(CK_SCMI_ICN_VID, CK_ICN_VID, "ck_icn_vid", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_07, CK_FLEXGEN_07, "ck_flexgen_07", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_08, CK_FLEXGEN_08, "ck_flexgen_08", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_09, CK_FLEXGEN_09, "ck_flexgen_09", true),
-
-	CLOCK_CELL_RATES(CK_SCMI_FLEXGEN_10, CK_FLEXGEN_10, "ck_flexgen_10",
-			 true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_11, CK_FLEXGEN_11, "ck_flexgen_11", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_12, CK_FLEXGEN_12, "ck_flexgen_12", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_13, CK_FLEXGEN_13, "ck_flexgen_13", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_14, CK_FLEXGEN_14, "ck_flexgen_14", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_15, CK_FLEXGEN_15, "ck_flexgen_15", true),
-	CLOCK_CELL_RATES(CK_SCMI_FLEXGEN_16, CK_FLEXGEN_16, "ck_flexgen_16",
-			 true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_17, CK_FLEXGEN_17, "ck_flexgen_17", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_18, CK_FLEXGEN_18, "ck_flexgen_18", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_19, CK_FLEXGEN_19, "ck_flexgen_19", true),
-
-	CLOCK_CELL(CK_SCMI_FLEXGEN_20, CK_FLEXGEN_20, "ck_flexgen_20", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_21, CK_FLEXGEN_21, "ck_flexgen_21", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_22, CK_FLEXGEN_22, "ck_flexgen_22", true),
-	CLOCK_CELL_RATES(CK_SCMI_FLEXGEN_23, CK_FLEXGEN_23, "ck_flexgen_23",
-			 true),
-	CLOCK_CELL_RATES(CK_SCMI_FLEXGEN_24, CK_FLEXGEN_24, "ck_flexgen_24",
-			 true),
-	CLOCK_CELL_RATES(CK_SCMI_FLEXGEN_25, CK_FLEXGEN_25, "ck_flexgen_25",
-			 true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_26, CK_FLEXGEN_26, "ck_flexgen_26", true),
-	CLOCK_CELL_RATES(CK_SCMI_FLEXGEN_27, CK_FLEXGEN_27, "ck_flexgen_27",
-			 true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_28, CK_FLEXGEN_28, "ck_flexgen_28", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_29, CK_FLEXGEN_29, "ck_flexgen_29", true),
-
-	CLOCK_CELL(CK_SCMI_FLEXGEN_30, CK_FLEXGEN_30, "ck_flexgen_30", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_31, CK_FLEXGEN_31, "ck_flexgen_31", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_32, CK_FLEXGEN_32, "ck_flexgen_32", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_33, CK_FLEXGEN_33, "ck_flexgen_33", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_34, CK_FLEXGEN_34, "ck_flexgen_34", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_35, CK_FLEXGEN_35, "ck_flexgen_35", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_36, CK_FLEXGEN_36, "ck_flexgen_36", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_37, CK_FLEXGEN_37, "ck_flexgen_37", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_38, CK_FLEXGEN_38, "ck_flexgen_38", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_39, CK_FLEXGEN_39, "ck_flexgen_39", true),
-
-	CLOCK_CELL(CK_SCMI_FLEXGEN_40, CK_FLEXGEN_40, "ck_flexgen_40", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_41, CK_FLEXGEN_41, "ck_flexgen_41", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_42, CK_FLEXGEN_42, "ck_flexgen_42", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_43, CK_FLEXGEN_43, "ck_flexgen_43", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_44, CK_FLEXGEN_44, "ck_flexgen_44", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_45, CK_FLEXGEN_45, "ck_flexgen_45", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_46, CK_FLEXGEN_46, "ck_flexgen_46", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_47, CK_FLEXGEN_47, "ck_flexgen_47", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_48, CK_FLEXGEN_48, "ck_flexgen_48", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_49, CK_FLEXGEN_49, "ck_flexgen_49", true),
-
-	CLOCK_CELL(CK_SCMI_FLEXGEN_50, CK_FLEXGEN_50, "ck_flexgen_50", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_51, CK_FLEXGEN_51, "ck_flexgen_51", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_52, CK_FLEXGEN_52, "ck_flexgen_52", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_53, CK_FLEXGEN_53, "ck_flexgen_53", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_54, CK_FLEXGEN_54, "ck_flexgen_54", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_55, CK_FLEXGEN_55, "ck_flexgen_55", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_56, CK_FLEXGEN_56, "ck_flexgen_56", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_57, CK_FLEXGEN_57, "ck_flexgen_57", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_58, CK_FLEXGEN_58, "ck_flexgen_58", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_59, CK_FLEXGEN_59, "ck_flexgen_59", true),
-
-	CLOCK_CELL(CK_SCMI_FLEXGEN_60, CK_FLEXGEN_60, "ck_flexgen_60", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_61, CK_FLEXGEN_61, "ck_flexgen_61", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_62, CK_FLEXGEN_62, "ck_flexgen_62", true),
-	CLOCK_CELL(CK_SCMI_FLEXGEN_63, CK_FLEXGEN_63, "ck_flexgen_63", true),
-
-	CLOCK_CELL(CK_SCMI_ICN_LS_MCU, CK_ICN_LS_MCU, "ck_icn_ls_mcu", true),
-	CLOCK_CELL(CK_SCMI_HSE, HSE_CK, "hse_ck", true),
-	CLOCK_CELL(CK_SCMI_LSE, LSE_CK, "lse_ck", true),
-	CLOCK_CELL(CK_SCMI_HSI, HSI_CK, "hsi_ck", true),
-	CLOCK_CELL(CK_SCMI_LSI, LSI_CK, "lsi_ck", true),
-	CLOCK_CELL(CK_SCMI_MSI, MSI_CK, "msi_ck", true),
-
-	CLOCK_CELL(CK_SCMI_RTCCK, RTC_CK, "rtc_ck", true),
-
-	CLOCK_CELL(CK_SCMI_ICN_APB1, CK_ICN_APB1, "ck_icn_apb1", true),
-	CLOCK_CELL(CK_SCMI_ICN_APB2, CK_ICN_APB2, "ck_icn_apb2", true),
-	CLOCK_CELL(CK_SCMI_ICN_APB3, CK_ICN_APB3, "ck_icn_apb3", true),
-	CLOCK_CELL(CK_SCMI_ICN_APB4, CK_ICN_APB4, "ck_icn_apb4", true),
-
-	CLOCK_CELL(CK_SCMI_ICN_APBDBG, CK_ICN_APBDBG, "ck_icn_apbdbg", true),
-
-	CLOCK_CELL(CK_SCMI_TIMG1, TIMG1_CK, "timg1_ck", true),
-	CLOCK_CELL(CK_SCMI_TIMG2, TIMG2_CK, "timg2_ck", true),
-
-	CLOCK_CELL(CK_SCMI_BKPSRAM, CK_BUS_BKPSRAM, "ck_bus_bkpsram", true),
-	CLOCK_CELL(CK_SCMI_BSEC, CK_BUS_BSEC, "ck_bus_bsec", true),
-	CLOCK_CELL(CK_SCMI_BUS_ETR, CK_BUS_ETR, "ck_icn_p_etr", true),
-	CLOCK_CELL(CK_SCMI_FMC, CK_KER_FMC, "ck_ker_fmc", true),
-	CLOCK_CELL(CK_SCMI_GPIOA, CK_BUS_GPIOA, "ck_bus_gpioa", true),
-	CLOCK_CELL(CK_SCMI_GPIOB, CK_BUS_GPIOB, "ck_bus_gpiob", true),
-	CLOCK_CELL(CK_SCMI_GPIOC, CK_BUS_GPIOC, "ck_bus_gpioc", true),
-	CLOCK_CELL(CK_SCMI_GPIOD, CK_BUS_GPIOD, "ck_bus_gpiod", true),
-	CLOCK_CELL(CK_SCMI_GPIOE, CK_BUS_GPIOE, "ck_bus_gpioe", true),
-	CLOCK_CELL(CK_SCMI_GPIOF, CK_BUS_GPIOF, "ck_bus_gpiof", true),
-	CLOCK_CELL(CK_SCMI_GPIOG, CK_BUS_GPIOG, "ck_bus_gpiog", true),
-	CLOCK_CELL(CK_SCMI_GPIOH, CK_BUS_GPIOH, "ck_bus_gpioh", true),
-	CLOCK_CELL(CK_SCMI_GPIOI, CK_BUS_GPIOI, "ck_bus_gpioi", true),
-	CLOCK_CELL(CK_SCMI_GPIOJ, CK_BUS_GPIOJ, "ck_bus_gpioj", true),
-	CLOCK_CELL(CK_SCMI_GPIOK, CK_BUS_GPIOK, "ck_bus_gpiok", true),
-	CLOCK_CELL(CK_SCMI_GPIOZ, CK_BUS_GPIOZ, "ck_bus_gpioz", true),
-	CLOCK_CELL(CK_SCMI_HPDMA1, CK_BUS_HPDMA1, "ck_bus_hpdma1", true),
-	CLOCK_CELL(CK_SCMI_HPDMA2, CK_BUS_HPDMA2, "ck_bus_hpdma2", true),
-	CLOCK_CELL(CK_SCMI_HPDMA3, CK_BUS_HPDMA3, "ck_bus_hpdma3", true),
-	CLOCK_CELL(CK_SCMI_HSEM, CK_BUS_HSEM, "ck_bus_hsem", true),
-	CLOCK_CELL(CK_SCMI_IPCC1, CK_BUS_IPCC1, "ck_bus_ipcc1", true),
-	CLOCK_CELL(CK_SCMI_IPCC2, CK_BUS_IPCC2, "ck_bus_ipcc2", true),
-	CLOCK_CELL(CK_SCMI_LPDMA, CK_BUS_LPDMA, "ck_bus_lpdma", true),
-	CLOCK_CELL(CK_SCMI_RETRAM, CK_BUS_RETRAM, "ck_bus_retram", true),
-	CLOCK_CELL(CK_SCMI_RTC, CK_BUS_RTC, "ck_bus_rtc", true),
-	CLOCK_CELL(CK_SCMI_SRAM1, CK_BUS_SRAM1, "ck_bus_sram1", true),
-	CLOCK_CELL(CK_SCMI_SRAM2, CK_BUS_SRAM2, "ck_bus_sram2", true),
-	CLOCK_CELL(CK_SCMI_SYSCPU1, CK_BUS_SYSCPU1, "ck_bus_syscpu1", true),
-	CLOCK_CELL(CK_SCMI_CPU1, CK_CPU1, "ck_cpu1", true),
-	CLOCK_CELL(CK_SCMI_HSE_DIV2, HSE_DIV2_CK, "hse_div2_ck", false),
-	CLOCK_CELL(CK_SCMI_PLL2, PLL2_CK, "ck_pll2", true),
-	CLOCK_CELL(CK_SCMI_PLL3, PLL3_CK, "ck_pll3", false),
-	CLOCK_CELL(CK_SCMI_LPSRAM1, CK_BUS_LPSRAM1, "ck_icn_lpsram1", true),
-	CLOCK_CELL(CK_SCMI_LPSRAM2, CK_BUS_LPSRAM2, "ck_icn_lpsram2", true),
-	CLOCK_CELL(CK_SCMI_LPSRAM3, CK_BUS_LPSRAM3, "ck_icn_lpsram3", true),
-	CLOCK_CELL(CK_SCMI_VDERAM, CK_BUS_VDERAM, "ck_icn_s_vderam", true),
-	CLOCK_CELL(CK_SCMI_SYSRAM, CK_BUS_SYSRAM, "ck_icn_s_sysram", true),
-	CLOCK_CELL(CK_SCMI_OSPI1, CK_KER_OSPI1, "ck_ker_ospi1", true),
-	CLOCK_CELL(CK_SCMI_OSPI2, CK_KER_OSPI2, "ck_ker_ospi2", true),
-	CLOCK_CELL(CK_SCMI_TPIU, CK_KER_TPIU, "ck_ker_tpiu", true),
-	CLOCK_CELL(CK_SCMI_SYSDBG, CK_SYSDBG, "ck_sys_dbg", true),
-	CLOCK_CELL(CK_SCMI_SYSATB, CK_BUS_SYSATB, "ck_sys_atb", true),
-	CLOCK_CELL(CK_SCMI_TSDBG, CK_KER_TSDBG, "ck_ker_tsdbg", true),
-	CLOCK_CELL(CK_SCMI_KER_ETR, CK_KER_ETR, "ck_icn_m_etr", true),
-	CLOCK_CELL(CK_SCMI_BUS_STM, CK_BUS_STM, "ck_icn_p_stm", true),
-	CLOCK_CELL(CK_SCMI_KER_STM, CK_KER_STM, "ck_icn_s_stm", true),
-};
-#endif
-
-static struct stm32_scmi_rd stm32_scmi_reset[] = {
-	RESET_CELL(RST_SCMI_C1_R, C1_R, "c1"),
-	RESET_CELL(RST_SCMI_C2_R, C2_R, "c2"),
-	RESET_CELL(RST_SCMI_C1_HOLDBOOT_R, C1_HOLDBOOT_R, "c1_holdboot"),
-	RESET_CELL(RST_SCMI_C2_HOLDBOOT_R, C2_HOLDBOOT_R, "c2_holdboot"),
-	/* SCMI FMC reset allowed: RCC driver stubs request if necessary */
-	RESET_CELL(RST_SCMI_FMC, FMC_R, "fmc"),
-	RESET_CELL(RST_SCMI_OSPI1, OSPI1_R, "ospi1"),
-#if (defined(CFG_STM32MP25) || defined(CFG_STM32MP23))
-	RESET_CELL(RST_SCMI_OSPI2, OSPI2_R, "ospi2"),
-#endif
-	RESET_CELL(RST_SCMI_OSPI1DLL, OSPI1DLL_R, "ospi1_ddl"),
-#ifdef CFG_STM32MP25
-	RESET_CELL(RST_SCMI_OSPI2DLL, OSPI2DLL_R, "ospi2_ddl"),
-#endif
-};
-
-#if (defined(CFG_STM32MP25) || defined(CFG_STM32MP23))
-static struct stm32_scmi_pd stm32_scmi_pd[] = {
-	PD_CELL(PD_SCMI_GPU, "gpu", PLL3_CK, "vddgpu"),
-};
-#endif
-
-static const struct channel_resources scmi_channel_a35_ns[] = {
-	[0] = {
-		.clock = stm32_scmi_clock,
-		.clock_count = ARRAY_SIZE(stm32_scmi_clock),
-		.rd = stm32_scmi_reset,
-		.rd_count = ARRAY_SIZE(stm32_scmi_reset),
-#if (defined(CFG_STM32MP25) || defined(CFG_STM32MP23))
-		.pd = stm32_scmi_pd,
-		.pd_count = ARRAY_SIZE(stm32_scmi_pd),
-#endif
-	},
-};
-
-static const struct channel_resources scmi_channel_m33_ns[] = {
-	[0] = {
-		.clock = stm32_scmi_clock,
-		.clock_count = ARRAY_SIZE(stm32_scmi_clock),
-		.rd = stm32_scmi_reset,
-		.rd_count = ARRAY_SIZE(stm32_scmi_reset),
-	},
-};
-
-/*
- * Platform clocks exposed with SCMI
- */
-static struct clk plat_clocks[ARRAY_SIZE(stm32_scmi_clock)];
-
-static TEE_Result plat_scmi_clk_get_rates_steps(struct clk *clk,
-						unsigned long *min,
-						unsigned long *max,
-						unsigned long *step)
-{
-	struct stm32_scmi_clk *scmi_clk = clk->priv;
-
-	if (scmi_clk->change_rate) {
-		*min = 0;
-		*max = UINT32_MAX;
-		*step = 0;
-	} else {
-		*min = clk->rate;
-		*max = *min;
-		*step = 0;
-	}
-
-	return TEE_SUCCESS;
-}
-
-static TEE_Result plat_scmi_clk_get_rates_array(struct clk *clk, size_t index,
-						unsigned long *rates,
-						size_t *nb_elts)
-{
-	struct stm32_scmi_clk *scmi_clk = clk->priv;
-
-	if (!nb_elts)
-		return TEE_ERROR_BAD_PARAMETERS;
-
-	if (scmi_clk->change_rate)
-		return clk_get_rates_array(clk->parent, index, rates, nb_elts);
-
-	if (!rates || !*nb_elts) {
-		*nb_elts = 1;
-		return TEE_SUCCESS;
-	}
-
-	if (index)
-		return TEE_ERROR_BAD_PARAMETERS;
-
-	assert(rates);
-	*rates = clk_get_rate(clk->parent);
-	*nb_elts = 1;
-
-	return TEE_SUCCESS;
-}
-
-static const struct clk_ops plat_scmi_clk_ops = {
-	.get_rates_array = plat_scmi_clk_get_rates_array,
-	.get_rates_steps = plat_scmi_clk_get_rates_steps,
-};
-
-static void get_scmi_clocks(void)
-{
-	size_t i = 0;
-
-	for (i = 0; i < ARRAY_SIZE(stm32_scmi_clock); i++) {
-		struct stm32_scmi_clk *scmi_clk = stm32_scmi_clock + i;
-		struct clk *clk = plat_clocks + i;
-
-		if (!scmi_clk->is_exposed) {
-			/* Empty name clocks discarded by Linux kernel */
-			scmi_clk->name = "";
-			continue;
-		}
-
-		clk->ops = &plat_scmi_clk_ops;
-		clk->priv = scmi_clk;
-		clk->name = scmi_clk->name;
-		clk->parent = stm32mp_rcc_clock_id_to_clk(scmi_clk->clock_id);
-		assert(clk->parent);
-
-		if (scmi_clk->change_rate)
-			clk->flags = CLK_SET_RATE_PARENT;
-
-		clk->flags |= CLK_DUTY_CYCLE_PARENT;
-
-		if (clk_register(clk))
-			panic();
-
-		scmi_clk->clk = clk;
-	}
-}
-
-/*
- * Platform reset controllers exposed with SCMI
- */
-static struct rstctrl plat_resets[ARRAY_SIZE(stm32_scmi_reset)];
-
-static TEE_Result plat_scmi_reset_assert_level(struct rstctrl *rstctrl,
-					       unsigned int to_us)
-{
-	int index = rstctrl - plat_resets;
-	unsigned long __maybe_unused reset_id = 0;
-
-	assert(index >= 0 && (size_t)index < ARRAY_SIZE(stm32_scmi_reset));
-
-	return rstctrl_assert_to(stm32_scmi_reset[index].rstctrl_be, to_us);
-}
-
-static TEE_Result plat_scmi_reset_deassert_level(struct rstctrl *rstctrl,
-						 unsigned int to_us)
-{
-	int index = rstctrl - plat_resets;
-	unsigned long __maybe_unused reset_id = 0;
-
-	assert(index >= 0 && (size_t)index < ARRAY_SIZE(stm32_scmi_reset));
-
-	return rstctrl_deassert_to(stm32_scmi_reset[index].rstctrl_be, to_us);
-}
-
-static const char *plat_scmi_reset_get_name(struct rstctrl *rstctrl)
-{
-	int index = rstctrl - plat_resets;
-
-	assert(index >= 0 && (size_t)index < ARRAY_SIZE(stm32_scmi_reset));
-
-	return rstctrl_name(stm32_scmi_reset[index].rstctrl_be);
-}
-
-static const struct rstctrl_ops plat_scmi_reset_ops = {
-	.assert_level = plat_scmi_reset_assert_level,
-	.deassert_level = plat_scmi_reset_deassert_level,
-	.get_name = plat_scmi_reset_get_name,
-};
-
-static void get_scmi_resets(void)
-{
-	size_t i = 0;
-
-	for (i = 0; i < ARRAY_SIZE(stm32_scmi_reset); i++) {
-		struct stm32_scmi_rd *scmi_reset = stm32_scmi_reset + i;
-		struct rstctrl *rstctrl = plat_resets + i;
-
-		if (!scmi_reset->is_exposed) {
-			/* SCP-firmware needs a name */
-			scmi_reset->name = "<reserved>";
-			continue;
-		}
-
-		rstctrl->ops = &plat_scmi_reset_ops;
-
-		scmi_reset->rstctrl_be =
-			stm32mp_rcc_reset_id_to_rstctrl(scmi_reset->reset_id);
-		assert(scmi_reset->rstctrl_be);
-
-		scmi_reset->rstctrl = rstctrl;
-	}
-}
-
-/*
- * Build the structure used to initialize SCP firmware.
- * We target a description from the DT so SCP firmware configuration
- * but we currently rely on local data (clock, reset) and 2 DT node
- * (voltage domain/regulators and DVFS).
+ * struct optee_scmi_server - Data of scmi_server_scpfw
  *
- * At early_init initcall level, prepare scpfw_cfg agent and channel parts.
- * At driver_init_late initcall level, get clock and reset devices.
- * When scmi-regulator-consumer driver probes, it adds the regulators.
- * When CPU OPP driver probesn it adds the DVFS part.
+ * @dt_name: SCMI node name
+ * @agent_list: list of optee_scmi_server_agent
  */
+struct optee_scmi_server {
+	const char *dt_name;
+
+	SIMPLEQ_HEAD(agent_list_head, optee_scmi_server_agent) agent_list;
+};
+
+/*
+ * @struct optee_scmi_server_agent - Data of an SCMI agent
+ *
+ * @dt_name: SCMI agent node name
+ * @agent_id: SCMI agent identifier
+ * @channel_id: SCMI channel identifier
+ * @scp_mailbox_idx: SCPFW mailbox identifier
+ * @mbox_chan: handle for a mailbox channel
+ * @event_waiting: an event from mailbox is waiting to be handle
+ * @mailbox_notif: data for threaded execution
+ * @shm: shared memory information
+ * @exposed_clock: data for clocks exposed thru SCMI
+ * @protocol_list: list of optee_scmi_server_protocol
+ * @link: link for optee_scmi_server:agent_list
+ */
+struct optee_scmi_server_agent {
+	const char *dt_name;
+	unsigned int agent_id;
+	unsigned int channel_id;
+	unsigned int scp_mailbox_idx;
+	struct mbox_chan *mbox_chan;
+	bool event_waiting;
+	struct notif_driver mailbox_notif;
+	struct shared_mem shm;
+
+	SIMPLEQ_HEAD(protocol_list_head, optee_scmi_server_protocol)
+		protocol_list;
+
+	SIMPLEQ_ENTRY(optee_scmi_server_agent) link;
+};
+
+/*
+ * struct optee_scmi_server_protocol - Data of an SCMI protocol
+ *
+ * @dt_name: SCMI protocol node name
+ * @dt_node: SCMI protocol node
+ * @protocol_id: SCMI protocol identifier
+ * @link: list for optee_scmi_server_agent:protocol_list
+ */
+struct optee_scmi_server_protocol {
+	const char *dt_name;
+	int dt_node;
+	unsigned int protocol_id;
+
+	SIMPLEQ_ENTRY(optee_scmi_server_protocol) link;
+};
+
+/* scmi_agent_configuration API */
 static struct scpfw_config scpfw_cfg;
+
+static void scmi_scpfw_free_agent(struct scpfw_agent_config agent_cfg)
+{
+	unsigned int j = 0;
+	unsigned int k = 0;
+
+	for (j = 0; j < agent_cfg.channel_count; j++) {
+		struct scpfw_channel_config *channel_cfg =
+			agent_cfg.channel_config + j;
+
+		for (k = 0; k < channel_cfg->perfd_count; k++) {
+			struct scmi_perfd *perfd = channel_cfg->perfd + k;
+
+			free(perfd->dvfs_opp_khz);
+			free(perfd->dvfs_opp_mv);
+		}
+		free(channel_cfg->perfd);
+
+		free(channel_cfg->pd);
+		free(channel_cfg->voltd);
+		free(channel_cfg->reset);
+		free(channel_cfg->clock);
+	}
+	free(agent_cfg.channel_config);
+}
 
 struct scpfw_config *scmi_scpfw_get_configuration(void)
 {
-	assert(scpfw_cfg.agent_count);
+	struct scpfw_agent_config *old_agent_config = scpfw_cfg.agent_config;
+
+	assert(scpfw_cfg.agent_count >= 1);
+
+	/*
+	 * Do not expose agent_config[0] as it is empty
+	 * and SCP didn't want it.
+	 */
+	scpfw_cfg.agent_count--;
+	scpfw_cfg.agent_config = calloc(scpfw_cfg.agent_count,
+					sizeof(*scpfw_cfg.agent_config));
+
+	memcpy(scpfw_cfg.agent_config, old_agent_config + 1,
+	       sizeof(*scpfw_cfg.agent_config) * scpfw_cfg.agent_count);
+
+	scmi_scpfw_free_agent(old_agent_config[0]);
+	free(old_agent_config);
 
 	return &scpfw_cfg;
 }
 
-TEE_Result scmi_scpfw_attach_notif(unsigned int agent_id,
-				   unsigned int channel_id,
-				   struct shared_mem *shm,
-				   TEE_Result (**process)(unsigned int chan_id),
-				   unsigned int *process_arg)
-{
-	if (agent_id < scpfw_cfg.agent_count) {
-		struct scpfw_agent_config *agent_cfg =
-			scpfw_cfg.agent_config + agent_id;
-
-		if (channel_id < agent_cfg->channel_count) {
-			struct scpfw_channel_config *channel_cfg =
-				agent_cfg->channel_config + channel_id;
-
-			*process = &scmi_server_smt_process_thread;
-			*process_arg = channel_cfg->mailbox_idx;
-
-			channel_cfg->shm = *shm;
-
-			return TEE_SUCCESS;
-		}
-	}
-
-	return TEE_ERROR_BAD_PARAMETERS;
-}
-
-static TEE_Result scmi_scpfw_cfg_early_init(void)
-{
-	unsigned int mailbox_idx = 0;
-	unsigned int index = 0;
-	unsigned int i = 0;
-	unsigned int j = 0;
-
-	scpfw_cfg.agent_count = 1;
-
-	if (IS_ENABLED(CFG_SCMI_CORTEXM_AGENT))
-		scpfw_cfg.agent_count += 1;
-
-	scpfw_cfg.agent_config = calloc(scpfw_cfg.agent_count,
-					sizeof(*scpfw_cfg.agent_config));
-
-	scpfw_cfg.agent_config[index].name = "agent_a35";
-	scpfw_cfg.agent_config[index].agent_id = index + 1;
-	scpfw_cfg.agent_config[index].channel_count =
-		ARRAY_SIZE(scmi_channel_a35_ns);
-	scpfw_cfg.agent_config[index].channel_config =
-		calloc(scpfw_cfg.agent_config[index].channel_count,
-		       sizeof(*scpfw_cfg.agent_config[index].channel_config));
-	index++;
-
-	if (IS_ENABLED(CFG_SCMI_CORTEXM_AGENT)) {
-		scpfw_cfg.agent_config[index].name = "agent_m33";
-		scpfw_cfg.agent_config[index].agent_id = index + 1;
-		scpfw_cfg.agent_config[index].channel_count =
-			ARRAY_SIZE(scmi_channel_m33_ns);
-		scpfw_cfg.agent_config[index].channel_config =
-			calloc(scpfw_cfg.agent_config[index].channel_count,
-			       sizeof(*scpfw_cfg.agent_config[index]
-						.channel_config));
-		index++;
-	}
-
-	assert(scpfw_cfg.agent_count == index);
-
-	for (i = 0; i < scpfw_cfg.agent_count; i++)
-		for (j = 0; j < scpfw_cfg.agent_config[i].channel_count; j++)
-			scpfw_cfg.agent_config[i]
-				 .channel_config[j]
-				 .mailbox_idx = mailbox_idx++;
-
-	return TEE_SUCCESS;
-}
-
-early_init(scmi_scpfw_cfg_early_init);
-
-static void scmi_scpfw_cfg_init_channel(const char *name,
-					struct scpfw_agent_config *agent_config,
-					const struct channel_resources
-						channels_res[])
-{
-	size_t i = 0;
-	size_t j = 0;
-
-	for (i = 0; i < agent_config->channel_count; i++) {
-		struct channel_resources chan_res = channels_res[i];
-		struct scpfw_channel_config *channel_cfg =
-			agent_config->channel_config + i;
-
-		channel_cfg->name = name;
-
-		channel_cfg->clock_count = chan_res.clock_count;
-		channel_cfg->clock = calloc(channel_cfg->clock_count,
-					    sizeof(*channel_cfg->clock));
-		for (j = 0; j < channel_cfg->clock_count; j++) {
-			channel_cfg->clock[j] = (struct scmi_clock){
-				.name = chan_res.clock[j].name,
-				.clk = chan_res.clock[j].clk,
-				/* Default OFF for RIF issues */
-				.enabled = false,
-			};
-		}
-
-		channel_cfg->reset_count = chan_res.rd_count;
-		channel_cfg->reset = calloc(channel_cfg->reset_count,
-					    sizeof(*channel_cfg->reset));
-		for (j = 0; j < channel_cfg->reset_count; j++) {
-			channel_cfg->reset[j] = (struct scmi_reset){
-				.name = chan_res.rd[j].name,
-				.rstctrl = chan_res.rd[j].rstctrl,
-			};
-		}
-
-		channel_cfg->pd_count = chan_res.pd_count;
-		if (channel_cfg->pd_count) {
-			channel_cfg->pd = calloc(channel_cfg->pd_count,
-						 sizeof(*channel_cfg->pd));
-			assert(channel_cfg->pd);
-
-			for (j = 0; j < channel_cfg->pd_count; j++) {
-				struct clk *clk = stm32mp_rcc_clock_id_to_clk(
-					chan_res.pd[j].clock_id);
-				struct regulator *regu = regulator_get_by_name(
-					chan_res.pd[j].regu_name);
-
-				if (!regu)
-					DMSG("Regulator %s not found "
-					     "for %s power domain",
-					     chan_res.pd[j].regu_name,
-					     chan_res.pd[j].name);
-
-				if (!clk)
-					DMSG("Clock ID %ld not found for %s "
-					     "power domain",
-					     chan_res.pd[j].clock_id,
-					     chan_res.pd[j].name);
-
-				channel_cfg->pd[j] = (struct scmi_pd){
-					.name = chan_res.pd[j].name,
-					.clk = clk,
-					.regu = regu,
-				};
-			}
-		}
-	}
-}
-
-static TEE_Result scmi_scpfw_cfg_init(void)
-{
-	get_scmi_clocks();
-	get_scmi_resets();
-
-	scmi_scpfw_cfg_init_channel("channel_a35_ns",
-				    &scpfw_cfg.agent_config[0],
-				    scmi_channel_a35_ns);
-
-	if (IS_ENABLED(CFG_SCMI_CORTEXM_AGENT)) {
-		scmi_scpfw_cfg_init_channel("channel_m33_ns",
-					    &scpfw_cfg.agent_config[1],
-					    scmi_channel_m33_ns);
-	}
-
-	/* DVFS will be populated from cpu_opp driver */
-
-	if (IS_ENABLED(CFG_SCMI_SERVER_REGULATOR_CONSUMER)) {
-		TEE_Result res = TEE_ERROR_GENERIC;
-
-		res = scmi_regulator_consumer_init();
-		if (res) {
-			scmi_scpfw_release_configuration();
-			EMSG("SCMI regulator consumer init: %#"PRIx32, res);
-			return res;
-		}
-	}
-
-	return TEE_SUCCESS;
-}
-
-driver_init_late(scmi_scpfw_cfg_init);
-
 void scmi_scpfw_release_configuration(void)
 {
-	struct scpfw_channel_config *channel_cfg = NULL;
-	struct scpfw_agent_config *agent_cfg = NULL;
-	size_t i = 0;
-	size_t j = 0;
-	size_t k = 0;
+	unsigned int i = 0;
 
-	for (i = 0; i < scpfw_cfg.agent_count; i++) {
-		agent_cfg = scpfw_cfg.agent_config + i;
-
-		for (j = 0; j < agent_cfg->channel_count; j++) {
-			channel_cfg = agent_cfg->channel_config + j;
-
-			free(channel_cfg->clock);
-			free(channel_cfg->reset);
-			free(channel_cfg->voltd);
-
-			for (k = 0; k < channel_cfg->perfd_count; k++) {
-				free(channel_cfg->perfd[k].dvfs_opp_khz);
-				free(channel_cfg->perfd[k].dvfs_opp_mv);
-			}
-
-			free(channel_cfg->perfd);
-			free(channel_cfg->pd);
-		}
-
-		free(agent_cfg->channel_config);
-	}
+	for (i = 0; i < scpfw_cfg.agent_count; i++)
+		scmi_scpfw_free_agent(scpfw_cfg.agent_config[i]);
 
 	free(scpfw_cfg.agent_config);
 }
 
-static unsigned int voltd_id_count(struct scmi_server_regu *regu,
-				   size_t regu_count)
+static void yielding_mailbox_notif(struct notif_driver *ndrv,
+				   enum notif_event ev)
 {
-	unsigned int max_id = 0;
-	size_t i = 0;
+	struct optee_scmi_server_agent *ctx = container_of(ndrv,
+		struct optee_scmi_server_agent, mailbox_notif);
 
-	for (i = 0; i < regu_count; i++)
-		max_id = MAX(max_id, regu[i].domain_id);
+	if (ev == NOTIF_EVENT_DO_BOTTOM_HALF && ctx->event_waiting) {
+		ctx->event_waiting = false;
 
-	return max_id + 1;
+		/* Ack notification */
+		if (mbox_recv(ctx->mbox_chan, false, NULL, 0))
+			panic();
+
+		/* Let SCP handle the message and the answer */
+		if (scmi_server_smt_process_thread(ctx->scp_mailbox_idx)) {
+			/*
+			 * It should force the SMT_CHANNEL_STATUS_ERROR in the
+			 * mailbox header channel_status_field and notify the
+			 * Cortex-M the response sent.
+			 * For now just panic().
+			 */
+			panic();
+		}
+
+		/* Notify requester that an answer is ready */
+		if (mbox_send(ctx->mbox_chan, false, NULL, 0))
+			panic();
+	}
 }
 
-TEE_Result scmi_scpfw_cfg_add_regu(unsigned int agent_id,
-				   unsigned int channel_id,
-				   struct scmi_server_regu *regu,
-				   size_t regu_count)
+static void mailbox_rcv_callback(void *cookie)
 {
-	struct scpfw_channel_config *channel_cfg = NULL;
-	struct scpfw_agent_config *agent_cfg = NULL;
-	size_t i = 0;
+	struct optee_scmi_server_agent *ctx = cookie;
 
-	agent_cfg = scpfw_cfg.agent_config + agent_id;
-	channel_cfg = agent_cfg->channel_config + channel_id;
+	ctx->event_waiting = true;
+	notif_send_async(NOTIF_VALUE_DO_BOTTOM_HALF);
+}
 
-	if (!regu_count)
+static TEE_Result optee_scmi_server_shm_map(struct shared_mem *shm)
+{
+	/* Nothing to do */
+	if (!shm->va && !shm->size)
 		return TEE_SUCCESS;
 
-	if (agent_id >= scpfw_cfg.agent_count ||
-	    channel_id >= agent_cfg->channel_count) {
-		EMSG("SCMI agent %u channel %u not found, do not add regulator",
-		     agent_id, channel_id);
-		return TEE_ERROR_ITEM_NOT_FOUND;
-	}
+	/* Only consider non-secure client for now */
+	shm->va = (vaddr_t)core_mmu_add_mapping(MEM_AREA_IO_NSEC,
+						shm->pa, shm->size);
 
-	if (channel_cfg->voltd) {
-		EMSG("Voltage domain already loaded: agent %u, channel %u",
-		     agent_id, channel_id);
+	if (!shm->va)
+		return TEE_ERROR_BAD_PARAMETERS;
+
+	return TEE_SUCCESS;
+}
+
+static TEE_Result optee_scmi_server_probe_agent(const void *fdt, int agent_node,
+						struct optee_scmi_server_agent
+							*agent_ctx)
+{
+	struct optee_scmi_server_protocol *protocol_ctx = NULL;
+	int protocol_node = 0;
+	uint32_t phandle = 0;
+	int shmem_node = 0;
+	const fdt32_t *cuint = NULL;
+	TEE_Result res = TEE_SUCCESS;
+
+	SIMPLEQ_INIT(&agent_ctx->protocol_list);
+
+	/* Get agent id (required) */
+	cuint = fdt_getprop(fdt, agent_node, "reg", NULL);
+	if (!cuint) {
+		EMSG("%s Missing property reg", agent_ctx->dt_name);
+		panic();
+	}
+	agent_ctx->agent_id = fdt32_to_cpu(*cuint);
+
+	/* Agent id 0 is stritly reserved to SCMI server. */
+	assert(agent_ctx->agent_id > 0);
+
+	if (!fdt_node_check_compatible(fdt, agent_node, "arm,scmi")) {
+		res = mbox_dt_register_chan(mailbox_rcv_callback, NULL,
+					    agent_ctx, fdt, agent_node,
+					    &agent_ctx->mbox_chan);
+		if (res == TEE_ERROR_DEFER_DRIVER_INIT) {
+			EMSG("%s Mailbox request an impossible probe defer",
+			     protocol_ctx->dt_name);
+			panic();
+		} else if (res) {
+			EMSG("%s Failed to register mailbox channel",
+			     protocol_ctx->dt_name);
+			panic();
+		}
+	} else if (!fdt_node_check_compatible(fdt, agent_node,
+					      "linaro,scmi-optee")) {
+		cuint = fdt_getprop(fdt, agent_node, "scmi-channel-id", NULL);
+		if (!cuint) {
+			EMSG("%s scmi-channel-id property not found",
+			     agent_ctx->dt_name);
+			panic();
+		}
+		agent_ctx->channel_id = fdt32_to_cpu(*cuint);
+	} else {
+		EMSG("%s Incorrect compatible", agent_ctx->dt_name);
 		panic();
 	}
 
-	channel_cfg->voltd_count = voltd_id_count(regu, regu_count);
-	channel_cfg->voltd = calloc(channel_cfg->voltd_count,
-				    sizeof(*channel_cfg->voltd));
-	assert(channel_cfg->voltd);
-
-	for (i = 0; i < regu_count; i++) {
-		unsigned int domain_id = regu[i].domain_id;
-
-		if (regu[i].regulator) {
-			channel_cfg->voltd[domain_id] = (struct scmi_voltd){
-				.name = regulator_name(regu[i].regulator),
-				.regulator = regu[i].regulator,
-				.enabled = regu[i].enabled,
-			};
+	/* Manage shmem property (optional) */
+	cuint = fdt_getprop(fdt, agent_node, "shmem", NULL);
+	if (cuint) {
+		phandle = fdt32_to_cpu(*cuint);
+		shmem_node = fdt_node_offset_by_phandle(fdt, phandle);
+		agent_ctx->shm.size = fdt_reg_size(fdt, shmem_node);
+		agent_ctx->shm.pa = fdt_reg_base_address(fdt, shmem_node);
+		if (shmem_node >= 0 &&
+		    (agent_ctx->shm.pa == DT_INFO_INVALID_REG ||
+		     agent_ctx->shm.size == DT_INFO_INVALID_REG_SIZE)) {
+			panic();
 		}
+
+		optee_scmi_server_shm_map(&agent_ctx->shm);
 	}
 
-	return TEE_SUCCESS;
-}
+	fdt_for_each_subnode(protocol_node, fdt, agent_node) {
+		const char *node_name = fdt_get_name(fdt, protocol_node, NULL);
+		struct optee_scmi_server_protocol *p = NULL;
 
-TEE_Result scmi_scpfw_cfg_add_dvfs(unsigned int agent_id,
-				   unsigned int channel_id,
-				   unsigned int domain_id,
-				   struct regulator *regulator, struct clk *clk,
-				   unsigned int *dvfs_khz,
-				   unsigned int *dvfs_mv, size_t dvfs_count,
-				   size_t initial_index)
-{
-	struct scpfw_channel_config *channel_cfg = NULL;
-	struct scpfw_agent_config *agent_cfg = NULL;
-	unsigned int *dvfs_opp_khz = NULL;
-	unsigned int *dvfs_opp_mv = NULL;
+		if (!strstr(node_name, "protocol@"))
+			continue;
 
-	agent_cfg = scpfw_cfg.agent_config + agent_id;
-	channel_cfg = agent_cfg->channel_config + channel_id;
-
-	if (agent_id >= scpfw_cfg.agent_count ||
-	    channel_id >= agent_cfg->channel_count || !dvfs_count)
-		return TEE_ERROR_BAD_PARAMETERS;
-
-	dvfs_opp_khz = calloc(dvfs_count, sizeof(*dvfs_opp_khz));
-	dvfs_opp_mv = calloc(dvfs_count, sizeof(*dvfs_opp_mv));
-	if (!dvfs_opp_khz || !dvfs_opp_mv) {
-		free(dvfs_opp_khz);
-		free(dvfs_opp_mv);
-
-		return TEE_ERROR_OUT_OF_MEMORY;
-	}
-	memcpy(dvfs_opp_khz, dvfs_khz, dvfs_count * sizeof(*dvfs_opp_khz));
-	memcpy(dvfs_opp_mv, dvfs_mv, dvfs_count * sizeof(*dvfs_opp_mv));
-
-	if (channel_cfg->perfd_count <= domain_id) {
-		void *ptr = realloc(channel_cfg->perfd,
-				    (domain_id + 1) *
-				    sizeof(*channel_cfg->perfd));
-
-		if (!ptr) {
-			free(dvfs_opp_khz);
-			free(dvfs_opp_mv);
+		protocol_ctx = calloc(1, sizeof(*protocol_ctx));
+		if (!protocol_ctx)
 			return TEE_ERROR_OUT_OF_MEMORY;
+
+		protocol_ctx->dt_name = node_name;
+		protocol_ctx->dt_node = protocol_node;
+
+		/* Get protocol id (required) */
+		cuint = fdt_getprop(fdt, protocol_node, "reg", NULL);
+		if (!cuint) {
+			EMSG("%s Missing property reg", protocol_ctx->dt_name);
+			panic();
 		}
+		protocol_ctx->protocol_id = fdt32_to_cpu(*cuint);
 
-		channel_cfg->perfd = ptr;
-		memset(channel_cfg->perfd + channel_cfg->perfd_count, 0,
-		       (domain_id + 1 - channel_cfg->perfd_count) *
-		       sizeof(*channel_cfg->perfd));
+		SIMPLEQ_FOREACH(p, &agent_ctx->protocol_list, link)
+			assert(p->protocol_id != protocol_ctx->protocol_id);
 
-		channel_cfg->perfd_count = domain_id + 1;
+		SIMPLEQ_INSERT_TAIL(&agent_ctx->protocol_list, protocol_ctx,
+				    link);
 	}
-
-	assert(!channel_cfg->perfd->dvfs_opp_khz);
-
-	channel_cfg->perfd[domain_id] = (struct scmi_perfd){
-		.name = "DVFS",
-		.initial_opp = initial_index,
-		.dvfs_opp_count = dvfs_count,
-		.dvfs_opp_khz = dvfs_opp_khz,
-		.dvfs_opp_mv = dvfs_opp_mv,
-		.clk = clk,
-		.regulator = regulator,
-	};
 
 	return TEE_SUCCESS;
 }
+
+static TEE_Result optee_scmi_server_probe(const void *fdt, int parent_node,
+					  const void *compat_data __unused)
+{
+	struct optee_scmi_server *ctx = NULL;
+	struct optee_scmi_server_agent *agent_ctx = NULL;
+	struct optee_scmi_server_agent *a = NULL;
+	TEE_Result res = TEE_SUCCESS;
+	unsigned int agent_cfg_count = 0;
+	unsigned int scp_mailbox_idx = 0;
+	unsigned int i = 0;
+	int agent_node = 0;
+
+	ctx = calloc(1, sizeof(*ctx));
+	if (!ctx)
+		return TEE_ERROR_OUT_OF_MEMORY;
+
+	ctx->dt_name = fdt_get_name(fdt, parent_node, NULL);
+
+	/* Read device tree */
+	SIMPLEQ_INIT(&ctx->agent_list);
+
+	fdt_for_each_subnode(agent_node, fdt, parent_node) {
+		const char *node_name = fdt_get_name(fdt, agent_node, NULL);
+
+		if (!strstr(node_name, "agent@"))
+			continue;
+
+		agent_ctx = calloc(1, sizeof(*agent_ctx));
+		if (!agent_ctx) {
+			res = TEE_ERROR_OUT_OF_MEMORY;
+			goto fail_agent;
+		}
+		agent_ctx->dt_name = node_name;
+
+		res = optee_scmi_server_probe_agent(fdt, agent_node, agent_ctx);
+		if (res)
+			goto fail_agent;
+
+		SIMPLEQ_FOREACH(a, &ctx->agent_list, link)
+			assert(a->agent_id != agent_ctx->agent_id);
+
+		SIMPLEQ_INSERT_TAIL(&ctx->agent_list, agent_ctx, link);
+		agent_cfg_count = MAX(agent_cfg_count, agent_ctx->agent_id);
+	}
+
+	agent_cfg_count++;
+
+	/* Create SCMI config structures */
+	scpfw_cfg.agent_count = agent_cfg_count;
+	scpfw_cfg.agent_config = calloc(scpfw_cfg.agent_count,
+					sizeof(*scpfw_cfg.agent_config));
+	if (!scpfw_cfg.agent_config) {
+		res = TEE_ERROR_OUT_OF_MEMORY;
+		scpfw_cfg.agent_count = 0;
+		goto fail_agent;
+	}
+
+	SIMPLEQ_FOREACH(agent_ctx, &ctx->agent_list, link) {
+		struct scpfw_agent_config *agent_cfg =
+			scpfw_cfg.agent_config + agent_ctx->agent_id;
+
+		agent_cfg->name = agent_ctx->dt_name;
+		agent_cfg->agent_id = agent_ctx->agent_id;
+
+		if (agent_ctx->mbox_chan) {
+			agent_ctx->event_waiting = false;
+			agent_ctx->mailbox_notif.yielding_cb =
+				yielding_mailbox_notif;
+			notif_register_driver(&agent_ctx->mailbox_notif);
+		}
+
+		/*
+		 * Right now this driver can handle one channel per agent only.
+		 */
+		assert(agent_ctx->channel_id == 0);
+		agent_cfg->channel_count = 1;
+		agent_cfg->channel_config =
+			calloc(agent_cfg->channel_count,
+			       sizeof(*agent_cfg->channel_config));
+		if (!agent_cfg->channel_config) {
+			res = TEE_ERROR_OUT_OF_MEMORY;
+			agent_cfg->channel_count = 0;
+			goto fail_scpfw_cfg;
+		}
+
+		for (i = 0; i < agent_cfg->channel_count; i++) {
+			struct scpfw_channel_config *channel_cfg =
+				agent_cfg->channel_config + i;
+
+			channel_cfg->name = "channel";
+			channel_cfg->channel_id = agent_ctx->channel_id;
+			channel_cfg->mailbox_idx = scp_mailbox_idx++;
+			channel_cfg->shm = agent_ctx->shm;
+
+			/* One channel per agent only */
+			agent_ctx->scp_mailbox_idx = channel_cfg->mailbox_idx;
+		}
+
+	}
+
+	/* Parse protocols and fill channels config */
+	SIMPLEQ_FOREACH(agent_ctx, &ctx->agent_list, link) {
+		struct optee_scmi_server_protocol *protocol_ctx = NULL;
+		struct scpfw_agent_config *agent_cfg =
+			scpfw_cfg.agent_config + agent_ctx->agent_id;
+		struct scpfw_channel_config *channel_cfg =
+			agent_cfg->channel_config + agent_ctx->channel_id;
+
+		SIMPLEQ_FOREACH(protocol_ctx, &agent_ctx->protocol_list, link) {
+			switch (protocol_ctx->protocol_id) {
+			default:
+				EMSG("%s Unknown protocol ID: %#x",
+				     protocol_ctx->dt_name,
+				     protocol_ctx->protocol_id);
+				panic();
+				break;
+			}
+		}
+		i++;
+	}
+
+	return TEE_SUCCESS;
+
+fail_scpfw_cfg:
+	scmi_scpfw_release_configuration();
+
+fail_agent:
+	while (!SIMPLEQ_EMPTY(&ctx->agent_list)) {
+		agent_ctx = SIMPLEQ_FIRST(&ctx->agent_list);
+
+		while (!SIMPLEQ_EMPTY(&agent_ctx->protocol_list)) {
+			struct optee_scmi_server_protocol *protocol_ctx =
+				SIMPLEQ_FIRST(&agent_ctx->protocol_list);
+
+			SIMPLEQ_REMOVE_HEAD(&agent_ctx->protocol_list, link);
+			free(protocol_ctx);
+		}
+
+		SIMPLEQ_REMOVE_HEAD(&ctx->agent_list, link);
+		free(agent_ctx);
+	}
+
+	free(ctx);
+
+	return res;
+}
+
+static TEE_Result optee_scmi_server_init(void)
+{
+	const void *fdt = get_embedded_dt();
+	int node = -1;
+
+	if (!fdt)
+		panic();
+
+	node = fdt_node_offset_by_compatible(fdt, node, "optee,scmi-server");
+	if (node == -FDT_ERR_NOTFOUND)
+		panic();
+
+	return optee_scmi_server_probe(fdt, node, NULL);
+}
+driver_init_late(optee_scmi_server_init);

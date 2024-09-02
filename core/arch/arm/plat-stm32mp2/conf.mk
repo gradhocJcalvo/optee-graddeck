@@ -154,8 +154,6 @@ ifeq ($(CFG_STM32MP21),y)
 CFG_STM32_EXTI ?= n
 endif
 
-CFG_SCMI_CORTEXM_AGENT ?= y
-
 CFG_STM32_BSEC3 ?= y
 CFG_STM32_BSEC_WRITE ?= y
 CFG_STM32_CPU_OPP ?= y
@@ -316,11 +314,6 @@ endif
 CFG_DRIVERS_FIREWALL ?= y
 ifeq ($(call cfg-one-enabled, CFG_STM32_RISAF CFG_STM32_RIFSC),y)
 $(call force,CFG_DRIVERS_FIREWALL,y)
-endif
-
-# Scmi cortexM agent require mailbox drivers
-ifeq ($(CFG_SCMI_CORTEXM_AGENT),y)
-$(call force,CFG_DRIVERS_MAILBOX,y)
 endif
 
 # Trusted User Interface
