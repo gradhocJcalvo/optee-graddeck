@@ -15,6 +15,7 @@
 #include <libfdt.h>
 #include <mm/core_memprot.h>
 #include <mm/core_mmu.h>
+#include <scmi_pd_consumer.h>
 #include <scmi/scmi_server.h>
 #include <tee_api_types.h>
 #include <tee_api_defines.h>
@@ -403,6 +404,14 @@ static TEE_Result optee_scmi_server_probe(const void *fdt, int parent_node,
 
 		SIMPLEQ_FOREACH(protocol_ctx, &agent_ctx->protocol_list, link) {
 			switch (protocol_ctx->protocol_id) {
+			case SCMI_PROTOCOL_ID_POWER_DOMAIN:
+				res = optee_scmi_server_init_pd(fdt,
+					protocol_ctx->dt_node,
+					agent_cfg, channel_cfg);
+				if (res)
+					panic("Error during power domains init"
+					      );
+				break;
 			default:
 				EMSG("%s Unknown protocol ID: %#x",
 				     protocol_ctx->dt_name,
