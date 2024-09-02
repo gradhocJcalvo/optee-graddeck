@@ -27,6 +27,18 @@ static void rtc_pta_copy_time_from_optee(struct pta_rtc_time *pta_time,
 	pta_time->tm_wday = optee_time->tm_wday;
 }
 
+static void rtc_pta_copy_time_to_optee(struct optee_rtc_time *optee_time,
+				       struct pta_rtc_time *pta_time)
+{
+	optee_time->tm_sec = pta_time->tm_sec;
+	optee_time->tm_min = pta_time->tm_min;
+	optee_time->tm_hour = pta_time->tm_hour;
+	optee_time->tm_mday = pta_time->tm_mday;
+	optee_time->tm_mon = pta_time->tm_mon;
+	optee_time->tm_year = pta_time->tm_year;
+	optee_time->tm_wday = pta_time->tm_wday;
+}
+
 static TEE_Result rtc_pta_get_time(uint32_t types,
 				   TEE_Param params[TEE_NUM_PARAMS])
 {
@@ -41,16 +53,15 @@ static TEE_Result rtc_pta_get_time(uint32_t types,
 		return TEE_ERROR_BAD_PARAMETERS;
 
 	pta_time = params[0].memref.buffer;
-	if (!pta_time || params[0].memref.size != sizeof(*pta_time))
+	if (!pta_time || params[0].memref.size != sizeof(*pta_time) ||
+	    !IS_ALIGNED_WITH_TYPE(pta_time, typeof(*pta_time)))
 		return TEE_ERROR_BAD_PARAMETERS;
 
 	res = rtc_get_time(&time);
-	if (res)
-		return res;
+	if (!res)
+		rtc_pta_copy_time_from_optee(pta_time, &time);
 
-	rtc_pta_copy_time_from_optee(pta_time, &time);
-
-	return TEE_SUCCESS;
+	return res;
 }
 
 static TEE_Result rtc_pta_set_time(uint32_t types,
@@ -66,16 +77,11 @@ static TEE_Result rtc_pta_set_time(uint32_t types,
 		return TEE_ERROR_BAD_PARAMETERS;
 
 	pta_time = params[0].memref.buffer;
-	if (!pta_time || params[0].memref.size != sizeof(*pta_time))
+	if (!pta_time || params[0].memref.size != sizeof(*pta_time) ||
+	    !IS_ALIGNED_WITH_TYPE(pta_time, typeof(*pta_time)))
 		return TEE_ERROR_BAD_PARAMETERS;
 
-	time.tm_sec = pta_time->tm_sec;
-	time.tm_min = pta_time->tm_min;
-	time.tm_hour = pta_time->tm_hour;
-	time.tm_mday = pta_time->tm_mday;
-	time.tm_mon = pta_time->tm_mon;
-	time.tm_year = pta_time->tm_year;
-	time.tm_wday = pta_time->tm_wday;
+	rtc_pta_copy_time_to_optee(&time, pta_time);
 
 	return rtc_set_time(&time);
 }
@@ -105,13 +111,12 @@ static TEE_Result rtc_pta_get_offset(uint32_t types,
 		return TEE_ERROR_BAD_PARAMETERS;
 
 	res = rtc_get_offset(&offset);
-	if (res)
-		return res;
-
-	if (offset > INT32_MAX || offset < INT32_MIN)
-		return TEE_ERROR_OVERFLOW;
-
-	params[0].value.a = (uint32_t)offset;
+	if (!res) {
+		if (offset > INT32_MAX || offset < INT32_MIN)
+			res = TEE_ERROR_OVERFLOW;
+		else
+			params[0].value.a = (uint32_t)offset;
+	}
 
 	return res;
 }
@@ -132,7 +137,8 @@ static TEE_Result rtc_pta_get_info(uint32_t types,
 		return TEE_ERROR_BAD_PARAMETERS;
 
 	info = params[0].memref.buffer;
-	if (!info || params[0].memref.size != sizeof(*info))
+	if (!info || params[0].memref.size != sizeof(*info) ||
+	    !IS_ALIGNED_WITH_TYPE(info, typeof(*info)))
 		return TEE_ERROR_BAD_PARAMETERS;
 
 	memset(info, 0, sizeof(*info));
