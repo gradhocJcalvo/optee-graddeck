@@ -26,6 +26,7 @@ scpfw-integ-version-pat = 0
 scpfw-integ-version = $(scpfw-integ-version-maj).$(scpfw-integ-version-min).$(scpfw-integ-version-pat)
 
 srcs-y += scmi_server.c
+srcs-$(CFG_SCMI_SERVER_CLOCK_CONSUMER) += scmi_clock_consumer.c
 srcs-$(CFG_SCMI_SERVER_PD_CONSUMER) += scmi_pd_consumer.c
 srcs-$(CFG_SCMI_SERVER_REGULATOR_CONSUMER) += scmi_regulator_consumer.c
 global-incdirs-y += include

@@ -15,6 +15,7 @@
 #include <libfdt.h>
 #include <mm/core_memprot.h>
 #include <mm/core_mmu.h>
+#include <scmi_clock_consumer.h>
 #include <scmi_pd_consumer.h>
 #include <scmi/scmi_server.h>
 #include <tee_api_types.h>
@@ -411,6 +412,13 @@ static TEE_Result optee_scmi_server_probe(const void *fdt, int parent_node,
 				if (res)
 					panic("Error during power domains init"
 					      );
+				break;
+			case SCMI_PROTOCOL_ID_CLOCK:
+				res = optee_scmi_server_init_clocks(fdt,
+					protocol_ctx->dt_node, agent_cfg,
+					channel_cfg);
+				if (res)
+					panic("Error during clocks init");
 				break;
 			default:
 				EMSG("%s Unknown protocol ID: %#x",
