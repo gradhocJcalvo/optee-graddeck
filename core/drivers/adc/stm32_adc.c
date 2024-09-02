@@ -1381,6 +1381,7 @@ static const struct stm32_adc_cfg stm32mp25_adc_cfg = {
 static const struct dt_device_match stm32_adc_match_table[] = {
 	{ .compatible = "st,stm32mp13-adc", .compat_data = &stm32mp13_adc_cfg },
 	{ .compatible = "st,stm32mp21-adc", .compat_data = &stm32mp21_adc_cfg },
+	{ .compatible = "st,stm32mp23-adc", .compat_data = &stm32mp25_adc_cfg },
 	{ .compatible = "st,stm32mp25-adc", .compat_data = &stm32mp25_adc_cfg },
 	{ }
 };
