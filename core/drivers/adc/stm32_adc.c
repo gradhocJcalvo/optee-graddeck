@@ -273,6 +273,8 @@ static const struct stm32_adc_regs stm32_adc_smp_bits[] = {
 static const unsigned int stm32mp13_adc_min_ts[] = { 1000, 1000, 1000, 4300,
 						     9800, 0};
 static_assert(ARRAY_SIZE(stm32mp13_adc_min_ts) == STM32_ADC_INT_CH_NB);
+static const unsigned int stm32mp21_adc_min_ts[] = { 34, 34, 0, 34, 34, 0 };
+static_assert(ARRAY_SIZE(stm32mp21_adc_min_ts) == STM32_ADC_INT_CH_NB);
 static const unsigned int stm32mp25_adc_min_ts[] = { 34, 34, 0, 34, 34, 34 };
 static_assert(ARRAY_SIZE(stm32mp25_adc_min_ts) == STM32_ADC_INT_CH_NB);
 
@@ -1360,6 +1362,14 @@ static const struct stm32_adc_cfg stm32mp13_adc_cfg = {
 	.regs = &stm32mp13_regs,
 };
 
+static const struct stm32_adc_cfg stm32mp21_adc_cfg = {
+	.max_channels = STM32MP25_ADC_CH_MAX,
+	.hw_start = stm32mp25_adc_hw_start,
+	.min_ts = stm32mp21_adc_min_ts,
+	.smp_cycles = stm32mp25_adc_smp_cycles,
+	.regs = &stm32mp25_regs,
+};
+
 static const struct stm32_adc_cfg stm32mp25_adc_cfg = {
 	.max_channels = STM32MP25_ADC_CH_MAX,
 	.hw_start = stm32mp25_adc_hw_start,
@@ -1370,6 +1380,7 @@ static const struct stm32_adc_cfg stm32mp25_adc_cfg = {
 
 static const struct dt_device_match stm32_adc_match_table[] = {
 	{ .compatible = "st,stm32mp13-adc", .compat_data = &stm32mp13_adc_cfg },
+	{ .compatible = "st,stm32mp21-adc", .compat_data = &stm32mp21_adc_cfg },
 	{ .compatible = "st,stm32mp25-adc", .compat_data = &stm32mp25_adc_cfg },
 	{ }
 };

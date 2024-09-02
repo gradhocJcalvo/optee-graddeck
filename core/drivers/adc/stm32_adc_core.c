@@ -444,6 +444,9 @@ static const struct dt_device_match stm32_adc_core_match_table[] = {
 	{ .compatible = "st,stm32mp13-adc-core",
 	  .compat_data =  &stm32mp13_adc_core_cfg
 	},
+	{ .compatible = "st,stm32mp21-adc-core",
+	  .compat_data =  &stm32mp25_adc_core_cfg
+	},
 	{ .compatible = "st,stm32mp25-adc-core",
 	  .compat_data =  &stm32mp25_adc_core_cfg
 	},
