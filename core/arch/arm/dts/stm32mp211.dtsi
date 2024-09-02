@@ -805,6 +805,7 @@
 				#gpio-cells = <2>;
 				interrupt-controller;
 				#interrupt-cells = <2>;
+				#access-controller-cells = <1>;
 				reg = <0x0 0x400>;
 				clocks = <&rcc CK_BUS_GPIOA>;
 				st,bank-name = "GPIOA";
@@ -816,6 +817,7 @@
 				#gpio-cells = <2>;
 				interrupt-controller;
 				#interrupt-cells = <2>;
+				#access-controller-cells = <1>;
 				reg = <0x10000 0x400>;
 				clocks = <&rcc CK_BUS_GPIOB>;
 				st,bank-name = "GPIOB";
@@ -827,6 +829,7 @@
 				#gpio-cells = <2>;
 				interrupt-controller;
 				#interrupt-cells = <2>;
+				#access-controller-cells = <1>;
 				reg = <0x20000 0x400>;
 				clocks = <&rcc CK_BUS_GPIOC>;
 				st,bank-name = "GPIOC";
@@ -838,6 +841,7 @@
 				#gpio-cells = <2>;
 				interrupt-controller;
 				#interrupt-cells = <2>;
+				#access-controller-cells = <1>;
 				reg = <0x30000 0x400>;
 				clocks = <&rcc CK_BUS_GPIOD>;
 				st,bank-name = "GPIOD";
@@ -849,6 +853,7 @@
 				#gpio-cells = <2>;
 				interrupt-controller;
 				#interrupt-cells = <2>;
+				#access-controller-cells = <1>;
 				reg = <0x40000 0x400>;
 				clocks = <&rcc CK_BUS_GPIOE>;
 				st,bank-name = "GPIOE";
@@ -860,6 +865,7 @@
 				#gpio-cells = <2>;
 				interrupt-controller;
 				#interrupt-cells = <2>;
+				#access-controller-cells = <1>;
 				reg = <0x50000 0x400>;
 				clocks = <&rcc CK_BUS_GPIOF>;
 				st,bank-name = "GPIOF";
@@ -871,6 +877,7 @@
 				#gpio-cells = <2>;
 				interrupt-controller;
 				#interrupt-cells = <2>;
+				#access-controller-cells = <1>;
 				reg = <0x60000 0x400>;
 				clocks = <&rcc CK_BUS_GPIOG>;
 				st,bank-name = "GPIOG";
@@ -882,6 +889,7 @@
 				#gpio-cells = <2>;
 				interrupt-controller;
 				#interrupt-cells = <2>;
+				#access-controller-cells = <1>;
 				reg = <0x70000 0x400>;
 				clocks = <&rcc CK_BUS_GPIOH>;
 				st,bank-name = "GPIOH";
@@ -893,6 +901,7 @@
 				#gpio-cells = <2>;
 				interrupt-controller;
 				#interrupt-cells = <2>;
+				#access-controller-cells = <1>;
 				reg = <0x80000 0x400>;
 				clocks = <&rcc CK_BUS_GPIOI>;
 				st,bank-name = "GPIOI";
@@ -964,6 +973,7 @@
 				#gpio-cells = <2>;
 				interrupt-controller;
 				#interrupt-cells = <2>;
+				#access-controller-cells = <1>;
 				reg = <0 0x400>;
 				clocks = <&rcc CK_BUS_GPIOZ>;
 				st,bank-name = "GPIOZ";
