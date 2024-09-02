@@ -748,7 +748,8 @@ static bool bank_is_registered(const void *fdt, int node)
 	return false;
 }
 
-static TEE_Result apply_rif_config(struct stm32_gpio_bank *bank)
+static TEE_Result apply_rif_config(struct stm32_gpio_bank *bank,
+				   uint32_t gpios_mask)
 {
 	TEE_Result res = TEE_ERROR_GENERIC;
 	uint32_t cidcfgr = 0;
@@ -761,7 +762,8 @@ static TEE_Result apply_rif_config(struct stm32_gpio_bank *bank)
 		panic();
 
 	for (i = 0; i < bank->ngpios; i++) {
-		if (!(BIT(i) & bank->rif_cfg->access_mask[0]))
+		if (!(BIT(i) & gpios_mask) ||
+		    !(BIT(i) & bank->rif_cfg->access_mask[0]))
 			continue;
 
 		/*
@@ -789,16 +791,17 @@ static TEE_Result apply_rif_config(struct stm32_gpio_bank *bank)
 	}
 
 	/* Security and privilege RIF configuration */
-	io_clrsetbits32(bank->base + GPIO_PRIVCFGR_OFFSET, GPIO_PRIVCFGR_MASK,
+	io_clrsetbits32(bank->base + GPIO_PRIVCFGR_OFFSET, gpios_mask,
 			bank->rif_cfg->priv_conf[0]);
-	io_clrsetbits32(bank->base + GPIO_SECR_OFFSET, GPIO_SECCFGR_MASK,
+	io_clrsetbits32(bank->base + GPIO_SECR_OFFSET, gpios_mask,
 			bank->rif_cfg->sec_conf[0]);
 
 	if (!bank->is_tdcid)
 		goto out;
 
 	for (i = 0; i < bank->ngpios; i++) {
-		if (!(BIT(i) & bank->rif_cfg->access_mask[0]))
+		if (!(BIT(i) & gpios_mask) ||
+		    !(BIT(i) & bank->rif_cfg->access_mask[0]))
 			continue;
 
 		io_clrsetbits32(bank->base + GPIO_CIDCFGR(i),
@@ -837,22 +840,22 @@ static TEE_Result apply_rif_config(struct stm32_gpio_bank *bank)
 	 * Lock RIF configuration if configured. This cannot be undone until
 	 * next reset.
 	 */
-	io_clrsetbits32(bank->base + GPIO_RCFGLOCKR_OFFSET, GPIO_RCFGLOCKR_MASK,
+	io_clrsetbits32(bank->base + GPIO_RCFGLOCKR_OFFSET, gpios_mask,
 			bank->rif_cfg->lock_conf[0]);
 
 	if (IS_ENABLED(CFG_TEE_CORE_DEBUG)) {
 		/* Check that RIF config are applied, panic otherwise */
 		if ((io_read32(bank->base + GPIO_PRIVCFGR_OFFSET) &
-		     bank->rif_cfg->access_mask[0]) !=
-		    bank->rif_cfg->priv_conf[0]) {
+		     bank->rif_cfg->access_mask[0] & gpios_mask) !=
+		    (bank->rif_cfg->priv_conf[0] & gpios_mask)) {
 			EMSG("GPIO bank priv conf (ID: %u) is incorrect",
 			     bank->bank_id);
 			panic();
 		}
 
 		if ((io_read32(bank->base + GPIO_SECR_OFFSET) &
-		     bank->rif_cfg->access_mask[0]) !=
-		    bank->rif_cfg->sec_conf[0]) {
+		     bank->rif_cfg->access_mask[0] & gpios_mask) !=
+		    (bank->rif_cfg->sec_conf[0] & gpios_mask)) {
 			EMSG("GPIO bank sec conf (ID: %u) is incorrect",
 			     bank->bank_id);
 			panic();
@@ -1262,7 +1265,7 @@ static TEE_Result stm32_gpio_sec_config_resume(void)
 			bank->rif_cfg->access_mask[0] = GENMASK_32(bank->ngpios,
 								   0);
 
-			apply_rif_config(bank);
+			apply_rif_config(bank, bank->rif_cfg->access_mask[0]);
 		} else {
 			stm32_gpio_set_conf_sec(bank);
 		}
@@ -1322,7 +1325,8 @@ static TEE_Result apply_sec_cfg(void)
 			continue;
 
 		if (bank->rif_cfg) {
-			res = apply_rif_config(bank);
+			res = apply_rif_config(bank,
+					       bank->rif_cfg->access_mask[0]);
 			if (res) {
 				EMSG("Failed to set GPIO RIF, bank %u",
 				     bank->bank_id);
