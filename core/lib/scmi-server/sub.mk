@@ -29,6 +29,7 @@ srcs-y += scmi_server.c
 srcs-$(CFG_SCMI_SERVER_CLOCK_CONSUMER) += scmi_clock_consumer.c
 srcs-$(CFG_SCMI_SERVER_PD_CONSUMER) += scmi_pd_consumer.c
 srcs-$(CFG_SCMI_SERVER_REGULATOR_CONSUMER) += scmi_regulator_consumer.c
+srcs-$(CFG_SCMI_SERVER_RESET_CONSUMER) += scmi_reset_consumer.c
 global-incdirs-y += include
 
 # SCP-firmware cmake configuration generates header fwk_module_idx.h and

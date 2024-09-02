@@ -18,6 +18,7 @@
 #include <scmi_clock_consumer.h>
 #include <scmi_pd_consumer.h>
 #include <scmi_regulator_consumer.h>
+#include <scmi_reset_consumer.h>
 #include <scmi/scmi_server.h>
 #include <tee_api_types.h>
 #include <tee_api_defines.h>
@@ -427,6 +428,13 @@ static TEE_Result optee_scmi_server_probe(const void *fdt, int parent_node,
 					channel_cfg);
 				if (res)
 					panic("Error during regulators init");
+				break;
+			case SCMI_PROTOCOL_ID_RESET_DOMAIN:
+				res = optee_scmi_server_init_resets(fdt,
+					protocol_ctx->dt_node, agent_cfg,
+					channel_cfg);
+				if (res)
+					panic("Error during resets init");
 				break;
 			default:
 				EMSG("%s Unknown protocol ID: %#x",
