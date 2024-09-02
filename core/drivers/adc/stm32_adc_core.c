@@ -14,6 +14,11 @@
 #include <mm/core_memprot.h>
 
 #define STM32MP13_ADC_MAX_CLK_RATE	U(75000000)
+#define STM32MP25_ADC_MAX_CLK_RATE	U(70000000)
+
+struct stm32_adc_core_cfg {
+	TEE_Result (*clk_sel)(struct stm32_adc_core_device *adc_dev);
+};
 
 struct stm32_adc_core_data {
 	struct clk *aclk;
@@ -21,6 +26,7 @@ struct stm32_adc_core_data {
 	struct regulator *vref;
 	struct regulator *vdda;
 	struct stm32_adc_common common;
+	const struct stm32_adc_core_cfg *cfg;
 };
 
 struct stm32_adc_core_device {
@@ -59,6 +65,10 @@ static const struct stm32mp13_adc_ck_spec stm32mp13_adc_ckmodes_spec[] = {
 	{ .ckmode = 3, .presc = 0, .div = 4 },
 };
 
+/* STM32MP25 ADC internal common clock prescaler division ratios */
+static const unsigned int stm32mp25_presc[] = {1, 2, 4, 6, 8, 10, 12, 16, 32,
+					       64, 128, 256};
+
 static TEE_Result stm32_adc_core_hw_start(struct stm32_adc_core_device *adc_dev)
 {
 	TEE_Result res = TEE_ERROR_GENERIC;
@@ -76,10 +86,12 @@ static TEE_Result stm32_adc_core_hw_start(struct stm32_adc_core_device *adc_dev)
 		goto err_vdda;
 	}
 
-	res = clk_enable(priv->bclk);
-	if (res) {
-		EMSG("Failed to enable bclk %#"PRIx32, res);
-		goto err_vref;
+	if (priv->bclk) {
+		res = clk_enable(priv->bclk);
+		if (res) {
+			EMSG("Failed to enable bclk %#"PRIx32, res);
+			goto err_vref;
+		}
 	}
 
 	if (priv->aclk) {
@@ -112,7 +124,8 @@ static TEE_Result stm32_adc_core_hw_stop(struct stm32_adc_core_device *adc_dev)
 
 	if (priv->aclk)
 		clk_disable(priv->aclk);
-	clk_disable(priv->bclk);
+	if (priv->bclk)
+		clk_disable(priv->bclk);
 
 	res1 = regulator_disable(priv->vref);
 	res2 = regulator_disable(priv->vdda);
@@ -130,7 +143,8 @@ static TEE_Result stm32_adc_core_hw_stop(struct stm32_adc_core_device *adc_dev)
 	return TEE_SUCCESS;
 }
 
-static TEE_Result stm32_adc_core_clk_sel(struct stm32_adc_core_device *adc_dev)
+static TEE_Result stm32mp13_adc_core_clk_sel(struct stm32_adc_core_device
+					     *adc_dev)
 {
 	struct stm32_adc_core_data *priv = &adc_dev->data;
 	uint32_t ckmode = 0;
@@ -145,6 +159,11 @@ static TEE_Result stm32_adc_core_clk_sel(struct stm32_adc_core_device *adc_dev)
 	 * So, choice is to have bus clock mandatory and ADC clock optional.
 	 * If optional 'adc' clock has been found, then try to use it first.
 	 */
+	if (!priv->bclk) {
+		EMSG("No bus clock found\n");
+		return TEE_ERROR_ITEM_NOT_FOUND;
+	}
+
 	if (priv->aclk) {
 		/*
 		 * Asynchronous clock modes (e.g. ckmode == 0)
@@ -218,6 +237,45 @@ out:
 	return TEE_SUCCESS;
 }
 
+static TEE_Result stm32mp25_adc_core_clk_sel(struct stm32_adc_core_device
+					     *adc_dev)
+{
+	struct stm32_adc_core_data *priv = &adc_dev->data;
+	unsigned long rate = 0;
+	unsigned int i = 0;
+
+	if (!priv->aclk) {
+		EMSG("No 'adc' clock found\n");
+		return TEE_ERROR_ITEM_NOT_FOUND;
+	}
+
+	rate = clk_get_rate(priv->aclk);
+	if (!rate) {
+		EMSG("Invalid %s clock rate", clk_get_name(priv->aclk));
+		return TEE_ERROR_GENERIC;
+	}
+
+	for (i = 0; i < ARRAY_SIZE(stm32mp25_presc); i++) {
+		if ((rate / stm32mp25_presc[i]) <= STM32MP25_ADC_MAX_CLK_RATE)
+			break;
+	}
+	if (i >= ARRAY_SIZE(stm32mp25_presc)) {
+		EMSG("adc clk selection failed\n");
+		return TEE_ERROR_BAD_PARAMETERS;
+	}
+
+	priv->common.rate = rate / stm32mp25_presc[i];
+
+	/* Set common prescaler */
+	io_clrsetbits32(priv->common.regs + STM32MP13_ADC_CCR,
+			STM32MP13_PRESC_MASK, i << STM32MP13_PRESC_SHIFT);
+
+	DMSG("Using analog clock source at %ld kHz\n",
+	     priv->common.rate / 1000);
+
+	return 0;
+}
+
 static TEE_Result
 stm32_adc_core_get_common_data(struct dt_pargs *pargs __unused, void *data,
 			       struct stm32_adc_common **adc_common)
@@ -254,6 +312,31 @@ stm32_adc_core_pm(enum pm_op op, unsigned int pm_hint __unused,
 		res = stm32_adc_core_pm_resume(dev);
 	else
 		res = stm32_adc_core_pm_suspend(dev);
+
+	return res;
+}
+
+static TEE_Result stm32_adc_core_get_clk(struct stm32_adc_core_device
+					 *adc_dev, const void *fdt, int node)
+{
+	struct stm32_adc_core_data *priv = &adc_dev->data;
+	TEE_Result res = TEE_ERROR_GENERIC;
+
+	/*
+	 * Optionally get clocks here, only check defer status.
+	 * Later check for mandatory clocks in clk_sel routine
+	 * for each SoC.
+	 */
+	res = clk_dt_get_by_name(fdt, node, "bus", &priv->bclk);
+	if (res == TEE_ERROR_DEFER_DRIVER_INIT) {
+		DMSG("Error %#"PRIx32" getting 'bus' clock", res);
+		return res;
+	}
+
+	/* The 'adc' clock is optional on stm32mp13. Only check defer status. */
+	res = clk_dt_get_by_name(fdt, node, "adc", &priv->aclk);
+	if (res == TEE_ERROR_DEFER_DRIVER_INIT)
+		DMSG("Error %#"PRIx32" getting 'adc' clock", res);
 
 	return res;
 }
@@ -298,23 +381,17 @@ static TEE_Result stm32_adc_core_probe(const void *fdt, int node,
 
 	priv->common.vref_uv = regulator_get_voltage(priv->vref);
 
-	res = clk_dt_get_by_name(fdt, node, "bus", &priv->bclk);
-	if (res) {
-		if (res != TEE_ERROR_DEFER_DRIVER_INIT)
-			EMSG("Error %#"PRIx32" getting 'bus' clock", res);
-		goto err;
-	}
-
+	priv->cfg = (struct stm32_adc_core_cfg *)compat_data;
 	/* The 'adc' clock is optional. Only check defer status. */
-	res = clk_dt_get_by_name(fdt, node, "adc", &priv->aclk);
-	if (res == TEE_ERROR_DEFER_DRIVER_INIT)
+	res = stm32_adc_core_get_clk(adc_dev, fdt, node);
+	if (res)
 		goto err;
 
 	res = stm32_adc_core_hw_start(adc_dev);
 	if (res)
 		goto err;
 
-	res = stm32_adc_core_clk_sel(adc_dev);
+	res = priv->cfg->clk_sel(adc_dev);
 	if (res) {
 		EMSG("Error %#"PRIx32" selecting clock", res);
 		goto err_stop;
@@ -355,8 +432,21 @@ err:
 	return res;
 }
 
+static const struct stm32_adc_core_cfg stm32mp13_adc_core_cfg = {
+	.clk_sel = stm32mp13_adc_core_clk_sel,
+};
+
+static const struct stm32_adc_core_cfg stm32mp25_adc_core_cfg = {
+	.clk_sel = stm32mp25_adc_core_clk_sel,
+};
+
 static const struct dt_device_match stm32_adc_core_match_table[] = {
-	{ .compatible = "st,stm32mp13-adc-core" },
+	{ .compatible = "st,stm32mp13-adc-core",
+	  .compat_data =  &stm32mp13_adc_core_cfg
+	},
+	{ .compatible = "st,stm32mp25-adc-core",
+	  .compat_data =  &stm32mp25_adc_core_cfg
+	},
 	{ }
 };
 

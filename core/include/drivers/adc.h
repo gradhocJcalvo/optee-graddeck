@@ -31,7 +31,7 @@ struct adc_evt {
  */
 struct adc_chan {
 	unsigned int id;
-	const char *name;
+	char *name;
 	uint32_t smpt;
 };
 

@@ -73,11 +73,13 @@
 #define STM32MP13_HT2			GENMASK_32(23, 16)
 #define STM32MP13_HT2_SHIFT		U(16)
 #define STM32MP13_LT2			GENMASK_32(7, 0)
+#define STM32MP13_LT2_SHIFT		U(4)
 
 /* STM32MP13_ADC_TR3 - bit fields */
 #define STM32MP13_HT3			GENMASK_32(23, 16)
 #define STM32MP13_HT3_SHIFT		U(16)
 #define STM32MP13_LT3			GENMASK_32(7, 0)
+#define STM32MP13_LT3_SHIFT		U(4)
 
 /* STM32MP13_ADC_SQR1 - bit fields */
 #define STM32MP13_SQ1_SHIFT		U(6)
@@ -101,7 +103,47 @@
 #define STM32MP13_ADC_CH_MAX		U(19)
 #define STM32MP13_ADC_AWD_NB		U(3)
 #define STM32MP13_ADC_MAX_SQ		U(16)	/* SQ1..SQ16 */
-#define STM32MP13_ADC_MAX_SMP		U(7)	/* SMPx range is [0..7] */
+#define STM32_ADC_MAX_SMP		U(7)	/* SMPx range is [0..7] */
+
+/* STM32MP25 - Registers for each ADC instance */
+#define STM32MP25_ADC_DIFSEL		U(0xC0)
+#define STM32MP25_ADC_CALFACT		U(0xC4)
+#define STM32MP25_ADC_OR		U(0xD0)
+#define STM32MP25_ADC_AWD2CR		U(0xA0)
+#define STM32MP25_ADC_AWD3CR		U(0xA4)
+#define STM32MP25_ADC_AWD1LTR		U(0xA8)
+#define STM32MP25_ADC_AWD1HTR		U(0xAC)
+#define STM32MP25_ADC_AWD2LTR		U(0xB0)
+#define STM32MP25_ADC_AWD2HTR		U(0xB4)
+#define STM32MP25_ADC_AWD3LTR		U(0xB8)
+#define STM32MP25_ADC_AWD3HTR		U(0xBC)
+
+#define STM32MP25_ADC_AWD2CH_MASK	GENMASK_32(19, 0)
+#define STM32MP25_ADC_AWD3CH_MASK	GENMASK_32(19, 0)
+#define STM32MP25_ADC_AWD1LTR_MASK	GENMASK_32(22, 0)
+#define STM32MP25_ADC_AWD1HTR_MASK	GENMASK_32(22, 0)
+#define STM32MP25_ADC_AWD2LTR_MASK	GENMASK_32(22, 0)
+#define STM32MP25_ADC_AWD2HTR_MASK	GENMASK_32(22, 0)
+#define STM32MP25_ADC_AWD3LTR_MASK	GENMASK_32(22, 0)
+#define STM32MP25_ADC_AWD3HTR_MASK	GENMASK_32(22, 0)
+
+/* STM32MP25_ADC_CFGR bit fields */
+#define STM32MP25_RES		GENMASK_32(3, 2)
+
+/* STM32MP25_ADC_OR - bit fields */
+#define STM32MP25_OP3			BIT(3)
+#define STM32MP25_OP4			BIT(4)
+
+/* STM32MP25_ADC_CALFACT bit fields */
+#define STM32MP25_CALADDOS		BIT(31)
+#define STM32MP25_CALFACT_S		GENMASK_32(8, 0)
+#define STM32MP25_CALFACT_D		GENMASK_32(24, 16)
+#define STM32MP25_CALFACT_D_SHIFT	U(16)
+
+#define STM32MP25_DIFSEL_MASK		GENMASK_32(19, 0)
+
+#define STM32MP25_ADC_CH_MAX		U(20)
+#define STM32MP25_CALIB_LOOP		U(8)
 
 #define STM32_ADC_TIMEOUT_US		U(100000)
 #define STM32_ADC_NSEC_PER_SEC		UL(1000000000)
@@ -127,6 +169,7 @@ enum stm32_adc_int_ch {
 	STM32_ADC_INT_CH_VDDQ_DDR,
 	STM32_ADC_INT_CH_VREFINT,
 	STM32_ADC_INT_CH_VBAT,
+	STM32_ADC_INT_CH_VDDGPU,
 	STM32_ADC_INT_CH_NB
 };
 
@@ -141,6 +184,7 @@ struct stm32_adc_data {
 	vaddr_t regs;
 	uint32_t smpr[2];
 	int int_ch[STM32_ADC_INT_CH_NB];
+	const struct stm32_adc_cfg *cfg;
 };
 
 struct stm32_adc_regs {
@@ -150,12 +194,31 @@ struct stm32_adc_regs {
 };
 
 struct stm32_adc_awd_reginfo {
-	uint32_t awd_isr_msk;
 	const struct stm32_adc_regs awd_ch;
 	const struct stm32_adc_regs awd_lt;
 	const struct stm32_adc_regs awd_ht;
 	const struct stm32_adc_regs awd_en;
 	const struct stm32_adc_regs awd_sgl;
+};
+
+struct stm32_adc_regspec {
+	const unsigned int data_res;
+	const struct stm32_adc_regs or_vddcore;
+	const struct stm32_adc_regs or_vddcpu;
+	const struct stm32_adc_regs or_vddq_ddr;
+	const struct stm32_adc_regs ccr_vref;
+	const struct stm32_adc_regs ccr_vbat;
+	const struct stm32_adc_regs or_vddgpu;
+	const struct stm32_adc_awd_reginfo *awd_reginfo;
+};
+
+struct stm32_adc_cfg {
+	const unsigned int max_channels;
+	const unsigned int *min_ts;
+	const unsigned int *smp_cycles;
+	const struct stm32_adc_regspec *regs;
+	bool has_vregen;
+	TEE_Result (*hw_start)(struct adc_device *adc_dev);
 };
 
 static const struct stm32_adc_ic stm32_adc_ic[STM32_ADC_INT_CH_NB] = {
@@ -164,20 +227,26 @@ static const struct stm32_adc_ic stm32_adc_ic[STM32_ADC_INT_CH_NB] = {
 	{ .name = "vddq_ddr", .idx = STM32_ADC_INT_CH_VDDQ_DDR },
 	{ .name = "vrefint", .idx = STM32_ADC_INT_CH_VREFINT },
 	{ .name = "vbat", .idx = STM32_ADC_INT_CH_VBAT },
+	{ .name = "vddgpu", .idx = STM32_ADC_INT_CH_VDDGPU },
 };
 
 /* STM32MP13 programmable sampling time (ADC clock cycles, rounded down) */
 static const unsigned int
-stm32mp13_adc_smp_cycles[STM32MP13_ADC_MAX_SMP + 1] = {
+stm32mp13_adc_smp_cycles[STM32_ADC_MAX_SMP + 1] = {
 	2, 6, 12, 24, 47, 92, 247, 640
 };
 
+static const unsigned int
+stm32mp25_adc_smp_cycles[STM32_ADC_MAX_SMP + 1] = {
+	2, 3, 7, 12, 24, 47, 247, 1501,
+};
+
 /*
- * stm32mp13_adc_smp_bits - describe sampling time register index & bit fields
+ * stm32_adc_smp_bits - describe sampling time register index & bit fields
  * Sorted so it can be indexed by channel number.
  */
-static const struct stm32_adc_regs stm32mp13_adc_smp_bits[] = {
-	/* STM32MP13_ADC_SMPR1, smpr[] index, mask, shift for SMP0 to SMP9 */
+static const struct stm32_adc_regs stm32_adc_smp_bits[] = {
+	/* ADC_SMPR1, smpr[] index, mask, shift for SMP0 to SMP9 */
 	{ 0, GENMASK_32(2, 0), 0 },
 	{ 0, GENMASK_32(5, 3), 3 },
 	{ 0, GENMASK_32(8, 6), 6 },
@@ -188,7 +257,7 @@ static const struct stm32_adc_regs stm32mp13_adc_smp_bits[] = {
 	{ 0, GENMASK_32(23, 21), 21 },
 	{ 0, GENMASK_32(26, 24), 24 },
 	{ 0, GENMASK_32(29, 27), 27 },
-	/* STM32MP13_ADC_SMPR2, smpr[] index, mask, shift for SMP10 to SMP18 */
+	/* ADC_SMPR2, smpr[] index, mask, shift for SMP10 to SMP19 */
 	{ 1, GENMASK_32(2, 0), 0 },
 	{ 1, GENMASK_32(5, 3), 3 },
 	{ 1, GENMASK_32(8, 6), 6 },
@@ -198,10 +267,14 @@ static const struct stm32_adc_regs stm32mp13_adc_smp_bits[] = {
 	{ 1, GENMASK_32(20, 18), 18 },
 	{ 1, GENMASK_32(23, 21), 21 },
 	{ 1, GENMASK_32(26, 24), 24 },
+	{ 1, GENMASK_32(29, 27), 27 },
 };
 
 static const unsigned int stm32mp13_adc_min_ts[] = { 1000, 1000, 1000, 4300,
-						     9800 };
+						     9800, 0};
+static_assert(ARRAY_SIZE(stm32mp13_adc_min_ts) == STM32_ADC_INT_CH_NB);
+static const unsigned int stm32mp25_adc_min_ts[] = { 34, 34, 0, 34, 34, 34 };
+static_assert(ARRAY_SIZE(stm32mp25_adc_min_ts) == STM32_ADC_INT_CH_NB);
 
 /**
  * STM32MP13_awd_reginfo[] - Analog watchdog description.
@@ -211,7 +284,7 @@ static const unsigned int stm32mp13_adc_min_ts[] = { 1000, 1000, 1000, 4300,
  * - AWD2 & AWD3 are enabled by channel mask (in AWDxCR)
  * Remaining is similar
  */
-static const struct stm32_adc_awd_reginfo awd_reginfo[] = {
+static const struct stm32_adc_awd_reginfo stm32mp13_awd_reginfo[] = {
 	{
 		.awd_ch = {STM32MP13_ADC_CFGR, STM32MP13_AWD1CH,
 			   STM32MP13_AWD1CH_SHIFT},
@@ -222,14 +295,41 @@ static const struct stm32_adc_awd_reginfo awd_reginfo[] = {
 			   STM32MP13_HT1_SHIFT},
 	}, {
 		.awd_ch = {STM32MP13_ADC_AWD2CR, STM32MP13_AWD2CH},
-		.awd_lt = {STM32MP13_ADC_TR2, STM32MP13_LT2},
+		/* Bit resoluion on 8 bits  */
+		.awd_lt = {STM32MP13_ADC_TR2, STM32MP13_LT2,
+			   STM32MP13_LT2_SHIFT},
 		.awd_ht = {STM32MP13_ADC_TR2, STM32MP13_HT2,
-			   STM32MP13_HT2_SHIFT},
+			   STM32MP13_HT2_SHIFT - 4},
 	}, {
 		.awd_ch = {STM32MP13_ADC_AWD3CR, STM32MP13_AWD3CH},
-		.awd_lt = {STM32MP13_ADC_TR3, STM32MP13_LT3},
+		.awd_lt = {STM32MP13_ADC_TR3, STM32MP13_LT3,
+			   STM32MP13_LT3_SHIFT},
 		.awd_ht = {STM32MP13_ADC_TR3, STM32MP13_HT3,
-			   STM32MP13_HT3_SHIFT},
+			   STM32MP13_HT3_SHIFT - 4},
+	},
+};
+
+static const struct stm32_adc_awd_reginfo stm32mp25_awd_reginfo[] = {
+	{
+		.awd_ch = {STM32MP13_ADC_CFGR, STM32MP13_AWD1CH, 0},
+		.awd_en = {STM32MP13_ADC_CFGR, STM32MP13_AWD1EN},
+		.awd_sgl = {STM32MP13_ADC_CFGR, STM32MP13_AWD1SGL},
+		.awd_lt = {STM32MP25_ADC_AWD1LTR, STM32MP25_ADC_AWD1LTR_MASK,
+			   0},
+		.awd_ht = {STM32MP25_ADC_AWD1HTR, STM32MP25_ADC_AWD1HTR_MASK,
+			   0},
+	}, {
+		.awd_ch = {STM32MP25_ADC_AWD2CR, STM32MP25_ADC_AWD2CH_MASK},
+		.awd_lt = {STM32MP25_ADC_AWD2LTR, STM32MP25_ADC_AWD2LTR_MASK,
+			   0},
+		.awd_ht = {STM32MP25_ADC_AWD2HTR, STM32MP25_ADC_AWD2HTR_MASK,
+			   0},
+	}, {
+		.awd_ch = {STM32MP25_ADC_AWD3CR, STM32MP25_ADC_AWD3CH_MASK},
+		.awd_lt = {STM32MP25_ADC_AWD3LTR, STM32MP25_ADC_AWD3LTR_MASK,
+			   0},
+		.awd_ht = {STM32MP25_ADC_AWD3HTR, STM32MP25_ADC_AWD3HTR_MASK,
+			   0},
 	},
 };
 
@@ -255,10 +355,32 @@ static const struct stm32_adc_regs stm32_sqr[STM32MP13_ADC_MAX_SQ + 1] = {
 	{ STM32MP13_ADC_SQR4, GENMASK_32(10, 6), 6 },
 };
 
+static const struct stm32_adc_regspec stm32mp13_regs = {
+	.data_res = STM32MP13_RES,
+	.or_vddcore = { STM32MP13_ADC2_OR, STM32MP13_OP0 },
+	.or_vddcpu = { STM32MP13_ADC2_OR, STM32MP13_OP1 },
+	.or_vddq_ddr = { STM32MP13_ADC2_OR, STM32MP13_OP2 },
+	.ccr_vref = { STM32MP13_ADC_CCR, STM32MP13_VREFEN },
+	.ccr_vbat = { STM32MP13_ADC_CCR, STM32MP13_VBATEN },
+	.awd_reginfo = stm32mp13_awd_reginfo,
+};
+
+static const struct stm32_adc_regspec stm32mp25_regs = {
+	.data_res = STM32MP25_RES,
+	.or_vddcore = { STM32MP25_ADC_OR, STM32MP13_OP2 },
+	.or_vddcpu = { STM32MP25_ADC_OR, STM32MP25_OP3 },
+	.ccr_vref = { STM32MP13_ADC_CCR, STM32MP13_VREFEN },
+	.ccr_vbat = { STM32MP13_ADC_CCR, STM32MP13_VBATEN },
+	.or_vddgpu = { STM32MP25_ADC_OR, STM32MP25_OP4},
+	.awd_reginfo = stm32mp25_awd_reginfo,
+};
+
 static TEE_Result stm32_adc_awd_enable(struct adc_device *adc_dev,
 				       struct adc_evt *evt, uint32_t channel)
 {
 	struct stm32_adc_data *adc = adc_get_drv_data(adc_dev);
+	const struct stm32_adc_awd_reginfo *awd_reginfo =
+		adc->cfg->regs->awd_reginfo;
 	unsigned int i = 0;
 	uint32_t val = 0;
 
@@ -273,10 +395,12 @@ static TEE_Result stm32_adc_awd_enable(struct adc_device *adc_dev,
 	 * Supported data format:
 	 *	resolution: 12 bits (other resolutions not supported)
 	 *	alignment: indifferent (applied after comparison)
-	 *	offset: indifferent (applied after comparison)
+	 *	offset on:
+	 *		- stm32mp13: indifferent (applied after comparison)
+	 *		- stm32mp25: applied before comparison
 	 */
 	val = io_read32(adc->regs + STM32MP13_ADC_CFGR);
-	if (val & STM32MP13_RES)
+	if (val & adc->cfg->regs->data_res)
 		return TEE_ERROR_NOT_IMPLEMENTED;
 
 	/* Set AWD thresholds and enable AWD */
@@ -287,7 +411,8 @@ static TEE_Result stm32_adc_awd_enable(struct adc_device *adc_dev,
 		 * Thresholds resolution: 12 bits
 		 */
 		if (!IS_POWER_OF_TWO(channel)) {
-			EMSG("Only single channel allowed for AWD1");
+			EMSG("AWD1 allows Only single channel, no Channel %d",
+			     channel);
 			return TEE_ERROR_BAD_PARAMETERS;
 		}
 
@@ -295,11 +420,13 @@ static TEE_Result stm32_adc_awd_enable(struct adc_device *adc_dev,
 				awd_reginfo[i].awd_lt.msk, evt->lt);
 		io_clrsetbits32(adc->regs + awd_reginfo[i].awd_ht.reg,
 				awd_reginfo[i].awd_ht.msk,
-				evt->ht << awd_reginfo[i].awd_ht.shift);
+				evt->ht
+				<< awd_reginfo[i].awd_ht.shift);
 
 		io_clrsetbits32(adc->regs + awd_reginfo[i].awd_ch.reg,
 				awd_reginfo[i].awd_ch.msk,
-				channel << awd_reginfo[i].awd_ch.shift);
+				channel
+				<< awd_reginfo[i].awd_ch.shift);
 		/* Enable AWD on a single channel */
 		io_setbits32(adc->regs + awd_reginfo[i].awd_sgl.reg,
 			     awd_reginfo[i].awd_sgl.msk);
@@ -310,13 +437,17 @@ static TEE_Result stm32_adc_awd_enable(struct adc_device *adc_dev,
 		/*
 		 * AWD2/3:
 		 * Enable AWD through channel mask. (Scan mode supported)
-		 * Thresholds resolution: 8 bits (MSBs)
+		 * Thresholds resolution on:
+		 *	- stm32mp13: 8 bits (MSBs)
+		 *	- stm32mp25: 12 bits (LSBs)
 		 */
 		io_clrsetbits32(adc->regs + awd_reginfo[i].awd_lt.reg,
-				awd_reginfo[i].awd_lt.msk, evt->lt >> 4);
+				awd_reginfo[i].awd_lt.msk,
+				evt->lt >> awd_reginfo[i].awd_lt.shift);
 		io_clrsetbits32(adc->regs + awd_reginfo[i].awd_ht.reg,
 				awd_reginfo[i].awd_ht.msk,
-				evt->ht << (awd_reginfo[i].awd_ht.shift - 4));
+				evt->ht
+				<< awd_reginfo[i].awd_ht.shift);
 
 		/* Enable AWD for channel. Do not clear channels already set */
 		io_setbits32(adc->regs + awd_reginfo[i].awd_ch.reg,
@@ -333,6 +464,8 @@ static TEE_Result stm32_adc_awd_disable(struct adc_device *adc_dev,
 					struct adc_evt *evt, uint32_t channel)
 {
 	struct stm32_adc_data *adc = adc_get_drv_data(adc_dev);
+	const struct stm32_adc_awd_reginfo *awd_reginfo =
+		adc->cfg->regs->awd_reginfo;
 	unsigned int i = 0;
 
 	if (!evt->id || evt->id > STM32MP13_ADC_AWD_NB) {
@@ -381,7 +514,7 @@ static int stm32_adc_conf_scan_seq(struct stm32_adc_data *adc,
 			io_write32(adc->regs + stm32_sqr[scan_idx].reg, val);
 		}
 		channel_mask >>= 1;
-	} while (chan_idx++ < STM32MP13_ADC_CH_MAX);
+	} while (chan_idx++ < adc->cfg->max_channels);
 
 	/* Sequence len */
 	val = io_read32(adc->regs + stm32_sqr[0].reg);
@@ -455,28 +588,36 @@ static void stm32_adc_int_ch_enable(struct adc_device *adc_dev)
 		switch (i) {
 		case STM32_ADC_INT_CH_VDDCORE:
 			DMSG("Enable VDDCore");
-			io_setbits32(adc->regs + STM32MP13_ADC2_OR,
-				     STM32MP13_OP0);
+			io_setbits32(adc->regs + adc->cfg->regs->or_vddcore.reg,
+				     adc->cfg->regs->or_vddcore.msk);
 			break;
 		case STM32_ADC_INT_CH_VDDCPU:
 			DMSG("Enable VDDCPU");
-			io_setbits32(adc->regs + STM32MP13_ADC2_OR,
-				     STM32MP13_OP1);
+			io_setbits32(adc->regs + adc->cfg->regs->or_vddcpu.reg,
+				     adc->cfg->regs->or_vddcpu.msk);
 			break;
 		case STM32_ADC_INT_CH_VDDQ_DDR:
 			DMSG("Enable VDDQ_DDR");
-			io_setbits32(adc->regs + STM32MP13_ADC2_OR,
-				     STM32MP13_OP2);
+			io_setbits32(adc->regs
+				     + adc->cfg->regs->or_vddq_ddr.reg,
+				     adc->cfg->regs->or_vddq_ddr.msk);
 			break;
 		case STM32_ADC_INT_CH_VREFINT:
 			DMSG("Enable VREFInt");
-			io_setbits32(adc->common->regs + STM32MP13_ADC_CCR,
-				     STM32MP13_VREFEN);
+			io_setbits32(adc->common->regs
+				     + adc->cfg->regs->ccr_vref.reg,
+				     adc->cfg->regs->ccr_vref.msk);
 			break;
 		case STM32_ADC_INT_CH_VBAT:
 			DMSG("Enable VBAT");
-			io_setbits32(adc->common->regs + STM32MP13_ADC_CCR,
-				     STM32MP13_VBATEN);
+			io_setbits32(adc->common->regs
+				     + adc->cfg->regs->ccr_vbat.reg,
+				     adc->cfg->regs->ccr_vbat.msk);
+			break;
+		case STM32_ADC_INT_CH_VDDGPU:
+			DMSG("Enable VDDGPU");
+			io_setbits32(adc->regs + adc->cfg->regs->or_vddgpu.reg,
+				     adc->cfg->regs->or_vddgpu.msk);
 			break;
 		default:
 			break;
@@ -495,24 +636,31 @@ static void stm32_adc_int_ch_disable(struct adc_device *adc_dev)
 
 		switch (i) {
 		case STM32_ADC_INT_CH_VDDCORE:
-			io_clrbits32(adc->regs + STM32MP13_ADC2_OR,
-				     STM32MP13_OP0);
+			io_clrbits32(adc->regs + adc->cfg->regs->or_vddcore.reg,
+				     adc->cfg->regs->or_vddcore.msk);
 			break;
 		case STM32_ADC_INT_CH_VDDCPU:
-			io_clrbits32(adc->regs + STM32MP13_ADC2_OR,
-				     STM32MP13_OP1);
+			io_clrbits32(adc->regs + adc->cfg->regs->or_vddcpu.reg,
+				     adc->cfg->regs->or_vddcpu.msk);
 			break;
 		case STM32_ADC_INT_CH_VDDQ_DDR:
-			io_clrbits32(adc->regs + STM32MP13_ADC2_OR,
-				     STM32MP13_OP2);
+			io_clrbits32(adc->regs
+				     + adc->cfg->regs->or_vddq_ddr.reg,
+				     adc->cfg->regs->or_vddq_ddr.msk);
 			break;
 		case STM32_ADC_INT_CH_VREFINT:
-			io_clrbits32(adc->common->regs + STM32MP13_ADC_CCR,
-				     STM32MP13_VREFEN);
+			io_clrbits32(adc->common->regs
+				     + adc->cfg->regs->ccr_vref.reg,
+				     adc->cfg->regs->ccr_vref.msk);
 			break;
 		case STM32_ADC_INT_CH_VBAT:
-			io_clrbits32(adc->common->regs + STM32MP13_ADC_CCR,
-				     STM32MP13_VBATEN);
+			io_clrbits32(adc->common->regs
+				     + adc->cfg->regs->ccr_vbat.reg,
+				     adc->cfg->regs->ccr_vbat.msk);
+			break;
+		case STM32_ADC_INT_CH_VDDGPU:
+			io_clrbits32(adc->regs + adc->cfg->regs->or_vddgpu.reg,
+				     adc->cfg->regs->or_vddgpu.msk);
 			break;
 		default:
 			break;
@@ -542,7 +690,8 @@ static TEE_Result stm32_adc_exit_pwr_down(struct adc_device *adc_dev)
 
 	/* Exit deep power down, then enable ADC voltage regulator */
 	io_clrbits32(adc->regs + STM32MP13_ADC_CR, STM32MP13_DEEPPWD);
-	io_setbits32(adc->regs + STM32MP13_ADC_CR, STM32MP13_ADVREGEN);
+	if (adc->cfg->has_vregen)
+		io_setbits32(adc->regs + STM32MP13_ADC_CR, STM32MP13_ADVREGEN);
 
 	/* Wait for ADC LDO startup time (tADCVREG_STUP in datasheet) */
 	udelay(STM32_ADCVREG_STUP_DELAY_US);
@@ -657,7 +806,134 @@ static TEE_Result stm32_adc_selfcalib(struct adc_device *adc_dev)
 	return TEE_SUCCESS;
 }
 
-static TEE_Result stm32_adc_hw_start(struct adc_device *adc_dev)
+static TEE_Result stm32mp25_adc_calfact_data(struct adc_device *adc_dev,
+					     unsigned int *average_data)
+{
+	struct stm32_adc_data *adc = adc_get_drv_data(adc_dev);
+	uint32_t val = 0, val_sum = 0, i = 0;
+	TEE_Result res = TEE_ERROR_GENERIC;
+
+	for (i = 0; i < STM32MP25_CALIB_LOOP; i++) {
+		io_setbits32(adc->regs + STM32MP13_ADC_CR, STM32MP13_ADSTART);
+
+		/*
+		 * Wait for end of conversion by polling ADSTART bit until it
+		 * is cleared. Also work if waiting for EOC to be set in
+		 * STM32MP25_ADC_ISR.
+		 */
+		if (IO_READ32_POLL_TIMEOUT(adc->regs + STM32MP13_ADC_CR, val,
+					   !(val & STM32MP13_ADSTART), 0,
+					   STM32_ADC_TIMEOUT_US)) {
+			res = TEE_ERROR_TIME_NOT_SET;
+			EMSG("Conversion failed: %d\n", res);
+			return res;
+		}
+
+		val = io_read32(adc->regs + STM32MP13_ADC_DR);
+		val_sum += val;
+	}
+
+	*average_data = UDIV_ROUND_NEAREST(val_sum, STM32MP25_CALIB_LOOP);
+	DMSG("calibration average data = %#x", *average_data);
+
+	return TEE_SUCCESS;
+}
+
+static TEE_Result stm32mp25_adc_calib(struct adc_device *adc_dev)
+{
+	struct stm32_adc_data *adc = adc_get_drv_data(adc_dev);
+	uint32_t average_data = 0, calfact = 0;
+	TEE_Result res = TEE_ERROR_GENERIC;
+
+	io_setbits32(adc->regs + STM32MP13_ADC_CR, STM32MP13_ADCAL);
+	/* Clears CALADDOS (and old calibration data if any) */
+	io_clrbits32(adc->regs + STM32MP25_ADC_CALFACT, UINT32_MAX);
+	/* Select single ended input calibration */
+	io_clrbits32(adc->regs + STM32MP13_ADC_CR, STM32MP13_ADCALDIF);
+	/* Use default resolution (e.g. 12 bits) */
+	io_clrbits32(adc->regs + STM32MP13_ADC_CFGR, adc->cfg->regs->data_res);
+
+retry:
+	res = stm32mp25_adc_calfact_data(adc_dev, &average_data);
+	if (res)
+		goto out;
+
+	/*
+	 * If the averaged data is zero, retry with additional
+	 * offset (set CALADDOS)
+	 */
+	if (!average_data) {
+		if (!calfact) {
+			/*
+			 * Averaged data is zero, retry with
+			 * additional offset
+			 */
+			calfact = STM32MP25_CALADDOS;
+			io_setbits32(adc->regs + STM32MP25_ADC_CALFACT,
+				     STM32MP25_CALADDOS);
+			goto retry;
+		}
+		/*
+		 * Averaged data is still zero with additional offset,
+		 * just warn about it
+		 */
+		IMSG("Single-ended calibration average: 0\n");
+	}
+
+	calfact |= average_data & STM32MP25_CALFACT_S;
+
+	/*
+	 * Select differential input calibration
+	 * (keep previous CALADDOS value)
+	 */
+	io_setbits32(adc->regs + STM32MP13_ADC_CR, STM32MP13_ADCALDIF);
+
+	res = stm32mp25_adc_calfact_data(adc_dev, &average_data);
+	if (res)
+		goto out;
+
+	/*
+	 * If the averaged data is below 0x800 (half value in 12-bits mode),
+	 * retry with additional offset
+	 */
+	if (average_data < 0x800U) {
+		if (!(calfact & STM32MP25_CALADDOS)) {
+			/* Retry the calibration with additional offset */
+			io_clrbits32(adc->regs + STM32MP13_ADC_CR,
+				     STM32MP13_ADCALDIF);
+			calfact = STM32MP25_CALADDOS;
+			io_clrsetbits32(adc->regs + STM32MP25_ADC_CALFACT,
+					UINT32_MAX, calfact);
+			goto retry;
+		}
+		/*
+		 * Averaged data is still below center value.
+		 * It needs to be clamped to zero, so don't use the result
+		 * here, warn about it.
+		 */
+		IMSG("Differential calibration clamped(0): %#x\n",
+		     average_data);
+	} else {
+		calfact |= (average_data << STM32MP25_CALFACT_D_SHIFT)
+			    & STM32MP25_CALFACT_D;
+	}
+
+	io_clrsetbits32(adc->regs + STM32MP25_ADC_CALFACT, UINT32_MAX,
+			calfact);
+
+	DMSG("Set calfact_s=%#x, calfact_d=%#x, calados=%#x\n",
+	     STM32MP25_CALFACT_S & calfact,
+	     STM32MP25_CALFACT_D & calfact,
+	     STM32MP25_CALADDOS & calfact);
+
+out:
+	io_clrbits32(adc->regs + STM32MP13_ADC_CR, STM32MP13_ADCALDIF);
+	io_clrbits32(adc->regs + STM32MP13_ADC_CR, STM32MP13_ADCAL);
+
+	return res;
+}
+
+static TEE_Result stm32mp13_adc_hw_start(struct adc_device *adc_dev)
 {
 	TEE_Result res = TEE_ERROR_GENERIC;
 
@@ -681,6 +957,39 @@ err_ena:
 	stm32_adc_int_ch_disable(adc_dev);
 
 err_pwr:
+	stm32_adc_enter_pwr_down(adc_dev);
+
+	return res;
+}
+
+static TEE_Result stm32mp25_adc_hw_start(struct adc_device *adc_dev)
+{
+	struct stm32_adc_data *adc = adc_get_drv_data(adc_dev);
+	TEE_Result res = TEE_ERROR_GENERIC;
+
+	res = stm32_adc_exit_pwr_down(adc_dev);
+	if (res)
+		return res;
+
+	res = stm32_adc_enable(adc_dev);
+	if (res)
+		goto err_ena;
+
+	res = stm32mp25_adc_calib(adc_dev);
+	if (res)
+		goto err_cal;
+
+	stm32_adc_int_ch_enable(adc_dev);
+
+	/* Only use single ended channels */
+	io_clrbits32(adc->regs + STM32MP25_ADC_DIFSEL, STM32MP25_DIFSEL_MASK);
+
+	return res;
+
+err_cal:
+	stm32_adc_disable(adc_dev);
+
+err_ena:
 	stm32_adc_enter_pwr_down(adc_dev);
 
 	return res;
@@ -730,14 +1039,12 @@ static TEE_Result stm32_adc_read_channel(struct adc_device *adc_dev,
 static void stm32_adc_smpr_init(struct adc_device *dev,
 				int channel, uint32_t smp_ns)
 {
-	const struct stm32_adc_regs *smpr = &stm32mp13_adc_smp_bits[channel];
+	const struct stm32_adc_regs *smpr = &stm32_adc_smp_bits[channel];
 	struct stm32_adc_data *adc = adc_get_drv_data(dev);
 	unsigned int r = smpr->reg;
 	unsigned int period_ns = 0;
 	unsigned int i = 0;
 	unsigned int smp = 0;
-
-	assert(ARRAY_SIZE(stm32mp13_adc_min_ts) == STM32_ADC_INT_CH_NB);
 
 	/*
 	 * For internal channels, ensure that the sampling time cannot
@@ -746,15 +1053,15 @@ static void stm32_adc_smpr_init(struct adc_device *dev,
 	for (i = 0; i < STM32_ADC_INT_CH_NB; i++)
 		if (channel == adc->int_ch[i] &&
 		    adc->int_ch[i] != STM32_ADC_INT_CH_NONE)
-			smp_ns = MAX(smp_ns, stm32mp13_adc_min_ts[i]);
+			smp_ns = MAX(smp_ns, adc->cfg->min_ts[i]);
 
 	/* Determine sampling time (ADC clock cycles) */
 	period_ns = STM32_ADC_NSEC_PER_SEC / adc->common->rate;
-	for (smp = 0; smp <= STM32MP13_ADC_MAX_SMP; smp++)
-		if ((period_ns * stm32mp13_adc_smp_cycles[smp]) >= smp_ns)
+	for (smp = 0; smp <= STM32_ADC_MAX_SMP; smp++)
+		if ((period_ns * adc->cfg->smp_cycles[smp]) >= smp_ns)
 			break;
-	if (smp > STM32MP13_ADC_MAX_SMP)
-		smp = STM32MP13_ADC_MAX_SMP;
+	if (smp > STM32_ADC_MAX_SMP)
+		smp = STM32_ADC_MAX_SMP;
 
 	/* Pre-build sampling time registers (e.g. smpr1, smpr2) */
 	adc->smpr[r] = (adc->smpr[r] & ~smpr->msk) | (smp << smpr->shift);
@@ -764,9 +1071,9 @@ static TEE_Result stm32_adc_fdt_chan_init(struct adc_device *adc_dev,
 					  const void *fdt, int node)
 {
 	struct stm32_adc_data *adc = adc_get_drv_data(adc_dev);
+	TEE_Result res = TEE_ERROR_GENERIC;
 	const char *name = NULL;
-	struct adc_chan chans[STM32MP13_ADC_CH_MAX] = {};
-	size_t ch_nb = 0;
+	uint32_t ch_nb = 0;
 	int subnode = 0;
 	uint32_t ch_id = 0;
 	int rc = 0;
@@ -784,16 +1091,39 @@ static TEE_Result stm32_adc_fdt_chan_init(struct adc_device *adc_dev,
 	 * each channel is described through a sub-node, where reg property
 	 * corresponds to the channel index, and label to the channel name.
 	 */
+	fdt_for_each_subnode(subnode, fdt, node)
+		ch_nb++;
+
+	if (!ch_nb) {
+		EMSG("No channel found");
+		return TEE_ERROR_NO_DATA;
+	}
+
+	if (ch_nb > adc->cfg->max_channels) {
+		EMSG("too many channels: %"PRIu32, ch_nb);
+		return TEE_ERROR_EXCESS_DATA;
+	}
+
+	adc_dev->channels = calloc(ch_nb, sizeof(*adc_dev->channels));
+	if (!adc_dev->channels)
+		return TEE_ERROR_OUT_OF_MEMORY;
+
+	adc_dev->channels_nb = ch_nb;
+	adc_dev->data_mask = GENMASK_32(STM32MP13_ADC_MAX_RES - 1, 0);
+
+	ch_nb = 0;
 	fdt_for_each_subnode(subnode, fdt, node) {
 		rc = fdt_read_uint32(fdt, subnode, "reg", &ch_id);
 		if (rc < 0) {
 			EMSG("Invalid or missing reg property: %d", rc);
-			return TEE_ERROR_BAD_PARAMETERS;
+			res = TEE_ERROR_BAD_PARAMETERS;
+			goto err;
 		}
 
-		if (ch_id >= STM32MP13_ADC_CH_MAX) {
+		if (ch_id >= adc->cfg->max_channels) {
 			EMSG("Invalid channel index: %"PRIu32, ch_id);
-			return TEE_ERROR_BAD_PARAMETERS;
+			res = TEE_ERROR_BAD_PARAMETERS;
+			goto err;
 		}
 
 		/* 'label' property is optional */
@@ -823,40 +1153,38 @@ static TEE_Result stm32_adc_fdt_chan_init(struct adc_device *adc_dev,
 
 		adc_dev->channel_mask |= BIT(ch_id);
 
-		chans[ch_nb].id = ch_id;
-		chans[ch_nb].name = name;
+		adc_dev->channels[ch_nb].id = ch_id;
+		if (name) {
+			adc_dev->channels[ch_nb].name = strdup(name);
+			if (!adc_dev->channels[ch_nb].name) {
+				res = TEE_ERROR_OUT_OF_MEMORY;
+				goto err;
+			}
+		}
 
 		ch_nb++;
 	}
-
-	if (!ch_nb) {
-		EMSG("No channel found");
-		return TEE_ERROR_NO_DATA;
-	}
-
-	if (ch_nb > STM32MP13_ADC_CH_MAX) {
-		EMSG("too many channels: %"PRIu32, ch_nb);
-		return TEE_ERROR_EXCESS_DATA;
-	}
-
-	adc_dev->channels = calloc(1, ch_nb * sizeof(*adc_dev->channels));
-	if (!adc_dev->channels)
-		return TEE_ERROR_OUT_OF_MEMORY;
-
-	memcpy(adc_dev->channels, &chans, ch_nb * sizeof(*adc_dev->channels));
-
-	adc_dev->channels_nb = ch_nb;
-	adc_dev->data_mask = GENMASK_32(STM32MP13_ADC_MAX_RES - 1, 0);
 
 	DMSG("%"PRIu32" channels found: Mask %#"PRIx32,
 	     (uint32_t)adc_dev->channels_nb, adc_dev->channel_mask);
 
 	return TEE_SUCCESS;
+
+err:
+	for (i = 0; i < adc_dev->channels_nb; i++)
+		free(adc_dev->channels[i].name);
+
+	free(adc_dev->channels);
+	adc_dev->channels = NULL;
+	adc_dev->channels_nb = 0;
+	return res;
 }
 
 static TEE_Result stm32_adc_pm_resume(struct adc_device *adc_dev)
 {
-	return stm32_adc_hw_start(adc_dev);
+	struct stm32_adc_data *adc = adc_get_drv_data(adc_dev);
+
+	return adc->cfg->hw_start(adc_dev);
 }
 
 static TEE_Result stm32_adc_pm_suspend(struct adc_device *adc_dev)
@@ -929,7 +1257,7 @@ static struct adc_ops stm32_adc_ops = {
 };
 
 static TEE_Result stm32_adc_probe(const void *fdt, int node,
-				  const void *compat_data __unused)
+				  const void *compat_data)
 {
 	struct dt_node_info dt_info = { };
 	struct adc_device *adc_dev = NULL;
@@ -967,6 +1295,7 @@ static TEE_Result stm32_adc_probe(const void *fdt, int node,
 
 	adc->regs = adc->common->regs + dt_info.reg;
 	adc->dev = adc_dev;
+	adc->cfg = compat_data;
 	adc_dev->vref_uv = adc->common->vref_uv;
 
 	name = fdt_get_name(fdt, node, NULL);
@@ -989,7 +1318,7 @@ static TEE_Result stm32_adc_probe(const void *fdt, int node,
 
 	adc_register(adc_dev, &stm32_adc_ops);
 
-	res = stm32_adc_hw_start(adc_dev);
+	res = adc->cfg->hw_start(adc_dev);
 	if (res)
 		goto err_start;
 
@@ -1022,8 +1351,26 @@ err:
 	return res;
 }
 
+static const struct stm32_adc_cfg stm32mp13_adc_cfg = {
+	.max_channels = STM32MP13_ADC_CH_MAX,
+	.hw_start = stm32mp13_adc_hw_start,
+	.has_vregen = true,
+	.min_ts = stm32mp13_adc_min_ts,
+	.smp_cycles = stm32mp13_adc_smp_cycles,
+	.regs = &stm32mp13_regs,
+};
+
+static const struct stm32_adc_cfg stm32mp25_adc_cfg = {
+	.max_channels = STM32MP25_ADC_CH_MAX,
+	.hw_start = stm32mp25_adc_hw_start,
+	.min_ts = stm32mp25_adc_min_ts,
+	.smp_cycles = stm32mp25_adc_smp_cycles,
+	.regs = &stm32mp25_regs,
+};
+
 static const struct dt_device_match stm32_adc_match_table[] = {
-	{ .compatible = "st,stm32mp13-adc" },
+	{ .compatible = "st,stm32mp13-adc", .compat_data = &stm32mp13_adc_cfg },
+	{ .compatible = "st,stm32mp25-adc", .compat_data = &stm32mp25_adc_cfg },
 	{ }
 };
 
