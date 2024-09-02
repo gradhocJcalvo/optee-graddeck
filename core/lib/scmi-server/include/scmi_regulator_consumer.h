@@ -11,28 +11,24 @@
 #include <stdint.h>
 #include <tee_api_types.h>
 
-struct scmi_server_regu {
-	uint32_t domain_id;
-	struct regulator *regulator;
-	bool enabled;
-};
-
-struct scmi_server_regu_channel {
-	unsigned int agent_id;
-	unsigned int channel_id;
-	struct scmi_server_regu *regu;
-	size_t regu_count;
-};
-
 #ifdef CFG_SCMI_SERVER_REGULATOR_CONSUMER
 /*
  * Initialize SCMI regulator from regulator consumer information from DT.
  * Returns a TEE_Result compliant value
  */
-TEE_Result scmi_regulator_consumer_init(void);
-
+TEE_Result optee_scmi_server_init_regulators(const void *fdt, int node,
+					     struct scpfw_agent_config
+							*agent_cfg,
+					     struct scpfw_channel_config
+							*channel_cfg);
 #else
-static inline TEE_Result scmi_regulator_consumer_init(void)
+static inline TEE_Result
+	optee_scmi_server_init_regulators(const void *fdt __unused,
+					  int node __unused,
+					  struct scpfw_agent_config *agent_cfg
+						__unused,
+					  struct scpfw_channel_config
+						*channel_cfg __unused);
 {
 	return TEE_SUCCESS;
 }

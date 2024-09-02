@@ -9,7 +9,6 @@
 #include <drivers/clk.h>
 #include <drivers/regulator.h>
 #include <drivers/rstctrl.h>
-#include <scmi_regulator_consumer.h>
 #include <stdint.h>
 
 /* Structure used to describe the SCMI agents */
@@ -171,11 +170,6 @@ TEE_Result scmi_scpfw_cfg_add_dvfs(unsigned int agent, unsigned int channel,
 				   unsigned int *dvfs_khz,
 				   unsigned int *dvfs_mv, size_t dvfs_count,
 				   size_t initial_index);
-
-/* Add a voltage domains/regulators service to an SCMI channel */
-TEE_Result scmi_scpfw_cfg_add_regu(unsigned int agent, unsigned int channel,
-				   struct scmi_server_regu *regu,
-				   size_t regu_count);
 
 /* SCP firmware SCMI server configuration entry point */
 void scpfw_configure(struct scpfw_config *cfg);

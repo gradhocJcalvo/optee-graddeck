@@ -4,81 +4,84 @@
  */
 
 #include <assert.h>
-#include <config.h>
 #include <drivers/regulator.h>
-#include <initcall.h>
-#include <kernel/boot.h>
 #include <kernel/dt.h>
 #include <kernel/panic.h>
 #include <libfdt.h>
 #include <malloc.h>
 #include <scmi_agent_configuration.h>
 #include <scmi_regulator_consumer.h>
+#include <tee_api_defines_extensions.h>
 #include <trace.h>
 
-static TEE_Result init_channel(void *fdt, int node)
+/*
+ * struct scmi_server_regu: data for a SCMI regulator in DT
+ *
+ * @domain_id: SCMI domain identifier
+ * @regulator: regulator to control thru SCMI protocol
+ * @enabled: if regulator is enabled by default or not
+ */
+struct scmi_server_regu {
+	uint32_t domain_id;
+	struct regulator *regulator;
+	bool enabled;
+};
+
+TEE_Result optee_scmi_server_init_regulators(const void *fdt, int node,
+					     struct scpfw_agent_config
+							*agent_cfg,
+					     struct scpfw_channel_config
+							*channel_cfg)
 {
 	TEE_Result res = TEE_ERROR_GENERIC;
-	struct scmi_server_regu_channel voltd_channel = { };
+	struct scmi_server_regu *s_regu = NULL;
 	size_t voltd_domain_count = 0;
-	const fdt32_t *cuint = NULL;
-	int parent_node = 0;
-	int subnode = 0;
+	size_t s_regu_count = 0;
+	int subnode = 0, item_node = 0;
+	bool have_subnodes = false;
 	size_t n = 0;
 
-	parent_node = fdt_parent_offset(fdt, node);
-
-	/*
-	 * First try to get agent-id and channel-id from node,
-	 * and then from the parent node.
-	 */
-	cuint = fdt_getprop(fdt, node, "scmi-agent-id", NULL);
-	if (!cuint) {
-		cuint = fdt_getprop(fdt, parent_node, "scmi-agent-id", NULL);
-		if (!cuint)
-			return TEE_ERROR_BAD_PARAMETERS;
-	}
-	voltd_channel.agent_id = fdt32_to_cpu(*cuint);
-
-	cuint = fdt_getprop(fdt, node, "scmi-channel-id", NULL);
-	if (!cuint) {
-		cuint = fdt_getprop(fdt, parent_node, "scmi-channel-id", NULL);
-		if (!cuint)
-			return TEE_ERROR_BAD_PARAMETERS;
-	}
-	voltd_channel.channel_id = fdt32_to_cpu(*cuint);
+	item_node = fdt_subnode_offset(fdt, node, "regulators");
+	if (item_node < 0)
+		return TEE_SUCCESS;
 
 	/* Compute the number of domains to allocate */
-	fdt_for_each_subnode(subnode, fdt, node) {
+	fdt_for_each_subnode(subnode, fdt, item_node) {
 		paddr_t reg = fdt_reg_base_address(fdt, subnode);
 
 		assert(reg != DT_INFO_INVALID_REG);
 		if ((size_t)reg > voltd_domain_count)
 			voltd_domain_count = (uint32_t)reg;
+
+		have_subnodes = true;
 	}
 
-	voltd_channel.regu_count = voltd_domain_count + 1;
+	if (!have_subnodes)
+		return TEE_SUCCESS;
 
-	voltd_channel.regu = calloc(voltd_channel.regu_count,
-				    sizeof(*voltd_channel.regu));
-	if (!voltd_channel.regu)
+	s_regu_count = voltd_domain_count + 1;
+
+	s_regu = calloc(s_regu_count, sizeof(*s_regu));
+	if (!s_regu)
 		return TEE_ERROR_OUT_OF_MEMORY;
 
-	fdt_for_each_subnode(subnode, fdt, node) {
+	fdt_for_each_subnode(subnode, fdt, item_node) {
 		struct scmi_server_regu *regu = NULL;
 		struct regulator *regulator = NULL;
 		uint32_t domain_id = 0;
 
 		res = regulator_dt_get_supply(fdt, subnode, "voltd",
 					      &regulator);
-		if (res) {
-			DMSG("Can't get regulator for voltd %s (%#"PRIx32"), skipped",
+		if (res == TEE_ERROR_DEFER_DRIVER_INIT) {
+			panic("Unexpected init deferral");
+		} else if (res) {
+			EMSG("Can't get regulator for voltd %s (%#"PRIx32"), skipped",
 			     fdt_get_name(fdt, subnode, NULL), res);
 			continue;
 		}
 
 		domain_id = (uint32_t)fdt_reg_base_address(fdt, subnode);
-		regu = voltd_channel.regu + domain_id;
+		regu = s_regu + domain_id;
 		regu->domain_id = domain_id;
 
 		/* Check that the domain_id is not already used */
@@ -113,57 +116,38 @@ static TEE_Result init_channel(void *fdt, int node)
 	 * Assign domain IDs to un-exposed regulator as SCMI specification
 	 * require the resource is defined even if not accessible.
 	 */
-	for (n = 0; n < voltd_channel.regu_count; n++) {
-		if (voltd_channel.regu[n].regulator)
-			assert(voltd_channel.regu[n].domain_id == n);
-		else
-			voltd_channel.regu[n].domain_id = n;
-	}
+	for (n = 0; n < s_regu_count; n++)
+		if (!s_regu[n].regulator)
+			s_regu[n].domain_id = n;
 
-	res = scmi_scpfw_cfg_add_regu(voltd_channel.agent_id,
-				      voltd_channel.channel_id,
-				      voltd_channel.regu,
-				      voltd_channel.regu_count);
-	/*
-	 * TEE_ERROR_ITEM_NOT_FOUND means the agent or the channel haven't.
-	 * But regulators are described in the device-tree. This is not an
-	 * issue, just do nothing.
-	 */
-	if (res && res != TEE_ERROR_ITEM_NOT_FOUND)
+	if (channel_cfg->voltd) {
+		EMSG("Voltage domain already loaded: agent %u, channel %u",
+		     agent_cfg->agent_id, channel_cfg->channel_id);
 		panic();
-
-	/* We can free voltd_channel resources since SCMI server handles them */
-	free(voltd_channel.regu);
-
-	return TEE_SUCCESS;
-}
-
-TEE_Result scmi_regulator_consumer_init(void)
-{
-	TEE_Result res = TEE_ERROR_GENERIC;
-	void *fdt = NULL;
-	int node = -1;
-
-	if (!IS_ENABLED(CFG_SCMI_SERVER_REGULATOR_CONSUMER))
-		return TEE_SUCCESS;
-
-	fdt = get_embedded_dt();
-	if (!fdt)
-		return TEE_SUCCESS;
-
-	node = fdt_node_offset_by_compatible(fdt, node,
-					     "st,scmi-regulator-consumer");
-	while (node >= 0) {
-		res = init_channel(fdt, node);
-		if (res)
-			return res;
-		node = fdt_node_offset_by_compatible(fdt, node,
-						"st,scmi-regulator-consumer");
 	}
 
-	if (node != -FDT_ERR_NOTFOUND)
-		return TEE_ERROR_GENERIC;
+	channel_cfg->voltd_count = s_regu_count;
+	channel_cfg->voltd = calloc(channel_cfg->voltd_count,
+				    sizeof(*channel_cfg->voltd));
+	if (!channel_cfg->voltd) {
+		free(s_regu);
+		return TEE_ERROR_OUT_OF_MEMORY;
+	}
+
+	for (n = 0; n < s_regu_count; n++) {
+		unsigned int domain_id = s_regu[n].domain_id;
+
+		if (s_regu[n].regulator) {
+			channel_cfg->voltd[domain_id] = (struct scmi_voltd){
+				.name = regulator_name(s_regu[n].regulator),
+				.regulator = s_regu[n].regulator,
+				.enabled = s_regu[n].enabled,
+			};
+		}
+	}
+
+	/* We can free s_regu since SCMI server handles them */
+	free(s_regu);
 
 	return TEE_SUCCESS;
 }
-
