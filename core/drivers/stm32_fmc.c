@@ -371,8 +371,9 @@ static void configure_fmc(void)
 					FMC_NB_MAX_CID_SUPPORTED))
 		panic("Couldn't acquire controller 0 semaphore");
 
-	if (fmc_d->pinctrl_d)
-		pinctrl_apply_state(fmc_d->pinctrl_d);
+	if (fmc_d->pinctrl_d &&
+	    pinctrl_apply_state(fmc_d->pinctrl_d))
+		panic();
 
 	if (fmc_d->cclken) {
 		unsigned long hclk = clk_get_rate(fmc_d->fmc_clock);
@@ -421,8 +422,9 @@ static void fmc_suspend(void)
 	if (clk_enable(fmc_d->fmc_clock))
 		panic("Cannot access FMC clock");
 
-	if (is_fmc_controller_secure(0) && fmc_d->pinctrl_s)
-		pinctrl_apply_state(fmc_d->pinctrl_s);
+	if (is_fmc_controller_secure(0) && fmc_d->pinctrl_s &&
+	    pinctrl_apply_state(fmc_d->pinctrl_s))
+		panic();
 
 	for (i = 0; i < FMC_RIF_CONTROLLERS; i++)
 		fmc_d->conf_data->cid_confs[i] =
