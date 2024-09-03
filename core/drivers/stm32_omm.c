@@ -328,8 +328,9 @@ static void stm32_omm_setup(void)
 {
 	stm32_omm_set_mm();
 	stm32_omm_configure();
-	if (omm_d->pinctrl_d)
-		pinctrl_apply_state(omm_d->pinctrl_d);
+	if (omm_d->pinctrl_d &&
+	    pinctrl_apply_state(omm_d->pinctrl_d))
+		panic();
 
 	if (firewall_set_alternate_conf(omm_d->firewall_conf))
 		panic();
@@ -337,8 +338,8 @@ static void stm32_omm_setup(void)
 
 static void stm32_omm_suspend(void)
 {
-	if (omm_d->pinctrl_s)
-		pinctrl_apply_state(omm_d->pinctrl_s);
+	if (omm_d->pinctrl_s && pinctrl_apply_state(omm_d->pinctrl_s))
+		panic();
 }
 
 static TEE_Result
