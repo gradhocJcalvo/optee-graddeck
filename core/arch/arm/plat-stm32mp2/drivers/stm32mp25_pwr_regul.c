@@ -17,6 +17,7 @@
 #include <kernel/thread.h>
 #include <libfdt.h>
 #include <stm32_sysconf.h>
+#include <stm32mp_pm.h>
 #include <trace.h>
 
 #define PWR_CR1			U(0x00)
@@ -329,14 +330,19 @@ static TEE_Result pwr_supported_voltages(struct regulator *regulator,
  * To protect the IOs, disable low voltage mode before entering suspend
  * resume restore the previous configuration.
  */
-static TEE_Result pwr_regu_pm(enum pm_op op, unsigned int pm_hint __unused,
+static TEE_Result pwr_regu_pm(enum pm_op op, unsigned int pm_hint,
 			      const struct pm_callback_handle *hdl)
 {
 	struct regulator *regulator = hdl->handle;
 	struct pwr_regu *pwr_regu = regulator->priv;
 	TEE_Result res = TEE_ERROR_GENERIC;
+	unsigned int pwrlvl = PM_HINT_PLATFORM_STATE(pm_hint);
 
 	assert(op == PM_OP_SUSPEND || op == PM_OP_RESUME);
+
+	/* Skip as regulators don't change for Stop1 modes */
+	if (pwrlvl < PM_D1_LPLV_LEVEL)
+		return TEE_SUCCESS;
 
 	if (op == PM_OP_SUSPEND) {
 		FMSG("%s: suspend", regulator_name(regulator));
