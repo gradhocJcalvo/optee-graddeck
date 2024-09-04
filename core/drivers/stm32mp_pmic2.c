@@ -37,6 +37,8 @@ static bool stm32_pmic2;
 #define STPMIC2_LP_STATE_ON		BIT(1)
 #define STPMIC2_LP_STATE_UNMODIFIED	BIT(2)
 #define STPMIC2_LP_STATE_SET_VOLT	BIT(3)
+#define STPMIC2_LP_STATE_INVALID	-1
+
 
 /*
  * struct pmic_regu - STPMIC2 regulator instance
@@ -46,6 +48,7 @@ static bool stm32_pmic2;
  * @bypass_uv: 0 if not used, else is the voltage level to switch to bypass mode
  * @lp_state: Regulator mode during PM low power state, per PM states
  * @lp_level_uv: Regulator voltage level during PM low power state, per PM state
+ * @last_lp_mode: Last low power mode selected
  * @levels_desc: Description of the supported voltage levels
  * @levels: Voltage level value array related to description @levels_desc
  */
@@ -55,6 +58,7 @@ struct pmic_regu {
 	int bypass_uv;
 	uint8_t *lp_state;
 	int *lp_level_uv;
+	int last_lp_mode;
 	struct regulator_voltages_desc levels_desc;
 	int *levels;
 };
@@ -346,7 +350,7 @@ TEE_Result stm32_pmic2_apply_pm_state(struct regulator *regulator, uint8_t mode)
 	FMSG("%s: suspend state:%#"PRIx8" %d uV",
 	     regulator_name(regulator), state, lp_level_uv);
 
-	if (state & STPMIC2_LP_STATE_UNMODIFIED)
+	if (mode == regu->last_lp_mode)
 		return TEE_SUCCESS;
 
 	if (state & STPMIC2_LP_STATE_OFF) {
@@ -368,6 +372,8 @@ TEE_Result stm32_pmic2_apply_pm_state(struct regulator *regulator, uint8_t mode)
 				return res;
 		}
 	}
+
+	regu->last_lp_mode = mode;
 
 	return TEE_SUCCESS;
 }
@@ -468,6 +474,7 @@ static void parse_low_power_mode(const void *fdt, int node,
 	const fdt32_t *cuint = NULL;
 	const char __maybe_unused *regu_name = regu_desc->name;
 
+	regu->last_lp_mode = STPMIC2_LP_STATE_INVALID;
 	regu->lp_state[mode] = 0;
 
 	if (fdt_getprop(fdt, node, "regulator-off-in-suspend", NULL)) {
@@ -581,6 +588,8 @@ static TEE_Result register_pmic_regulator(const void *fdt, struct stpmic2 *pmic,
 
 	pmic_parse_regu_node(&desc, fdt, node);
 
+	parse_low_power_modes(fdt, node, &desc);
+
 	res = regulator_dt_register(fdt, node, parent_node, &desc);
 	if (res) {
 		EMSG("Failed to register %s", regu_name);
@@ -589,8 +598,6 @@ static TEE_Result register_pmic_regulator(const void *fdt, struct stpmic2 *pmic,
 		free(regu);
 		return res;
 	}
-
-	parse_low_power_modes(fdt, node, &desc);
 
 	return TEE_SUCCESS;
 }
