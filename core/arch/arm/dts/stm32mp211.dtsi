@@ -634,6 +634,7 @@
 			regulator-min-microvolt = <1210000>;
 			regulator-max-microvolt = <1500000>;
 			clocks = <&rcc CK_BUS_VREF>;
+			vdda-supply = <&vdda18adc>;
 			status = "disabled";
 		};
 
