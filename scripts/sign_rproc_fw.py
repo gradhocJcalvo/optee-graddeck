@@ -87,8 +87,8 @@ TLV_TYPES = {
 
 # Platform type definitions
 PLAT_TLV_TYPES = {
-        'BOOTADDR': 0x00010001, # boot address of the remoteproc firmware
-        'BOOTSEC': 0x00010002, # boot mode: secure or non-secure
+        'BOOTADDR': 0x00010001,  # boot address of the remoteproc firmware
+        'BOOTSEC': 0x00010002,   # boot mode: secure or non-secure
 }
 
 GENERIC_TLV_TYPE_RANGE = range(0x00000000, 0x00010000)
