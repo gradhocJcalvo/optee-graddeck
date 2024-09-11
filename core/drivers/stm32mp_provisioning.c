@@ -13,6 +13,7 @@
 #include <config.h>
 #include <drivers/stm32_bsec.h>
 #include <dt-bindings/soc/stm32mp-provisioning.h>
+#include <keep.h>
 #include <kernel/boot.h>
 #include <kernel/delay.h>
 #include <kernel/dt.h>
@@ -209,7 +210,7 @@ static TEE_Result provisioning_pm(enum pm_op op, unsigned int pm_hint __unused,
 
 	return TEE_SUCCESS;
 }
-DECLARE_KEEP_PAGER(provisioning_pm);
+DECLARE_KEEP_PAGER_PM(provisioning_pm);
 
 static TEE_Result provisioning_probe(void)
 {

@@ -16,6 +16,7 @@
 #include <drivers/stm32mp_dt_bindings.h>
 #include <drivers/stm32_etzpc.h>
 #include <initcall.h>
+#include <keep.h>
 #include <kernel/pm.h>
 #include <mm/core_memprot.h>
 #include <mm/core_mmu.h>
@@ -770,7 +771,7 @@ static TEE_Result stm32_scmi_pm(enum pm_op op, unsigned int pm_hint __unused,
 
 	return TEE_SUCCESS;
 }
-DECLARE_KEEP_PAGER(stm32_scmi_pm);
+DECLARE_KEEP_PAGER_PM(stm32_scmi_pm);
 
 /*
  * Initialize platform SCMI resources

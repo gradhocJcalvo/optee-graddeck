@@ -13,6 +13,7 @@
 #include <drivers/stm32mp1_pwr.h>
 #endif
 #include <drivers/stpmic2.h>
+#include <keep.h>
 #include <kernel/boot.h>
 #include <kernel/delay.h>
 #include <kernel/dt.h>
@@ -887,7 +888,7 @@ const struct regu_dt_desc pmic25_reguls[] = {
 	DEFINE_REGU("ldo8"),
 	DEFINE_SWITCH("refddr"),
 };
-DECLARE_KEEP_PAGER(pmic25_reguls);
+DECLARE_KEEP_PAGER_PM(pmic25_reguls);
 
 const struct regu_dt_desc pmic1l_reguls[] = {
 	DEFINE_REGU("buck1"),
@@ -900,7 +901,7 @@ const struct regu_dt_desc pmic1l_reguls[] = {
 	DEFINE_SWITCH("gpo1"),
 	DEFINE_SWITCH("gpo2"),
 };
-DECLARE_KEEP_PAGER(pmic1l_reguls);
+DECLARE_KEEP_PAGER_PM(pmic1l_reguls);
 
 const struct regu_dt_desc pmic2l_reguls[] = {
 	DEFINE_REGU("buck1"),
@@ -920,7 +921,7 @@ const struct regu_dt_desc pmic2l_reguls[] = {
 	DEFINE_SWITCH("gpo4"),
 	DEFINE_SWITCH("gpo5"),
 };
-DECLARE_KEEP_PAGER(pmic2l_reguls);
+DECLARE_KEEP_PAGER_PM(pmic2l_reguls);
 
 static const struct pmic_compat_data stm32_pmic25_cdata = {
 	.desc_table = pmic25_reguls,

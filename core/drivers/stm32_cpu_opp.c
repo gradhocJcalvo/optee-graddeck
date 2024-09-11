@@ -13,6 +13,7 @@
 #endif
 #include <initcall.h>
 #include <io.h>
+#include <keep.h>
 #include <kernel/boot.h>
 #include <kernel/dt.h>
 #include <kernel/mutex.h>
@@ -581,7 +582,7 @@ static TEE_Result cpu_opp_pm(enum pm_op op, unsigned int pm_hint __unused,
 
 	return TEE_SUCCESS;
 }
-DECLARE_KEEP_PAGER(cpu_opp_pm);
+DECLARE_KEEP_PAGER_PM(cpu_opp_pm);
 #endif
 
 static TEE_Result stm32_cpu_opp_is_supported(const void *fdt, int subnode)

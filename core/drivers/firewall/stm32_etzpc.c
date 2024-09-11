@@ -17,6 +17,7 @@
 #include <drivers/stm32mp_dt_bindings.h>
 #include <initcall.h>
 #include <io.h>
+#include <keep.h>
 #include <kernel/boot.h>
 #include <kernel/dt.h>
 #include <kernel/panic.h>
@@ -335,7 +336,7 @@ static TEE_Result etzpc_pm(enum pm_op op, unsigned int pm_hint __unused,
 
 	return TEE_SUCCESS;
 }
-DECLARE_KEEP_PAGER(etzpc_pm);
+DECLARE_KEEP_PAGER_PM(etzpc_pm);
 
 static TEE_Result stm32_etzpc_check_access(struct firewall_query *firewall)
 {

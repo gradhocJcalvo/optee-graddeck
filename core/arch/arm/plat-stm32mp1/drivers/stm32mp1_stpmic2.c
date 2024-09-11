@@ -7,6 +7,7 @@
 #include <drivers/regulator.h>
 #include <drivers/stm32mp_dt_bindings.h>
 #include <drivers/stpmic2.h>
+#include <keep.h>
 #include <kernel/pm.h>
 #include <platform_config.h>
 #include <trace.h>
@@ -33,6 +34,8 @@ static TEE_Result pmic_regu_pm(enum pm_op op, uint32_t pm_hint,
 
 	return TEE_SUCCESS;
 }
+
+DECLARE_KEEP_PAGER_PM(pmic_regu_pm);
 
 TEE_Result plat_pmic2_supplied_init(struct regulator *regulator)
 {

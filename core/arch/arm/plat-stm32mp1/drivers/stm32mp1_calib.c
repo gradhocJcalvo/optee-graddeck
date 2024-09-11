@@ -485,7 +485,7 @@ stm32mp1_calib_pm(enum pm_op op, unsigned int pm_hint __unused,
 
 	return TEE_SUCCESS;
 }
-DECLARE_KEEP_PAGER(stm32mp1_calib_pm);
+DECLARE_KEEP_PAGER_PM(stm32mp1_calib_pm);
 
 static TEE_Result init_stm32mp1_calib(void)
 {
