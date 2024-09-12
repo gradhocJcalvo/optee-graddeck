@@ -125,6 +125,7 @@
 
 		m33_rproc: m33@0 {
 			compatible = "st,stm32mp2-m33";
+			#reset-cells = <1>;
 			reg = <0 0>;
 			resets = <&rcc C2_R>,
 				 <&rcc C2_HOLDBOOT_R>;
