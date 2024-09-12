@@ -30,6 +30,7 @@
 #include <kernel/dt.h>
 #include <kernel/misc.h>
 #include <kernel/panic.h>
+#include <kernel/pm.h>
 #include <kernel/spinlock.h>
 #include <kernel/tee_misc.h>
 #include <mm/core_memprot.h>
@@ -677,6 +678,11 @@ void __noreturn do_reset(const char *str __maybe_unused)
 #define HSE_ALARM_PERCENT	110
 #define FREQ_MONITOR_COMPAT	"st,freq-monitor"
 
+struct stm32_hse_monitoring_data {
+	struct counter_device *counter;
+	void *config;
+};
+
 static void stm32_hse_over_frequency(uint32_t ticks __unused,
 				     void *user_data __unused)
 {
@@ -684,8 +690,27 @@ static void stm32_hse_over_frequency(uint32_t ticks __unused,
 }
 DECLARE_KEEP_PAGER(stm32_hse_over_frequency);
 
+static TEE_Result stm32_hse_monitoring_pm(enum pm_op op,
+					  unsigned int pm_hint __unused,
+					  const struct pm_callback_handle *h)
+{
+	struct stm32_hse_monitoring_data *priv =
+	(struct stm32_hse_monitoring_data *)PM_CALLBACK_GET_HANDLE(h);
+
+	if (op == PM_OP_RESUME) {
+		counter_start(priv->counter, priv->config);
+		counter_set_alarm(priv->counter);
+	} else {
+		counter_cancel_alarm(priv->counter);
+		counter_stop(priv->counter);
+	}
+
+	return TEE_SUCCESS;
+}
+
 static TEE_Result stm32_hse_monitoring(void)
 {
+	struct stm32_hse_monitoring_data *priv = NULL;
 	struct counter_device *counter = NULL;
 	struct clk *hse_clk = NULL;
 	struct clk *hsi_clk = NULL;
@@ -696,6 +721,10 @@ static TEE_Result stm32_hse_monitoring(void)
 	void *config = NULL;
 	int node = -1;
 	TEE_Result res = TEE_ERROR_GENERIC;
+
+	priv = calloc(1, sizeof(*priv));
+	if (!priv)
+		return TEE_ERROR_OUT_OF_MEMORY;
 
 	fdt = get_embedded_dt();
 	if (!fdt)
@@ -736,6 +765,12 @@ static TEE_Result stm32_hse_monitoring(void)
 
 	counter->alarm.callback = stm32_hse_over_frequency;
 	counter->alarm.ticks = ticks;
+
+	priv->counter = counter;
+	priv->config = config;
+
+	register_pm_core_service_cb(stm32_hse_monitoring_pm, priv,
+				    "stm32-hse-monitoring");
 
 	counter_start(counter, config);
 	counter_set_alarm(counter);
