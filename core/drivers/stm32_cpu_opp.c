@@ -518,7 +518,6 @@ TEE_Result stm32_cpu_opp_read_level(unsigned int *level)
 }
 #endif /*CFG_SCPFW_MOD_DVFS*/
 
-#ifdef CFG_STM32MP13
 static TEE_Result cpu_opp_pm(enum pm_op op, unsigned int pm_hint __unused,
 			     const struct pm_callback_handle *hdl __unused)
 {
@@ -527,11 +526,20 @@ static TEE_Result cpu_opp_pm(enum pm_op op, unsigned int pm_hint __unused,
 
 	assert(op == PM_OP_SUSPEND || op == PM_OP_RESUME);
 
+	/* nothing to do if OPP is managed by Linux and not by SCMI */
+	if (!IS_ENABLED(CFG_SCMI_MSG_PERF_DOMAIN) &&
+	    !IS_ENABLED(CFG_SCPFW_MOD_DVFS))
+		return TEE_SUCCESS;
+
+	/* nothing to do if RCC clock tree is not lost */
+	if (!PM_HINT_IS_STATE(pm_hint, CONTEXT))
+		return TEE_SUCCESS;
+
 #ifdef CFG_SCPFW_MOD_DVFS
 	if (op == PM_OP_SUSPEND) {
 		/*
 		 * When CFG_SCPFW_MOD_DVFS is enabled, save CPU OPP on suspend
-		 * for restoration at resmue. If CPU is not in an expected
+		 * for restoration at resume. If CPU is not in an expected
 		 * OPP state, fallback to default OPP at PM resume.
 		 */
 		unsigned int cur_khz = 0;
@@ -583,7 +591,6 @@ static TEE_Result cpu_opp_pm(enum pm_op op, unsigned int pm_hint __unused,
 	return TEE_SUCCESS;
 }
 DECLARE_KEEP_PAGER_PM(cpu_opp_pm);
-#endif
 
 static TEE_Result stm32_cpu_opp_is_supported(const void *fdt, int subnode)
 {
@@ -704,9 +711,7 @@ static TEE_Result stm32_cpu_opp_get_dt_subnode(const void *fdt, int node)
 	if (res)
 		return res;
 
-#ifdef CFG_STM32MP13
 	register_pm_driver_cb(cpu_opp_pm, NULL, "cpu-opp");
-#endif
 
 	return TEE_SUCCESS;
 }
