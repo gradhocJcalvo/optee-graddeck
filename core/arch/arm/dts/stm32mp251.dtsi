@@ -1065,7 +1065,7 @@
 					reset@1 {
 						reg = <RST_SCMI_C2_R>;
 						domain-name = "c2";
-						resets = <&rcc C2_R>;
+						resets = <&m33_rproc 0>;
 					};
 
 					reset@2 {
@@ -1077,7 +1077,7 @@
 					reset@3 {
 						reg = <RST_SCMI_C2_HOLDBOOT_R>;
 						domain-name = "c2_holdboot";
-						resets = <&rcc C2_HOLDBOOT_R>;
+						resets = <&m33_rproc 1>;
 					};
 
 					reset@4 {
@@ -2057,7 +2057,7 @@
 					reset@1 {
 						reg = <RST_SCMI_C2_R>;
 						domain-name = "c2";
-						resets = <&rcc C2_R>;
+						resets = <&m33_rproc 0>;
 					};
 
 					reset@2 {
@@ -2069,7 +2069,7 @@
 					reset@3 {
 						reg = <RST_SCMI_C2_HOLDBOOT_R>;
 						domain-name = "c2_holdboot";
-						resets = <&rcc C2_HOLDBOOT_R>;
+						resets = <&m33_rproc 1>;
 					};
 
 					reset@4 {
