@@ -6,7 +6,7 @@
 /dts-v1/;
 
 #include <dt-bindings/clock/stm32mp1-clksrc.h>
-#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/gpio/stm32mp_gpio.h>
 #include <dt-bindings/mfd/st,stpmic1.h>
 #include <dt-bindings/power/stm32mp1-power.h>
 #include <dt-bindings/soc/stm32mp-provisioning.h>
@@ -85,7 +85,7 @@
 		regulator-type = "voltage";
 		regulator-always-on;
 
-		gpios = <&gpiof 14 GPIO_ACTIVE_HIGH>;
+		gpios = <&gpiof 14 (GPIO_ACTIVE_HIGH | GPIO_STM32_NSEC)>;
 		states = <1800000 0x1>,
 			 <2900000 0x0>;
 	};
