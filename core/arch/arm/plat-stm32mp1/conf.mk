@@ -44,20 +44,6 @@ flavorlist-512M = $(flavorlist-cryp-512M) \
 flavorlist-1G = $(flavorlist-cryp-1G) \
 		$(flavorlist-no_cryp-1G)
 
-flavorlist-MP15-HUK-DT = $(flavor_dts_file-157A_DK1) \
-			 $(flavor_dts_file-157A_ED1) \
-			 $(flavor_dts_file-157A_EV1) \
-			 $(flavor_dts_file-157C_DK2) \
-			 $(flavor_dts_file-157C_ED1) \
-			 $(flavor_dts_file-157C_EV1) \
-			 $(flavor_dts_file-157D_DK1) \
-			 $(flavor_dts_file-157D_ED1) \
-			 $(flavor_dts_file-157D_EV1) \
-			 $(flavor_dts_file-157F_DK2) \
-			 $(flavor_dts_file-157F_ED1) \
-			 $(flavor_dts_file-157F_EV1)
-
-
 flavorlist-MP15 = $(flavor_dts_file-157A_DHCOR_AVENGER96) \
 		  $(flavor_dts_file-157A_DK1) \
 		  $(flavor_dts_file-157A_ED1) \
@@ -160,12 +146,6 @@ endif
 
 ifeq ($(CFG_STM32MP_PROFILE),system_services)
 include $(platform-dir)/conf.disable-secure-services.mk
-endif
-
-# Some platform do not support some resources
-ifneq ($(filter $(CFG_EMBED_DTB_SOURCE_FILE),$(flavorlist-MP15-HUK-DT)),)
-CFG_STM32MP15_HUK ?= y
-CFG_STM32_HUK_FROM_DT ?= y
 endif
 
 ifneq ($(filter $(CFG_EMBED_DTB_SOURCE_FILE),$(flavorlist-no_cryp)),)
@@ -537,7 +517,12 @@ CFG_STM32_EARLY_CONSOLE_UART ?= 4
 # content derived with the device UID fuses content. See derivation scheme
 # in stm32mp15_huk.c implementation.
 CFG_STM32MP15_HUK ?= n
-CFG_STM32_HUK_FROM_DT ?= n
+ifeq (,$(CFG_STM32MP15_HUK_BSEC_KEY_0)$(CFG_STM32MP15_HUK_OTP_BASE))
+# Default get the HUK location from the DT if not specified in the configuration
+CFG_STM32_HUK_FROM_DT ?= y
+else
+$(call force,CFG_STM32_HUK_FROM_DT,n)
+endif
 
 ifeq ($(CFG_STM32MP15_HUK),y)
 ifneq ($(CFG_STM32_HUK_FROM_DT),y)
