@@ -738,19 +738,22 @@ void __noreturn do_reset(const char *str __maybe_unused)
 }
 
 #ifdef CFG_STM32_HSE_MONITORING
-/* pourcent rate of hse alarm */
-#define HSE_ALARM_PERCENT	110
+/* Percent rate of HSE event */
+#define HSE_THRESHOLD_PERCENT	110
 #define FREQ_MONITOR_COMPAT	"st,freq-monitor"
 
 struct stm32_hse_monitoring_data {
 	struct counter_device *counter;
 	void *config;
+	uint32_t threshold;
 };
 
-static void stm32_hse_over_frequency(uint32_t ticks __unused,
-				     void *user_data __unused)
+static void stm32_hse_over_frequency(void *priv,
+				     enum counter_event_type event __unused)
 {
-	EMSG("HSE over frequency: nb ticks:%"PRIu32, ticks);
+	uint32_t __maybe_unused *ticks = priv;
+
+	EMSG("HSE over frequency detected: nb ticks:%"PRIu32, *ticks);
 }
 DECLARE_KEEP_PAGER(stm32_hse_over_frequency);
 
@@ -760,13 +763,31 @@ static TEE_Result stm32_hse_monitoring_pm(enum pm_op op,
 {
 	struct stm32_hse_monitoring_data *priv =
 	(struct stm32_hse_monitoring_data *)PM_CALLBACK_GET_HANDLE(h);
+	TEE_Result res = TEE_ERROR_GENERIC;
 
 	if (op == PM_OP_RESUME) {
-		counter_start(priv->counter, priv->config);
-		counter_set_alarm(priv->counter);
+		res = counter_set_threshold(priv->counter, priv->threshold);
+		if (res)
+			return res;
+
+		res = counter_enable_event(priv->counter,
+					   COUNTER_EVENT_THRESHOLD,
+					   stm32_hse_over_frequency,
+					   (void *)&priv->threshold);
+		if (res)
+			return res;
+
+		res = counter_start(priv->counter, priv->config);
+		if (res)
+			return res;
 	} else {
-		counter_cancel_alarm(priv->counter);
-		counter_stop(priv->counter);
+		res = counter_stop(priv->counter);
+		if (res)
+			return res;
+
+		res = counter_disable_all_events(priv->counter);
+		if (res)
+			return res;
 	}
 
 	return TEE_SUCCESS;
@@ -819,25 +840,33 @@ static TEE_Result stm32_hse_monitoring(void)
 	 */
 	hsi_cal /= 1024;
 
-	ticks = (hse / 100) * HSE_ALARM_PERCENT;
+	ticks = (hse / 100) * HSE_THRESHOLD_PERCENT;
 	ticks /= hsi_cal;
 
-	DMSG("HSE:%luHz HSI cal:%luHz alarm:%"PRIu32, hse, hsi_cal, ticks);
+	DMSG("HSE:%luHz HSI cal:%luHz event:%"PRIu32, hse, hsi_cal, ticks);
 
 	counter = fdt_counter_get(fdt, node, &config);
 	assert(counter && config);
 
-	counter->alarm.callback = stm32_hse_over_frequency;
-	counter->alarm.ticks = ticks;
-
 	priv->counter = counter;
 	priv->config = config;
+	priv->threshold = ticks;
 
 	register_pm_core_service_cb(stm32_hse_monitoring_pm, priv,
 				    "stm32-hse-monitoring");
+	res = counter_set_threshold(counter, priv->threshold);
+	if  (res)
+		return res;
 
-	counter_start(counter, config);
-	counter_set_alarm(counter);
+	res = counter_enable_event(counter, COUNTER_EVENT_THRESHOLD,
+				   stm32_hse_over_frequency,
+				   (void *)&priv->threshold);
+	if  (res)
+		return res;
+
+	res = counter_start(counter, config);
+	if  (res)
+		return res;
 
 	return TEE_SUCCESS;
 }
