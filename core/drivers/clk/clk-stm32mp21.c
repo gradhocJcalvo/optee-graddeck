@@ -2249,6 +2249,18 @@ static const struct clk_ops clk_stm32_osc_ops = {
 	.restore_context = clk_stm32_osc_pm_restore,
 };
 
+static TEE_Result __maybe_unused clk_stm32_pm_save_rate(struct clk *clk)
+{
+	/*
+	 * Update the frequency in the clock framework in case this clock is
+	 * registered before its parent.
+	 */
+
+	clk->rate = clk_get_rate(clk);
+
+	return TEE_SUCCESS;
+}
+
 static void __maybe_unused clk_stm32_osc_msi_pm_restore(struct clk *clk)
 {
 	if (!stm32_rcc_has_access_by_id(RCC_RIF_OSCILLATORS))
@@ -2286,6 +2298,7 @@ static void __maybe_unused clk_stm32_hse_div_pm_restore(struct clk *clk)
 static const struct clk_ops clk_stm32_hse_div_ops = {
 	.get_rate = clk_stm32_divider_get_rate,
 	.set_rate = clk_stm32_hse_div_set_rate,
+	.save_context = clk_stm32_pm_save_rate,
 	.restore_context = clk_stm32_hse_div_pm_restore,
 };
 
@@ -2773,6 +2786,7 @@ static const struct clk_ops clk_stm32_flexgen_ops = {
 	.disable	= clk_stm32_flexgen_disable,
 	.is_enabled	= clk_stm32_flexgen_is_enabled,
 	.round_rate	= clk_stm32_flexgen_round_rate,
+	.save_context	= clk_stm32_pm_save_rate,
 	.restore_context = clk_stm32_flexgen_pm_restore,
 };
 
@@ -3015,6 +3029,7 @@ static const struct clk_ops clk_stm32_rif_composite_ops = {
 	.enable		= clk_stm32_rif_composite_gate_enable,
 	.disable	= clk_stm32_rif_composite_gate_disable,
 	.is_enabled	= clk_stm32_rif_composite_gate_is_enabled,
+	.save_context	= clk_stm32_pm_save_rate,
 	.restore_context = clk_stm32_rif_composite_pm_restore,
 };
 
