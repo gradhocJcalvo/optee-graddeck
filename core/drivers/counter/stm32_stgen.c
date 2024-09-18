@@ -112,21 +112,17 @@ static void stm32_stgen_pm_resume(void)
 {
 	unsigned long clock_src_rate = clk_get_rate(stgen_d.tsgen_clock_source);
 	uint64_t counter_val = ((uint64_t)stgen_d.cnt_h << 32) | stgen_d.cnt_l;
-	struct stm32_rtc_calendar *cur_calendar = NULL;
+	struct stm32_rtc_calendar cur_calendar = { };
 	uint64_t nb_pm_count_ticks = 0;
-
-	cur_calendar = calloc(1, sizeof(*cur_calendar));
-	if (!cur_calendar)
-		panic();
 
 	/* STGEN clocks are already restored by the clock driver */
 	io_clrbits32(stgen_d.base + STGENC_CNTCR, BIT(0));
 
 	/* Read the current time from the RTC to update system counter */
-	if (stm32_rtc_get_calendar(cur_calendar))
+	if (stm32_rtc_get_calendar(&cur_calendar))
 		panic("Could not get RTC calendar at resume");
 
-	nb_pm_count_ticks = stm32_rtc_diff_calendar_tick(cur_calendar,
+	nb_pm_count_ticks = stm32_rtc_diff_calendar_tick(&cur_calendar,
 							 stgen_d.calendar,
 							 clock_src_rate);
 
@@ -148,8 +144,6 @@ static void stm32_stgen_pm_resume(void)
 		stm32mp_stgen_smc_config();
 
 	io_setbits32(stgen_d.base + STGENC_CNTCR, BIT(0));
-
-	free(cur_calendar);
 }
 
 static TEE_Result
