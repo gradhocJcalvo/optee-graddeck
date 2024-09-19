@@ -257,6 +257,9 @@ bool stm32mp_supports_cpu_opp(uint32_t opp_id __maybe_unused)
 		id = BIT(0);
 
 	return (opp_id & id) == id;
+#elif CFG_STM32_CM33TDCID
+	/* can't read OTP in M33TDCID to support all OPP */
+	return true;
 #else
 	return false;
 #endif
