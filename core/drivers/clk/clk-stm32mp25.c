@@ -4348,6 +4348,7 @@ static bool clk_stm32_clock_is_critical(struct clk *clk)
 		&ck_icn_p_ddrphyc,
 		&ck_icn_s_sysram,
 		&ck_icn_s_bkpsram,
+		&ck_ker_fmc,
 		&ck_ker_ospi1,
 		&ck_ker_ospi2,
 		&ck_icn_s_vderam,
