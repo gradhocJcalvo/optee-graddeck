@@ -451,8 +451,8 @@ static void set_scmi_comm_resources(struct scpfw_config *cfg)
         .agent_table = scmi_agent_table,
         .agent_count = scmi_agent_count-1,
         .protocol_count_max = 9,
-        .vendor_identifier = "STMicroelectronics",
-        .sub_vendor_identifier = "STMicroelectronics",
+        .vendor_identifier = "ST",
+        .sub_vendor_identifier = "ST",
     };
     channel_index = 0;
 
