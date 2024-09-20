@@ -1066,6 +1066,34 @@
 						clocks = <&rcc MSI_KER_CK>;
 						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
 					};
+
+					clock@80 {
+						reg = <CK_SCMI_GPIOZ_AM>;
+						domain-name = "ck_gpioz_am";
+						clocks = <&rcc CK_GPIOZ_AM>;
+						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
+					};
+
+					clock@81 {
+						reg = <CK_SCMI_LPDMA_AM>;
+						domain-name = "ck_lpdma_am";
+						clocks = <&rcc CK_LPDMA_AM>;
+						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
+					};
+
+					clock@82 {
+						reg = <CK_SCMI_RTC_AM>;
+						domain-name = "ck_rtc_am";
+						clocks = <&rcc CK_RTC_AM>;
+						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
+					};
+
+					clock@83 {
+						reg = <CK_SCMI_IPCC2_AM>;
+						domain-name = "ck_ipcc2_am";
+						clocks = <&rcc CK_IPCC2_AM>;
+						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
+					};
 				};
 			};
 
@@ -2077,6 +2105,34 @@
 						reg = <CK_SCMI_MSI_KER_CK>;
 						domain-name = "msi_ker_ck";
 						clocks = <&rcc MSI_KER_CK>;
+						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
+					};
+
+					clock@80 {
+						reg = <CK_SCMI_GPIOZ_AM>;
+						domain-name = "ck_gpioz_am";
+						clocks = <&rcc CK_GPIOZ_AM>;
+						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
+					};
+
+					clock@81 {
+						reg = <CK_SCMI_LPDMA_AM>;
+						domain-name = "ck_lpdma_am";
+						clocks = <&rcc CK_LPDMA_AM>;
+						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
+					};
+
+					clock@82 {
+						reg = <CK_SCMI_RTC_AM>;
+						domain-name = "ck_rtc_am";
+						clocks = <&rcc CK_RTC_AM>;
+						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
+					};
+
+					clock@83 {
+						reg = <CK_SCMI_IPCC2_AM>;
+						domain-name = "ck_ipcc2_am";
+						clocks = <&rcc CK_IPCC2_AM>;
 						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
 					};
 				};
