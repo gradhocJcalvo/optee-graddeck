@@ -227,14 +227,17 @@ struct stm32_clk_platdata {
 enum enum_gate_cfg {
 	GATE_HSI,
 	GATE_HSI_RDY,
+	GATE_HSI_KER,
 	GATE_HSE,
 	GATE_HSE_RDY,
+	GATE_HSE_KER,
 	GATE_LSE,
 	GATE_LSE_RDY,
 	GATE_LSI,
 	GATE_LSI_RDY,
 	GATE_MSI,
 	GATE_MSI_RDY,
+	GATE_MSI_KER,
 	GATE_PLL1,
 	GATE_PLL1_RDY,
 	GATE_PLL2,
@@ -457,6 +460,7 @@ static const struct gate_cfg gates_mp25[GATE_NB] = {
 	GATE_CFG(GATE_LSI_RDY,		RCC_BDCR,		10,	0),
 	GATE_CFG(GATE_RTCCK,		RCC_BDCR,		20,	0),
 	GATE_CFG(GATE_MSI,		RCC_D3DCR,		0,	0),
+	GATE_CFG(GATE_MSI_KER,		RCC_D3DCR,		1,	0),
 	GATE_CFG(GATE_MSI_RDY,		RCC_D3DCR,		2,	0),
 	GATE_CFG(GATE_PLL1,		RCC_PLL2CFGR1,		8,	0),
 	GATE_CFG(GATE_PLL1_RDY,		RCC_PLL2CFGR1,		24,	0),
@@ -494,8 +498,10 @@ static const struct gate_cfg gates_mp25[GATE_NB] = {
 	GATE_CFG(GATE_MCO1,		RCC_MCO1CFGR,		8,	0),
 	GATE_CFG(GATE_MCO2,		RCC_MCO2CFGR,		8,	0),
 	GATE_CFG(GATE_HSI,		RCC_OCENSETR,		0,	1),
+	GATE_CFG(GATE_HSI_KER,		RCC_OCENSETR,		1,	1),
 	GATE_CFG(GATE_HSEDIV2,		RCC_OCENSETR,		5,	1),
 	GATE_CFG(GATE_HSE,		RCC_OCENSETR,		8,	1),
+	GATE_CFG(GATE_HSE_KER,		RCC_OCENSETR,		9,	1),
 	GATE_CFG(GATE_HSI_RDY,		RCC_OCRDYR,		0,	0),
 	GATE_CFG(GATE_HSE_RDY,		RCC_OCRDYR,		8,	0),
 	GATE_CFG(GATE_APB1DIV_RDY,	RCC_APB1DIVR,		31,	0),
@@ -3365,6 +3371,18 @@ static const struct clk_ops ck_timer_ops = {
 		.parents = { NULL },\
 	}
 
+#define STM32_OSC_KER(_name, _flags, _gate_id)\
+	struct clk _name = {\
+		.ops = &clk_stm32_gate_ops,\
+		.priv = &(struct clk_stm32_gate_cfg){\
+			.gate_id = (_gate_id),\
+		},\
+		.name = #_name,\
+		.flags = (_flags),\
+		.num_parents = 1,\
+		.parents = { NULL },\
+	}
+
 #define STM32_HSE_DIV2(_name, _parent, _flags, _gate_id)\
 	struct clk _name = {\
 		.ops = &clk_hsediv2_ops,\
@@ -3499,6 +3517,10 @@ static STM32_OSC_MSI(ck_msi, 0, GATE_MSI);
 static STM32_OSC(ck_lsi, 0, GATE_LSI);
 static STM32_OSC(ck_lse, 0, GATE_LSE);
 
+static STM32_OSC_KER(ck_hsi_ker, 0, GATE_HSI_KER);
+static STM32_OSC_KER(ck_hse_ker, 0, GATE_HSE_KER);
+static STM32_OSC_KER(ck_msi_ker, 0, GATE_MSI_KER);
+
 static STM32_HSE_DIV2(ck_hse_div2, &ck_hse, 0, GATE_HSEDIV2);
 static STM32_HSE_RTC(ck_hse_rtc, &ck_hse, 0, DIV_RTC);
 
@@ -3524,7 +3546,8 @@ static STM32_PLLS(ck_pll8, 0, RCC_PLL8CFGR1, GATE_PLL8, MUX_MUXSEL4);
 		.num_parents = 15,\
 		.parents = {\
 			&ck_pll4, &ck_pll5, &ck_pll6, &ck_pll7, &ck_pll8,\
-			&ck_hsi, &ck_hse, &ck_msi, &ck_hsi, &ck_hse, &ck_msi,\
+			&ck_hsi, &ck_hse, &ck_msi,\
+			&ck_hsi_ker, &ck_hse_ker, &ck_msi_ker,\
 			&spdifsymb, &i2sckin, &ck_lsi, &ck_lse\
 		},\
 	}
@@ -3960,6 +3983,10 @@ static struct clk *stm32mp25_clk_provided[STM32MP25_ALL_CLK_NB] = {
 	[MSI_CK]		= &ck_msi,
 	[LSI_CK]		= &ck_lsi,
 	[LSE_CK]		= &ck_lse,
+
+	[HSI_KER_CK]		= &ck_hsi_ker,
+	[HSE_KER_CK]		= &ck_hse_ker,
+	[MSI_KER_CK]		= &ck_msi_ker,
 
 	[HSE_DIV2_CK]		= &ck_hse_div2,
 
@@ -4406,6 +4433,10 @@ static void clk_stm32_init_oscillators(const void *fdt, int node)
 
 		clks[i]->parents[0] = clk;
 	}
+
+	ck_hse_ker.parents[0] = ck_hse.parents[0];
+	ck_hsi_ker.parents[0] = ck_hsi.parents[0];
+	ck_msi_ker.parents[0] = ck_msi.parents[0];
 }
 
 static TEE_Result clk_stm32_apply_rcc_config(struct stm32_clk_platdata *pdata)
