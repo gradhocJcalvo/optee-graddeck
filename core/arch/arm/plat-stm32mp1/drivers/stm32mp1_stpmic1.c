@@ -823,34 +823,49 @@ static enum itr_return stpmic1_irq_handler(struct itr_handler *handler __unused)
 {
 	uint8_t read_val = 0U;
 	unsigned int i = 0U;
+	uint8_t latch1 = 0U;
+	uint8_t latch2 = 0U;
+	uint8_t latch3 = 0U;
+	uint8_t latch4 = 0U;
 
 	FMSG("Stpmic1 irq handler");
 
 	stm32mp_get_pmic();
 
-	for (i = 0U; i < 4U; i++) {
-		if (stpmic1_register_read(ITLATCH1_REG + i, &read_val))
-			panic();
-
-		if (read_val) {
-			struct pmic_it_handle_s *prv = NULL;
-
-			FMSG("Stpmic1 irq pending %u: %#"PRIx8, i, read_val);
-
-			if (stpmic1_register_write(ITCLEARLATCH1_REG + i,
-						   read_val))
+	do {
+		for (i = 0U; i < 4U; i++) {
+			if (stpmic1_register_read(ITLATCH1_REG + i, &read_val))
 				panic();
 
-			SLIST_FOREACH(prv, &pmic_it_handle_list, link)
-				if ((prv->pmic_reg == ITCLEARMASK1_REG + i) &&
-				    (read_val & BIT(prv->pmic_bit))) {
-					FMSG("STPMIC1 send notif %u",
-					     prv->notif_id);
+			if (read_val) {
+				struct pmic_it_handle_s *prv = NULL;
 
-					notif_send_it(prv->notif_id);
+				FMSG("Stpmic1 irq pending %u: %#"PRIx8, i,
+				     read_val);
+
+				if (stpmic1_register_write(ITCLEARLATCH1_REG +
+							   i, read_val))
+					panic();
+
+				SLIST_FOREACH(prv, &pmic_it_handle_list, link)
+					if ((prv->pmic_reg == ITCLEARMASK1_REG +
+					     i) &&
+					    (read_val & BIT(prv->pmic_bit))) {
+						FMSG("STPMIC1 send notif %u",
+						     prv->notif_id);
+
+						notif_send_it(prv->notif_id);
 				}
+			}
 		}
-	}
+
+		stpmic1_register_read(ITLATCH1_REG, &latch1);
+		stpmic1_register_read(ITLATCH2_REG, &latch2);
+		stpmic1_register_read(ITLATCH3_REG, &latch3);
+		stpmic1_register_read(ITLATCH4_REG, &latch4);
+
+	} while ((latch1 != 0) || (latch2 != 0) || (latch3 != 0) ||
+		 (latch4 != 0));
 
 	stm32mp_put_pmic();
 
