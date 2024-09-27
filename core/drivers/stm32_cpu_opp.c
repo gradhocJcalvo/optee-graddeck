@@ -671,7 +671,7 @@ static TEE_Result stm32_cpu_opp_get_dt_subnode(const void *fdt, int node)
 		if (stm32_cpu_opp_is_supported(fdt, subnode) == TEE_SUCCESS)
 			cpu_opp.opp_count++;
 
-	cpu_opp.dvfs = calloc(1, cpu_opp.opp_count * sizeof(*cpu_opp.dvfs));
+	cpu_opp.dvfs = calloc(cpu_opp.opp_count, sizeof(*cpu_opp.dvfs));
 	if (!cpu_opp.dvfs)
 		return TEE_ERROR_OUT_OF_MEMORY;
 
