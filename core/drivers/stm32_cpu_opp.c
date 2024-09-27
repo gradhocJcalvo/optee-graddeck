@@ -668,7 +668,7 @@ static TEE_Result stm32_cpu_opp_get_dt_subnode(const void *fdt, int node)
 	bool opp_default = false;
 
 	fdt_for_each_subnode(subnode, fdt, node)
-		if (!stm32_cpu_opp_is_supported(fdt, subnode))
+		if (stm32_cpu_opp_is_supported(fdt, subnode) == TEE_SUCCESS)
 			cpu_opp.opp_count++;
 
 	cpu_opp.dvfs = calloc(1, cpu_opp.opp_count * sizeof(*cpu_opp.dvfs));
@@ -678,25 +678,32 @@ static TEE_Result stm32_cpu_opp_get_dt_subnode(const void *fdt, int node)
 	cpu_opp.current_opp = cpu_opp.opp_count;
 
 	fdt_for_each_subnode(subnode, fdt, node) {
-		if (stm32_cpu_opp_is_supported(fdt, subnode))
+		if (stm32_cpu_opp_is_supported(fdt, subnode) != TEE_SUCCESS)
 			continue;
 
 		cuint64 = fdt_getprop(fdt, subnode, "opp-hz", NULL);
 		if (!cuint64) {
-			EMSG("Missing opp-hz");
-			return TEE_ERROR_GENERIC;
+			EMSG("Missing opp-hz in node %s",
+			     fdt_get_name(fdt, subnode, NULL));
+			res = TEE_ERROR_GENERIC;
+			goto err;
 		}
+
 		freq_hz = fdt64_to_cpu(*cuint64);
 		freq_khz = freq_hz / 1000ULL;
 		if (freq_khz > (uint64_t)UINT32_MAX) {
-			EMSG("Invalid opp-hz %"PRIu64, freq_khz);
-			return TEE_ERROR_GENERIC;
+			EMSG("Invalid opp-hz %"PRIu64" in node %s",
+			     freq_khz, fdt_get_name(fdt, subnode, NULL));
+			res = TEE_ERROR_GENERIC;
+			goto err;
 		}
 
 		cuint32 = fdt_getprop(fdt, subnode, "opp-microvolt", NULL);
 		if (!cuint32) {
-			EMSG("Missing opp-microvolt");
-			return TEE_ERROR_GENERIC;
+			EMSG("Missing opp-microvolt in node %s",
+			     fdt_get_name(fdt, subnode, NULL));
+			res = TEE_ERROR_GENERIC;
+			goto err;
 		}
 
 		volt_uv = fdt32_to_cpu(*cuint32);
@@ -733,9 +740,12 @@ static TEE_Result stm32_cpu_opp_get_dt_subnode(const void *fdt, int node)
 		i++;
 	}
 
-	/* Erreur when "st,opp-default" is not present */
-	if (!opp_default)
-		return TEE_ERROR_GENERIC;
+	/* At least one OPP node shall have a "st,opp-default" property */
+	if (!opp_default) {
+		EMSG("No default OPP found");
+		res = TEE_ERROR_GENERIC;
+		goto err;
+	}
 
 	/* Select the max "st,opp-default" node as current OPP */
 #ifdef CFG_SCPFW_MOD_DVFS
@@ -748,12 +758,19 @@ static TEE_Result stm32_cpu_opp_get_dt_subnode(const void *fdt, int node)
 	else
 		res = set_clock_then_voltage(cpu_opp.current_opp);
 
-	if (res)
-		return res;
+	if (res) {
+		EMSG("Failed to set default OPP %u", cpu_opp.current_opp);
+		goto err;
+	}
 
 	register_pm_driver_cb(cpu_opp_pm, NULL, "cpu-opp");
 
 	return TEE_SUCCESS;
+
+err:
+	free(cpu_opp.dvfs);
+
+	return res;
 }
 
 static TEE_Result
