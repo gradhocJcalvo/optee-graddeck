@@ -2851,14 +2851,14 @@ static TEE_Result clk_stm32_pll3_enable(struct clk *clk)
 	stm32_gate_enable(GATE_GPU);
 
 	if (clk_stm32_pll_init(priv, PLL3_ID, pll_conf)) {
-		stm32_gate_disable(GATE_GPU);
-		return TEE_ERROR_GENERIC;
+		res = TEE_ERROR_GENERIC;
+		goto out;
 	}
 
 	res = stm32_gate_rdy_enable(cfg->gate_id);
 	if (res) {
 		EMSG("%s timeout", clk_get_name(clk));
-		return res;
+		goto out;
 	}
 
 	/* Update parent */
@@ -2866,8 +2866,14 @@ static TEE_Result clk_stm32_pll3_enable(struct clk *clk)
 	parent = clk_get_parent_by_index(clk, pidx);
 
 	res = clk_reparent(clk, parent);
-	if (res)
+	if (res) {
 		EMSG("fail to reparent PLL3");
+		clk_stm32_pll_disable(clk);
+	}
+
+out:
+	if (res)
+		stm32_gate_disable(GATE_GPU);
 
 	return res;
 }
