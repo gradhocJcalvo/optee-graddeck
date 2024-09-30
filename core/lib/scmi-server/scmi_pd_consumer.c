@@ -30,9 +30,14 @@ TEE_Result optee_scmi_server_init_pd(const void *fdt, int node,
 
 	/* Compute the number of domains to allocate */
 	fdt_for_each_subnode(subnode, fdt, item_node) {
-		paddr_t reg = fdt_reg_base_address(fdt, subnode);
+		paddr_t reg = fdt_reg_base_ncells(fdt, subnode, 1);
 
-		assert(reg != DT_INFO_INVALID_REG);
+		if (reg == DT_INFO_INVALID_REG) {
+			EMSG("Can't get SCMI domain ID for node %s, skipped",
+			     fdt_get_name(fdt, subnode, NULL));
+			continue;
+		}
+
 		if ((size_t)reg > channel_cfg->pd_count)
 			channel_cfg->pd_count = (uint32_t)reg;
 
@@ -55,6 +60,10 @@ TEE_Result optee_scmi_server_init_pd(const void *fdt, int node,
 		struct clk *clock = NULL;
 		uint32_t domain_id = 0;
 
+		domain_id = fdt_reg_base_ncells(fdt, subnode, 1);
+		if (domain_id == (uint32_t)DT_INFO_INVALID_REG)
+			continue;
+
 		res = regulator_dt_get_supply(fdt, subnode, "voltd",
 					      &regulator);
 		if (res == TEE_ERROR_DEFER_DRIVER_INIT) {
@@ -73,8 +82,6 @@ TEE_Result optee_scmi_server_init_pd(const void *fdt, int node,
 			     fdt_get_name(fdt, subnode, NULL), res);
 			continue;
 		}
-
-		domain_id = (uint32_t)fdt_reg_base_address(fdt, subnode);
 
 		cuint = fdt_getprop(fdt, subnode, "domain-name", NULL);
 		if (cuint)

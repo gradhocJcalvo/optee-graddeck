@@ -45,9 +45,14 @@ TEE_Result optee_scmi_server_init_resets(const void *fdt, int node,
 
 	/* Compute the number of domains to allocate */
 	fdt_for_each_subnode(subnode, fdt, item_node) {
-		paddr_t reg = fdt_reg_base_address(fdt, subnode);
+		paddr_t reg = fdt_reg_base_ncells(fdt, subnode, 1);
 
-		assert(reg != DT_INFO_INVALID_REG);
+		if (reg == DT_INFO_INVALID_REG) {
+			EMSG("Can't get SCMI clock ID for node %s, skipped",
+			     fdt_get_name(fdt, subnode, NULL));
+			continue;
+		}
+
 		if ((size_t)reg > s_resets_count)
 			s_resets_count = (uint32_t)reg;
 
@@ -68,6 +73,10 @@ TEE_Result optee_scmi_server_init_resets(const void *fdt, int node,
 		const fdt32_t *cuint = NULL;
 		uint32_t domain_id = 0;
 
+		domain_id = fdt_reg_base_ncells(fdt, subnode, 1);
+		if (domain_id == (uint32_t)DT_INFO_INVALID_REG)
+			continue;
+
 		res = rstctrl_dt_get_by_index(fdt, subnode, 0, &reset);
 		if (res == TEE_ERROR_DEFER_DRIVER_INIT) {
 			panic("Unexpected init deferral");
@@ -77,7 +86,6 @@ TEE_Result optee_scmi_server_init_resets(const void *fdt, int node,
 			continue;
 		}
 
-		domain_id = (uint32_t)fdt_reg_base_address(fdt, subnode);
 		s_reset = s_resets + domain_id;
 		s_reset->domain_id = domain_id;
 
