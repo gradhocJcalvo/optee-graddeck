@@ -1930,7 +1930,9 @@ static void clk_stm32_pll_disable(struct clk *clk)
 	io_clrbits32(pll_base, RCC_PLLNCR_DIVPEN | RCC_PLLNCR_DIVQEN |
 		     RCC_PLLNCR_DIVREN);
 
-	stm32_gate_rdy_disable(cfg->gate_id);
+	/* Almost silently allow timeout on PLL disabling */
+	if (stm32_gate_rdy_disable(cfg->gate_id))
+		EMSG("Disable ready timeout on %s clock", clk_get_name(clk));
 }
 
 static const struct clk_ops clk_stm32_pll_ops = {
@@ -2089,7 +2091,9 @@ static TEE_Result clk_stm32_pll1_set_rate(struct clk *clk __maybe_unused,
 			return TEE_ERROR_GENERIC;
 
 		stm32_gate_disable(GATE_PLL1_DIVP);
-		stm32_gate_rdy_disable(GATE_PLL1);
+		/* Almost silently allow timeout on PLL disabling */
+		if (stm32_gate_rdy_disable(GATE_PLL1))
+			EMSG("Disable ready timeout on PLL1 clock");
 		clk_stm32_pll_config_vco(priv, pll, &pll_conf->vco);
 	}
 
@@ -2315,8 +2319,9 @@ static void clk_stm32_oscillator_disable(struct clk *clk)
 	if (clk->rate == 0U)
 		return;
 
+	/* Almost silently allow timeout on oscillator disabling */
 	if (stm32_gate_rdy_disable(cfg->gate_id))
-		panic();
+		EMSG("Disable ready timeout on %s clock", clk_get_name(clk));
 }
 
 static bool clk_stm32_oscillator_is_enabled(struct clk *clk)
@@ -3342,7 +3347,10 @@ static void clk_stm32_pm_restore_pll_output_status(void)
 			/* Stop all output */
 			io_clrbits32(pllxcr, RCC_PLLNCR_DIVPEN |
 				     RCC_PLLNCR_DIVQEN | RCC_PLLNCR_DIVREN);
-			stm32_gate_rdy_disable(pll->gate_id);
+			/* Almost silently allow timeout on PLL disabling */
+			if (stm32_gate_rdy_disable(pll->gate_id))
+				EMSG("Disable ready timeout on PLL%u clock",
+				     pll_id + 1);
 		}
 	}
 }
