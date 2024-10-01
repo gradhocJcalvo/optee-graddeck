@@ -3123,6 +3123,8 @@
 			reg = <0x46000000 0x400>;
 			clocks = <&rcc CK_BUS_RTC>, <&rcc RTC_CK>;
 			clock-names = "pclk", "rtc_ck";
+			wakeup-source;
+			wakeup-parent = <&exti2>;
 			interrupts = <GIC_SPI 15 IRQ_TYPE_LEVEL_HIGH>;
 		};
 
