@@ -93,8 +93,7 @@ static int reset_set_state(fwk_id_t dev_id, enum mod_reset_domain_mode mode,
         break;
     case MOD_RESET_DOMAIN_AUTO_RESET:
         FWK_LOG_DEBUG(
-            MOD_NAME "SCMI reset %u: cycle(%s)",
-            fwk_id_get_element_idx(dev_id),
+            MOD_NAME "SCMI reset %u: cycle(%s%d)",
             fwk_id_get_element_idx(dev_id),
             ctx->rstctrl->dev->name, ctx->rstctrl->id);
 ;
