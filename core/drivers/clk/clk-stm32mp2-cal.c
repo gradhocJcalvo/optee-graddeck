@@ -419,7 +419,7 @@ static TEE_Result stm32mp2_clk_init_hsi_cal(struct stm32_calib_pdata *pdata)
 	/* Set HSI clock count deviation value */
 	assert(pdata->hsi_ref <= RCC_HSIFMONCR_HSIDEV_MASK);
 	io_clrsetbits32(address, RCC_HSIFMONCR_HSIDEV_MASK,
-			pdata->hsi_ref << RCC_HSIFMONCR_HSIDEV_SHIFT);
+			pdata->hsi_dev << RCC_HSIFMONCR_HSIDEV_SHIFT);
 
 	/* Set HSI clock count reference value */
 	io_clrsetbits32(address, RCC_HSIFMONCR_HSIREF_MASK,
