@@ -173,6 +173,23 @@ bad:
 
 }
 
+paddr_t fdt_reg_base_ncells(const void *fdt, int offs, size_t ncells)
+{
+	paddr_t reg = 0;
+	int len = 0;
+
+	/* fdt_read_paddr() traps most unexpected len values */
+	reg = fdt_read_paddr(fdt_getprop(fdt, offs, "reg", &len),
+			     len / sizeof(uint32_t));
+	if ((size_t)len != ncells * sizeof(uint32_t)) {
+		EMSG("Wrong reg cells number on node %s",
+		     fdt_get_name(fdt, offs, NULL));
+		return DT_INFO_INVALID_REG;
+	}
+
+	return reg;
+}
+
 paddr_t fdt_reg_base_address(const void *fdt, int offs)
 {
 	const void *reg;

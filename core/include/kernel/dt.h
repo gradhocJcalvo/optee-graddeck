@@ -174,6 +174,14 @@ paddr_t fdt_read_paddr(const uint32_t *cell, int n);
 paddr_t fdt_reg_base_address(const void *fdt, int offs);
 
 /*
+ * Return the base address for the "reg" property of the specified node
+ * expecting "reg" is made of @ncells FDT cells.
+ * Allowed values for @ncells are 1 and 2.
+ * Return (paddr_t)-1 in case of error.
+ */
+paddr_t fdt_reg_base_ncells(const void *fdt, int offs, size_t ncells);
+
+/*
  * Return the reg size for the reg property of the specified node or -1 in case
  * of error
  */
@@ -331,6 +339,13 @@ static inline paddr_t fdt_read_paddr(const uint32_t *cell __unused,
 
 static inline paddr_t fdt_reg_base_address(const void *fdt __unused,
 					   int offs __unused)
+{
+	return (paddr_t)-1;
+}
+
+static inline paddr_t fdt_reg_base_ncells(const void *fdt __unused,
+					  int offs __unused,
+					  size_t ncells __unused)
 {
 	return (paddr_t)-1;
 }
