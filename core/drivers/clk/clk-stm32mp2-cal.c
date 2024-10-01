@@ -406,6 +406,25 @@ static enum itr_return stm32_hsi_monitor_it_handler(struct itr_handler *handler)
 }
 DECLARE_KEEP_PAGER(stm32_hsi_monitor_it_handler);
 
+static void stm32mp2_clk_hsi_restore_pm(struct stm32_calib_pdata *pdata)
+{
+	uintptr_t address = stm32_rcc_base() + RCC_HSIFMONCR;
+
+	/* Set HSI clock count deviation value */
+	io_clrsetbits32(address, RCC_HSIFMONCR_HSIDEV_MASK,
+			pdata->hsi_dev << RCC_HSIFMONCR_HSIDEV_SHIFT);
+
+	/* Set HSI clock count reference value */
+	io_clrsetbits32(address, RCC_HSIFMONCR_HSIREF_MASK,
+			pdata->hsi_ref << RCC_HSIFMONCR_HSIREF_SHIFT);
+
+	/* Enable HSI clock period monitor interrupt */
+	io_setbits32(address, RCC_HSIFMONCR_HSIMONIE);
+
+	/* Enable HSI clock period monitor */
+	io_setbits32(address, RCC_HSIFMONCR_HSIMONEN);
+}
+
 static TEE_Result stm32mp2_clk_init_hsi_cal(struct stm32_calib_pdata *pdata)
 {
 	struct clk *hsi_clk = stm32mp_rcc_clock_id_to_clk(HSI_CK);
@@ -552,14 +571,21 @@ static TEE_Result stm32mp2_init_clock_calib(struct stm32_calib_pdata *pdata)
 }
 
 static TEE_Result
-stm32mp2_calib_pm(enum pm_op op, unsigned int pm_hint __unused,
-		  const struct pm_callback_handle *hdl __unused)
+stm32mp2_calib_pm(enum pm_op op, unsigned int pm_hint,
+		  const struct pm_callback_handle *hdl)
 {
+	struct stm32_calib_pdata *pdata = hdl->handle;
 	unsigned int i = 0;
 
-	if (op == PM_OP_RESUME)
-		return TEE_SUCCESS;
+	if (op == PM_OP_RESUME) {
+		struct stm32_calib *data = calib_tab[HSI_CAL];
 
+		if (PM_HINT_IS_STATE(pm_hint, CONTEXT) && data->is_used)
+			/* Only RCC_HSIFMONCR register need to be restored */
+			stm32mp2_clk_hsi_restore_pm(pdata);
+
+		return TEE_SUCCESS;
+	}
 	/* SUSPEND */
 	for (i = 0; i < MAX_CAL; i++) {
 		struct stm32_calib *data = calib_tab[i];
@@ -592,7 +618,7 @@ TEE_Result clk_stm32_init_calib(const void *fdt, int node)
 		return res;
 	}
 
-	register_pm_driver_cb(stm32mp2_calib_pm, NULL, "service-calib");
+	register_pm_driver_cb(stm32mp2_calib_pm, pdata, "service-calib");
 
 	return TEE_SUCCESS;
 }
