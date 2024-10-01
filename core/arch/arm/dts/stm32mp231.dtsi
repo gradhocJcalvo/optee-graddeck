@@ -1164,11 +1164,6 @@
 						reg = <VOLTD_SCMI_ADC>;
 						voltd-supply = <&vdda18adc>;
 					};
-
-					voltd-vddgpu {
-						reg = <VOLTD_SCMI_GPU>;
-						voltd-supply = <&vddgpu>;
-					};
 				};
 			};
 		};
