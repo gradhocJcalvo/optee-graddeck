@@ -334,3 +334,7 @@ endif
 
 # Support for STM32MP OSTL legacy SCMI messages
 CFG_STM32_OTSL_SCMI_CLOCK_SUPPORT ?= y
+
+# When CFG_DT_CACHED_NODE_INFO is enabled, boot time may be divided by 2 or
+# more (depending on DTB size).
+CFG_DT_CACHED_NODE_INFO ?= y
