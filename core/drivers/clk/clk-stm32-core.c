@@ -100,10 +100,10 @@ void stm32_gate_disable(uint16_t gate_id)
 	struct clk_stm32_priv *priv = clk_stm32_get_priv();
 	uint8_t *gate_cpt = priv->gate_cpt;
 
-	if (--gate_cpt[gate_id] > 0)
-		return;
-
-	stm32_gate_endisable(gate_id, false);
+	assert(gate_cpt[gate_id] > 0);
+	if (gate_cpt[gate_id] == 1)
+		stm32_gate_endisable(gate_id, false);
+	gate_cpt[gate_id]--;
 }
 
 void stm32_gate_enable(uint16_t gate_id)
@@ -111,10 +111,10 @@ void stm32_gate_enable(uint16_t gate_id)
 	struct clk_stm32_priv *priv = clk_stm32_get_priv();
 	uint8_t *gate_cpt = priv->gate_cpt;
 
-	if (gate_cpt[gate_id]++ > 0)
-		return;
-
-	stm32_gate_endisable(gate_id, true);
+	assert(gate_cpt[gate_id] < 0xFF);
+	if (gate_cpt[gate_id] == 0)
+		stm32_gate_endisable(gate_id, true);
+	gate_cpt[gate_id]++;
 }
 
 bool stm32_gate_is_enabled(uint16_t gate_id)
