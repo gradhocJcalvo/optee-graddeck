@@ -1626,6 +1626,7 @@
 				st,mem2mem;
 				dma-requests = <8>;
 				access-controllers = <&etzpc STM32MP1_ETZPC_DMA1_ID>;
+				status = "disabled";
 			};
 
 			dma2: dma-controller@48001000 {
@@ -1645,6 +1646,7 @@
 				st,mem2mem;
 				dma-requests = <8>;
 				access-controllers = <&etzpc STM32MP1_ETZPC_DMA2_ID>;
+				status = "disabled";
 			};
 
 			dmamux1: dma-router@48002000 {
@@ -1657,6 +1659,7 @@
 				clocks = <&rcc DMAMUX>;
 				resets = <&rcc DMAMUX_R>;
 				access-controllers = <&etzpc STM32MP1_ETZPC_DMAMUX_ID>;
+				status = "disabled";
 			};
 
 			adc: adc@48003000 {
