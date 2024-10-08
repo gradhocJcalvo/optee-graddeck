@@ -20,6 +20,10 @@
 #include <pta_stm32mp_bsec.h>
 #include <util.h>
 
+/* CFG_STM32_BSEC_WRITE cannot be enabled with CFG_STM32_CM33TDCID */
+static_assert(!(IS_ENABLED(CFG_STM32_CM33TDCID) &&
+		IS_ENABLED(CFG_STM32_BSEC_WRITE)));
+
 /* BSEC REGISTER OFFSET (base relative) */
 #define BSEC_FVR(i)			(U(0x000) + 4U * (i))
 #define BSEC_SPLOCK(i)			(U(0x800) + 4U * (i))
@@ -345,6 +349,9 @@ TEE_Result stm32_bsec_read_otp(uint32_t *val, uint32_t otp)
 		return TEE_SUCCESS;
 	}
 
+	if (IS_ENABLED(CFG_STM32_CM33TDCID))
+		return TEE_ERROR_ACCESS_DENIED;
+
 	/* for secure OTP, reload fuse word */
 	*val = 0U;
 	result = shadow_otp(otp);
@@ -376,6 +383,9 @@ TEE_Result stm32_bsec_shadow_read_otp(uint32_t *val, uint32_t otp)
 		return TEE_SUCCESS;
 	}
 
+	if (IS_ENABLED(CFG_STM32_CM33TDCID))
+		return TEE_ERROR_ACCESS_DENIED;
+
 	/* for secure OTP, reload fuse word if not shadowed */
 	*val = 0U;
 	if (!is_fuse_shadowed(otp))
@@ -396,6 +406,9 @@ TEE_Result stm32_bsec_write_otp(uint32_t val, uint32_t otp)
 {
 	uint32_t exceptions = 0U;
 	bool value = false;
+
+	if (IS_ENABLED(CFG_STM32_CM33TDCID))
+		return TEE_ERROR_ACCESS_DENIED;
 
 	if (otp > bsec_dev.max_id)
 		return TEE_ERROR_BAD_PARAMETERS;
@@ -535,6 +548,9 @@ TEE_Result stm32_bsec_write_debug_conf(uint32_t val)
 	TEE_Result result = TEE_ERROR_GENERIC;
 	uint32_t exceptions = 0U;
 
+	if (IS_ENABLED(CFG_STM32_CM33TDCID))
+		return TEE_ERROR_ACCESS_DENIED;
+
 	if (is_bsec_write_locked())
 		return TEE_ERROR_ACCESS_DENIED;
 
@@ -556,11 +572,17 @@ TEE_Result stm32_bsec_write_debug_conf(uint32_t val)
 
 uint32_t stm32_bsec_read_debug_conf(void)
 {
+	if (IS_ENABLED(CFG_STM32_CM33TDCID))
+		return 0;
+
 	return io_read32(bsec_base() + BSEC_DENR) & BSEC_DENR_ALL_MASK;
 }
 
 bool stm32_bsec_self_hosted_debug_is_enabled(void)
 {
+	if (IS_ENABLED(CFG_STM32_CM33TDCID))
+		return false;
+
 	return stm32_bsec_read_debug_conf() & BSEC_DENR_DBGSWEN;
 }
 
@@ -569,6 +591,9 @@ bool stm32_bsec_self_hosted_debug_is_enabled(void)
  */
 void stm32_bsec_mp21_dummy_adac(void)
 {
+	if (IS_ENABLED(CFG_STM32_CM33TDCID))
+		return;
+
 	io_write32(bsec_base() + BSEC_DBGACR, BSEC_DBGxCR_DUMMY_ADAC);
 	io_write32(bsec_base() + BSEC_DBGMCR, BSEC_DBGxCR_DUMMY_ADAC);
 	io_write32(bsec_base() + BSEC_AP_UNLOCK, BSEC_AP_UNLOCK_DUMMY_ADAC);
@@ -602,6 +627,9 @@ TEE_Result stm32_bsec_set_sr_lock(uint32_t otp)
 	uint32_t bank_value = 0U;
 	uint32_t mask = otp_bit(otp);
 	uint32_t exceptions = 0U;
+
+	if (IS_ENABLED(CFG_STM32_CM33TDCID))
+		return TEE_ERROR_ACCESS_DENIED;
 
 	if (otp > bsec_dev.max_id)
 		return TEE_ERROR_BAD_PARAMETERS;
@@ -657,6 +685,9 @@ TEE_Result stm32_bsec_set_sw_lock(uint32_t otp)
 	uint32_t mask = otp_bit(otp);
 	uint32_t bank_value = 0U;
 	uint32_t exceptions = 0U;
+
+	if (IS_ENABLED(CFG_STM32_CM33TDCID))
+		return TEE_ERROR_ACCESS_DENIED;
 
 	if (otp > bsec_dev.max_id)
 		return TEE_ERROR_BAD_PARAMETERS;
@@ -714,6 +745,9 @@ TEE_Result stm32_bsec_set_sp_lock(uint32_t otp)
 	uint32_t bank_value = 0U;
 	uint32_t mask = otp_bit(otp);
 	uint32_t exceptions = 0U;
+
+	if (IS_ENABLED(CFG_STM32_CM33TDCID))
+		return TEE_ERROR_ACCESS_DENIED;
 
 	if (otp > bsec_dev.max_id)
 		return TEE_ERROR_BAD_PARAMETERS;
@@ -824,6 +858,9 @@ bool stm32_bsec_can_access_otp(uint32_t otp)
 	if (otp < bsec_dev.upper_base)
 		return true;
 
+	if (IS_ENABLED(CFG_STM32_CM33TDCID))
+		return false;
+
 	/* manage HIDEUP */
 	if ((bsec_dev.shadow->status[otp] & HIDEUP_ERROR) == HIDEUP_ERROR)
 		return false;
@@ -845,6 +882,9 @@ bool stm32_bsec_nsec_can_access_otp(uint32_t otp)
 	/* lower OTP are accessible by non secure */
 	if (otp < bsec_dev.upper_base)
 		return true;
+
+	if (IS_ENABLED(CFG_STM32_CM33TDCID))
+		return false;
 
 	if (otp > bsec_dev.max_id)
 		return false;
@@ -1113,6 +1153,9 @@ static void initialize_nvmem_layout_from_dt(void *fdt, int bsec_node)
 		     cell_cnt, cell->name, cell->otp_id,
 		     cell->bit_offset, cell->bit_len);
 
+		if (IS_ENABLED(CFG_STM32_CM33TDCID))
+			continue;
+
 		/* check if shadowing is not allowed */
 		if (fdt_getprop(fdt, node, "st,secure-otp", NULL)) {
 			for (otp = cell->otp_id;
@@ -1193,21 +1236,26 @@ static TEE_Result initialize_bsec(void)
 
 	initialize_bsec_from_dt(fdt, node);
 
-	if ((IS_ENABLED(CFG_STM32MP21) &&
-	     bsec_get_version() != BSEC_IP_VERSION_1_2) ||
-	    (IS_ENABLED(CFG_STM32MP25) &&
-	     bsec_get_version() != BSEC_IP_VERSION_1_0) ||
-	    bsec_get_id() != BSEC_IP_ID_3)
-		panic("BSEC probe wrong IP version/ID\n");
+	if (IS_ENABLED(CFG_STM32_CM33TDCID)) {
+		if (bsec_dev.shadow->magic != BSEC_MAGIC)
+			panic("BSEC mirror is not initialized\n");
+	} else {
+		if ((IS_ENABLED(CFG_STM32MP21) &&
+		     bsec_get_version() != BSEC_IP_VERSION_1_2) ||
+		    (IS_ENABLED(CFG_STM32MP25) &&
+		     bsec_get_version() != BSEC_IP_VERSION_1_0) ||
+		    bsec_get_id() != BSEC_IP_ID_3)
+			panic("BSEC probe wrong IP version/ID\n");
 
-	check_reset_error();
+		check_reset_error();
 
-	/* initialize the shadow */
-	stm32_bsec_shadow_init(true);
+		/* initialize the shadow */
+		stm32_bsec_shadow_init(true);
+
+		register_pm_core_service_cb(stm32_bsec_pm, NULL, "stm32-bsec");
+	}
 
 	initialize_nvmem_layout_from_dt(fdt, node);
-
-	register_pm_core_service_cb(stm32_bsec_pm, NULL, "stm32-bsec");
 
 	return TEE_SUCCESS;
 }
