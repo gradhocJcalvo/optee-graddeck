@@ -850,7 +850,8 @@ bool stm32mp_allow_probe_shared_device(const void *fdt, int node)
 	 * with non-secure world
 	 */
 	if (node == uart_console_node ||
-	    !strcmp(compat, "st,stm32mp15-i2c-non-secure"))
+	    !strcmp(compat, "st,stm32mp15-i2c-non-secure") ||
+	    (IS_ENABLED(CFG_STM32MP15) && !strcmp(compat, "st,stm32-timers")))
 		return true;
 
 	return false;
