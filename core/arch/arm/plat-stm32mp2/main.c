@@ -178,6 +178,7 @@ void plat_bsec_get_static_cfg(struct stm32_bsec_static_cfg *cfg)
 	cfg->max_id = STM32MP2_OTP_MAX_ID;
 }
 
+#ifndef CFG_STM32_CM33TDCID
 #define BSEC3_DEBUG_ALL		GENMASK_32(11, 1)
 static TEE_Result init_debug(void)
 {
@@ -232,6 +233,7 @@ static TEE_Result init_debug(void)
 	return res;
 }
 early_init_late(init_debug);
+#endif /* !CFG_STM32_CM33TDCID */
 #endif /* CFG_STM32_BSEC3 */
 
 #ifdef CFG_STM32_CPU_OPP
