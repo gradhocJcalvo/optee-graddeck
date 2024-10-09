@@ -1415,14 +1415,19 @@ static int stm32_clk_parse_fdt(const void *fdt, int node,
 	pdata->rcc_base = stm32_rcc_base();
 
 	cuint = fdt_getprop(fdt, node, "st,protreg", &lenp);
-	if (!cuint)
-		panic("No RIF configuration");
+	if (lenp < 0) {
+		if (lenp != -FDT_ERR_NOTFOUND)
+			return lenp;
+
+		lenp = 0;
+		DMSG("No RIF configuration available");
+	}
 
 	pdata->nb_res = (unsigned int)(lenp / sizeof(uint32_t));
+
 	assert(pdata->nb_res <= RCC_NB_RIF_RES);
 
-	pdata->conf_data.cid_confs = calloc(RCC_NB_RIF_RES,
-					    sizeof(uint32_t));
+	pdata->conf_data.cid_confs = calloc(RCC_NB_RIF_RES, sizeof(uint32_t));
 	pdata->conf_data.sec_conf = calloc(RCC_NB_CONFS, sizeof(uint32_t));
 	pdata->conf_data.priv_conf = calloc(RCC_NB_CONFS, sizeof(uint32_t));
 	pdata->conf_data.lock_conf = calloc(RCC_NB_CONFS, sizeof(uint32_t));
@@ -4858,6 +4863,9 @@ static TEE_Result stm32_rcc_rif_pm_suspend(void)
 	struct stm32_clk_platdata *pdata = &stm32mp25_clock_pdata;
 	unsigned int i = 0;
 
+	if (!pdata->nb_res)
+		return TEE_SUCCESS;
+
 	for (i = 0; i < RCC_NB_RIF_RES; i++) {
 		pdata->conf_data.cid_confs[i] = io_read32(pdata->rcc_base +
 							  RCC_CIDCFGR(i));
@@ -4980,20 +4988,24 @@ static TEE_Result stm32mp2_clk_probe(const void *fdt, int node,
 		if (res) {
 			EMSG("Failed on node %s with %#"PRIx32,
 			     fdt_get_name(fdt, subnode, NULL), res);
-			return res;
+			goto err;
 		}
 	}
 
 	rc = clk_stm32_init(priv, stm32_rcc_base());
-	if (rc)
-		return TEE_ERROR_GENERIC;
+	if (rc) {
+		res = TEE_ERROR_GENERIC;
+		goto err;
+	}
 
 	if (IS_ENABLED(CFG_STM32_CLK_DEBUG))
 		clk_stm32_debug_display_pdata();
 
 	rc = stm32mp2_init_clock_tree(priv, pdata);
-	if (rc != 0)
-		return rc;
+	if (rc != 0) {
+		res = TEE_ERROR_GENERIC;
+		goto err;
+	}
 
 	clk_stm32_init_oscillators(fdt, node);
 
@@ -5013,6 +5025,14 @@ static TEE_Result stm32mp2_clk_probe(const void *fdt, int node,
 	register_pm_core_service_cb(stm32_rcc_pm, NULL, "stm32-rcc");
 
 	return TEE_SUCCESS;
+err:
+	free(pdata->conf_data.cid_confs);
+	free(pdata->conf_data.sec_conf);
+	free(pdata->conf_data.priv_conf);
+	free(pdata->conf_data.lock_conf);
+	free(pdata->conf_data.access_mask);
+
+	return res;
 }
 
 CLK_DT_DECLARE(stm32mp25_clk, "st,stm32mp25-rcc", stm32mp2_clk_probe);
