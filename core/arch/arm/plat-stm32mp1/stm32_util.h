@@ -352,10 +352,19 @@ bool stm32mp_allow_probe_shared_device(const void *fdt, int node);
  * @pa if it does not relate to an SRAMx non-aliased memory address.
  */
 paddr_t stm32mp1_pa_or_sram_alias_pa(paddr_t pa);
+
+/* Return whether or not the physical address range intersec pager secure RAM */
+bool stm32mp1_ram_intersect_pager_ram(paddr_t base, size_t size);
 #else
 static inline paddr_t stm32mp1_pa_or_sram_alias_pa(paddr_t pa)
 {
 	return pa;
+}
+
+static inline bool stm32mp1_ram_intersect_pager_ram(paddr_t base __unused,
+						    size_t size __unused)
+{
+	return false;
 }
 #endif
 #endif /*__STM32_UTIL_H__*/
