@@ -346,4 +346,16 @@ TEE_Result stm32_activate_internal_tamper(int id);
 
 bool stm32mp_allow_probe_shared_device(const void *fdt, int node);
 
+#if defined(CFG_STM32MP15) && defined(CFG_WITH_PAGER)
+/*
+ * Return the SRAM alias physical address related to @pa when applicable or
+ * @pa if it does not relate to an SRAMx non-aliased memory address.
+ */
+paddr_t stm32mp1_pa_or_sram_alias_pa(paddr_t pa);
+#else
+static inline paddr_t stm32mp1_pa_or_sram_alias_pa(paddr_t pa)
+{
+	return pa;
+}
+#endif
 #endif /*__STM32_UTIL_H__*/
