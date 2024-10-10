@@ -20,6 +20,7 @@
 #if defined(CFG_STM32MP25) || defined(CFG_STM32MP23) || defined(CFG_STM32MP21)
 #include <stm32_sysconf.h>
 #endif
+#include <stm32_util.h>
 
 #define TIMEOUT_US_1MS	U(1000)
 
@@ -613,6 +614,17 @@ static TEE_Result stm32_rproc_parse_mems(struct stm32_rproc_instance *rproc,
 			res = TEE_ERROR_GENERIC;
 			return res;
 		}
+
+#ifdef CFG_STM32MP15
+		if (stm32mp1_ram_intersect_pager_ram(regions[i].addr,
+						     regions[i].size)) {
+			EMSG("Region %#"PRIxPA"..%#"PRIxPA" intersects pager secure memory",
+			     regions[i].addr,
+			     regions[i].addr + regions[i].size);
+			return TEE_ERROR_GENERIC;
+		}
+#endif
+
 		res = firewall_dt_get_alternate_conf(fdt, pnode,
 						     FIREWALL_CONF_DEFAULT,
 						     &regions[i].default_conf);
