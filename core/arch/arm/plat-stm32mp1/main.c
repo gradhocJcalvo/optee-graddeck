@@ -13,6 +13,7 @@
 #include <drivers/gic.h>
 #include <drivers/pinctrl.h>
 #include <drivers/stm32_bsec.h>
+#include <drivers/stm32_etzpc.h>
 #include <drivers/stm32_gpio.h>
 #include <drivers/stm32_tamp.h>
 #include <drivers/stm32_uart.h>
@@ -28,6 +29,7 @@
 #include <kernel/boot.h>
 #include <kernel/delay.h>
 #include <kernel/dt.h>
+#include <kernel/dt_driver.h>
 #include <kernel/misc.h>
 #include <kernel/panic.h>
 #include <kernel/pm.h>
@@ -253,10 +255,6 @@ void boot_secondary_init_intc(void)
 #define SRAMS_START			SRAM1_BASE
 #define TZSRAM_END			(CFG_TZSRAM_START + CFG_TZSRAM_SIZE)
 
-#define SCMI_SHM_IS_IN_SRAMX	((CFG_STM32MP1_SCMI_SHM_BASE >= SRAM1_BASE) && \
-				 (CFG_STM32MP1_SCMI_SHM_BASE + \
-				  CFG_STM32MP1_SCMI_SHM_SIZE) <= SRAMS_END)
-
 #define TZSRAM_FITS_IN_SYSRAM_SEC	((CFG_TZSRAM_START >= SYSRAM_BASE) && \
 					 (TZSRAM_END <= SYSRAM_SEC_END))
 
@@ -281,59 +279,115 @@ void boot_secondary_init_intc(void)
  */
 static_assert(TZSRAM_FITS_IN_SYSRAM_SEC || TZSRAM_FITS_IN_SYSRAM_AND_SRAMS ||
 	      TZSRAM_FITS_IN_SRAMS || TZSRAM_IS_IN_DRAM);
+#endif /* CFG_WITH_PAGER */
+#endif /* CFG_STM32MP15 */
 
-#if TZSRAM_FITS_IN_SYSRAM_AND_SRAMS || TZSRAM_FITS_IN_SRAMS || \
-	SCMI_SHM_IS_IN_SRAMX
-/* At run time we enforce that SRAM1 to SRAM4 are properly assigned if used */
-static TEE_Result init_stm32mp15_secure_srams(void)
+static TEE_Result secure_pager_ram(struct dt_driver_provider *fw_provider,
+				   unsigned int decprot_id,
+				   paddr_t base, size_t secure_size)
 {
+	/* Lock firewall configuration for secure internal RAMs used by pager */
+	uint32_t query_arg = DECPROT(decprot_id, DECPROT_S_RW, DECPROT_LOCK);
+	struct firewall_query fw_query = {
+		.ctrl = dt_driver_provider_priv_data(fw_provider),
+		.args = &query_arg,
+		.arg_count = 1,
+	};
+	TEE_Result res = TEE_ERROR_GENERIC;
+	bool is_pager_ram = false;
+
+#ifdef CFG_WITH_PAGER
+	is_pager_ram = core_is_buffer_intersect(CFG_TZSRAM_START,
+						CFG_TZSRAM_SIZE,
+						base, secure_size);
+#endif
+	if (!is_pager_ram)
+		return TEE_SUCCESS;
+
+	res = firewall_set_memory_configuration(&fw_query, base, secure_size);
+	if (res)
+		EMSG("Failed to configure secure SRAM %#"PRIxPA"..%#"PRIxPA,
+		     base, base + secure_size);
+
+	return res;
+}
+
+static TEE_Result non_secure_scmi_ram(struct dt_driver_provider *fw_provider,
+				      unsigned int decprot_id,
+				      paddr_t base, size_t size)
+{
+	/* Do not lock firewall configuration for non-secure internal RAMs */
+	uint32_t query_arg = DECPROT(decprot_id, DECPROT_NS_RW, DECPROT_UNLOCK);
+	struct firewall_query fw_query = {
+		.ctrl = dt_driver_provider_priv_data(fw_provider),
+		.args = &query_arg,
+		.arg_count = 1,
+	};
+	TEE_Result res = TEE_ERROR_GENERIC;
+
+	if (!core_is_buffer_intersect(CFG_STM32MP1_SCMI_SHM_BASE,
+				      CFG_STM32MP1_SCMI_SHM_SIZE,
+				      base, size))
+		return TEE_SUCCESS;
+
+	res = firewall_set_memory_configuration(&fw_query, base, size);
+	if (res)
+		EMSG("Failed to configure non-secure SRAM %#"PRIxPA"..%#"PRIxPA,
+		     base, base + size);
+
+	return res;
+}
+
+/* At run time we enforce that SRAM1 to SRAM4 are properly assigned if used */
+static TEE_Result configure_srams(struct dt_driver_provider *fw_provider)
+{
+	bool error = false;
+
 	if (IS_ENABLED(CFG_WITH_PAGER)) {
-		if (core_is_buffer_intersect(CFG_TZSRAM_START, CFG_TZSRAM_SIZE,
-					     SRAM1_BASE, SRAM1_SIZE))
-			stm32mp_register_secure_periph_iomem(SRAM1_BASE);
+		if (secure_pager_ram(fw_provider, STM32MP1_ETZPC_SRAM1_ID,
+				     SRAM1_BASE, SRAM1_SIZE))
+			error = true;
 
-		if (core_is_buffer_intersect(CFG_TZSRAM_START, CFG_TZSRAM_SIZE,
-					     SRAM2_BASE, SRAM2_SIZE))
-			stm32mp_register_secure_periph_iomem(SRAM2_BASE);
+		if (secure_pager_ram(fw_provider, STM32MP1_ETZPC_SRAM2_ID,
+				     SRAM2_BASE, SRAM2_SIZE))
+			error = true;
 
-		if (core_is_buffer_intersect(CFG_TZSRAM_START, CFG_TZSRAM_SIZE,
-					     SRAM3_BASE, SRAM3_SIZE))
-			stm32mp_register_secure_periph_iomem(SRAM3_BASE);
+		if (secure_pager_ram(fw_provider, STM32MP1_ETZPC_SRAM3_ID,
+				     SRAM3_BASE, SRAM3_SIZE))
+			error = true;
 
-		if (core_is_buffer_intersect(CFG_TZSRAM_START, CFG_TZSRAM_SIZE,
-					     SRAM4_BASE, SRAM4_SIZE))
-			stm32mp_register_secure_periph_iomem(SRAM4_BASE);
+#ifdef CFG_STM32MP15
+		if (secure_pager_ram(fw_provider, STM32MP1_ETZPC_SRAM4_ID,
+				     SRAM4_BASE, SRAM4_SIZE))
+			error = true;
+#endif
 	}
 
-	if (SCMI_SHM_IS_IN_SRAMX) {
-		if (core_is_buffer_intersect(CFG_STM32MP1_SCMI_SHM_BASE,
-					     CFG_STM32MP1_SCMI_SHM_SIZE,
-					     SRAM1_BASE, SRAM1_SIZE))
-			stm32mp_register_non_secure_periph_iomem(SRAM1_BASE);
+	if (CFG_STM32MP1_SCMI_SHM_BASE) {
+		if (non_secure_scmi_ram(fw_provider, STM32MP1_ETZPC_SRAM1_ID,
+					SRAM1_BASE, SRAM1_SIZE))
+			error = true;
 
-		if (core_is_buffer_intersect(CFG_STM32MP1_SCMI_SHM_BASE,
-					     CFG_STM32MP1_SCMI_SHM_SIZE,
-					     SRAM2_BASE, SRAM2_SIZE))
-			stm32mp_register_non_secure_periph_iomem(SRAM2_BASE);
+		if (non_secure_scmi_ram(fw_provider, STM32MP1_ETZPC_SRAM2_ID,
+					SRAM2_BASE, SRAM2_SIZE))
+			error = true;
 
-		if (core_is_buffer_intersect(CFG_STM32MP1_SCMI_SHM_BASE,
-					     CFG_STM32MP1_SCMI_SHM_SIZE,
-					     SRAM3_BASE, SRAM3_SIZE))
-			stm32mp_register_non_secure_periph_iomem(SRAM3_BASE);
+		if (non_secure_scmi_ram(fw_provider, STM32MP1_ETZPC_SRAM3_ID,
+					SRAM3_BASE, SRAM3_SIZE))
+			error = true;
 
-		if (core_is_buffer_intersect(CFG_STM32MP1_SCMI_SHM_BASE,
-					     CFG_STM32MP1_SCMI_SHM_SIZE,
-					     SRAM4_BASE, SRAM4_SIZE))
-			stm32mp_register_non_secure_periph_iomem(SRAM4_BASE);
+#ifdef CFG_STM32MP15
+		if (non_secure_scmi_ram(fw_provider, STM32MP1_ETZPC_SRAM4_ID,
+					SRAM4_BASE, SRAM4_SIZE))
+			error = true;
+#endif
 	}
+
+	if (error)
+		panic();
 
 	return TEE_SUCCESS;
 }
-
-service_init_late(init_stm32mp15_secure_srams);
-#endif /* TZSRAM_FITS_IN_SYSRAM_AND_SRAMS || TZSRAM_FITS_IN_SRAMS */
-#endif /* CFG_WITH_PAGER */
-#endif /* CFG_STM32MP15 */
 
 static TEE_Result init_stm32mp1_drivers(void)
 {
@@ -374,6 +428,9 @@ static TEE_Result init_stm32mp1_drivers(void)
 		/* Clear content from the non-secure part */
 		memset(va, 0, nsec_size);
 	}
+
+	/* Configure SRAMx secure hardening */
+	configure_srams(prov);
 
 	return TEE_SUCCESS;
 }
