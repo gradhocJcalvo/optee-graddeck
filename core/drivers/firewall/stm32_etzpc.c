@@ -542,8 +542,12 @@ static TEE_Result stm32_etzpc_configure_memory(struct firewall_query *firewall,
 		attr = etzpc_binding2decprot(mode);
 
 		if (decprot_is_locked(etzpc_dev, id)) {
-			EMSG("Internal RAM configuration locked");
-			return TEE_ERROR_ACCESS_DENIED;
+			if (etzpc_do_get_decprot(etzpc_dev, id) != attr) {
+				EMSG("Internal RAM configuration locked");
+				return TEE_ERROR_ACCESS_DENIED;
+			}
+
+			return TEE_SUCCESS;
 		}
 
 #ifdef CFG_STM32MP15
@@ -584,12 +588,17 @@ static TEE_Result stm32_etzpc_configure_memory(struct firewall_query *firewall,
 		if (!IS_ALIGNED(size, SMALL_PAGE_SIZE))
 			return TEE_ERROR_BAD_PARAMETERS;
 
+		total_sz = ROUNDUP_DIV(size, SMALL_PAGE_SIZE);
+
 		if (tzma_is_locked(etzpc_dev, tzma_id)) {
-			EMSG("TZMA configuration locked");
-			return TEE_ERROR_ACCESS_DENIED;
+			if (etzpc_do_get_tzma(etzpc_dev, tzma_id) != total_sz) {
+				EMSG("TZMA configuration locked");
+				return TEE_ERROR_ACCESS_DENIED;
+			}
+
+			return TEE_SUCCESS;
 		}
 
-		total_sz = ROUNDUP_DIV(size, SMALL_PAGE_SIZE);
 		etzpc_do_configure_tzma(etzpc_dev, tzma_id, total_sz);
 	} else {
 		EMSG("Unknown firewall ID: %"PRIu32, id);
@@ -627,8 +636,15 @@ static TEE_Result stm32_etzpc_configure(struct firewall_query *firewall)
 		attr = etzpc_binding2decprot(mode);
 
 		if (decprot_is_locked(etzpc_dev, id)) {
-			EMSG("Peripheral configuration locked");
-			return TEE_ERROR_ACCESS_DENIED;
+			if (etzpc_do_get_decprot(etzpc_dev, id) != attr) {
+				EMSG("Peripheral configuration locked");
+				return TEE_ERROR_ACCESS_DENIED;
+			}
+
+			DMSG("Valid access for periph %"PRIu32" - attr %s",
+			     id, etzpc_decprot_strings[attr]);
+
+			return TEE_SUCCESS;
 		}
 
 		DMSG("Setting access config for periph %"PRIu32" - attr %s", id,
