@@ -97,8 +97,6 @@
 #define RCC_NB_RIF_RES			U(114)
 #define RCC_NB_CONFS			DIV_ROUND_UP(RCC_NB_RIF_RES, 32)
 
-#define RCC_NB_MAX_CID_SUPPORTED	U(7)
-
 /* Register: RCC_RxCIDCFGR */
 #define RCC_CIDCFGR_CFEN		BIT(0)
 #define RCC_CIDCFGR_SEM_EN		BIT(1)
@@ -4313,42 +4311,77 @@ static struct clk_stm32_priv stm32mp21_clock_data = {
 	.is_critical		= clk_stm32_clock_is_critical,
 };
 
+static TEE_Result handle_available_semaphores(void)
+{
+	struct stm32_clk_platdata *pdata = &stm32mp21_clock_pdata;
+	TEE_Result res = TEE_ERROR_GENERIC;
+	unsigned int index = 0;
+	uint32_t cidcfgr = 0;
+	unsigned int i = 0;
+
+	for (i = 0; i < RCC_NB_RIF_RES; i++) {
+		vaddr_t reg_offset = pdata->rcc_base + RCC_SEMCR(i);
+
+		index = i / 32;
+
+		if (!(BIT(i % 32) & pdata->conf_data.access_mask[index]))
+			continue;
+
+		cidcfgr = io_read32(pdata->rcc_base + RCC_CIDCFGR(i));
+
+		if (!stm32_rif_semaphore_enabled_and_ok(cidcfgr, RIF_CID1))
+			continue;
+
+		if (!(io_read32(pdata->rcc_base + RCC_SECCFGR(index)) &
+		      BIT(i % 32))) {
+			res = stm32_rif_release_semaphore(reg_offset,
+							  MAX_CID_SUPPORTED);
+			if (res) {
+				EMSG("Cannot release semaphore for resource %"PRIu32,
+				     i);
+				return res;
+			}
+		} else {
+			res = stm32_rif_acquire_semaphore(reg_offset,
+							  MAX_CID_SUPPORTED);
+			if (res) {
+				EMSG("Cannot acquire semaphore for resource %"PRIu32,
+				     i);
+				return res;
+			}
+		}
+	}
+
+	return TEE_SUCCESS;
+}
+
 static TEE_Result apply_rcc_rif_config(bool is_tdcid)
 {
 	TEE_Result res = TEE_ERROR_ACCESS_DENIED;
 	struct stm32_clk_platdata *pdata = &stm32mp21_clock_pdata;
-	uint32_t cidcfgr = 0;
 	unsigned int i = 0;
 	unsigned int index = 0;
 
-	for (i = 0; i < RCC_NB_RIF_RES; i++) {
-		index = i / 32;
-		if (!(BIT(i % 32) & pdata->conf_data.access_mask[index]))
-			continue;
+	if (is_tdcid) {
+		for (i = 0; i < RCC_NB_RIF_RES; i++) {
+			index = i / 32;
+			if (!(BIT(i % 32) &
+			      pdata->conf_data.access_mask[index]))
+				continue;
 
-		/*
-		 * When TDCID, OP-TEE should be the one to set the CID filtering
-		 * configuration. Clearing previous configuration prevents
-		 * undesired events during the only legitimate configuration.
-		 */
-		if (is_tdcid)
+			/*
+			 * When TDCID, OP-TEE should be the one to set the CID
+			 * filtering configuration. Clearing previous
+			 * configuration prevents undesired events during the
+			 * only legitimate configuration.
+			 */
 			io_clrbits32(pdata->rcc_base + RCC_CIDCFGR(i),
 				     RCC_CIDCFGR_CONF_MASK);
-
-		cidcfgr = io_read32(pdata->rcc_base + RCC_CIDCFGR(i));
-
-		/* Check if the resource is in semaphore mode */
-		if (!stm32_rif_semaphore_enabled_and_ok(cidcfgr, RIF_CID1))
-			continue;
-
-		/* If not TDCID, we want to acquire semaphores assigned to us */
-		res = stm32_rif_acquire_semaphore(pdata->rcc_base +
-						  RCC_SEMCR(i),
-						  RCC_NB_MAX_CID_SUPPORTED);
-		if (res) {
-			EMSG("Could not acquire semaphore for resource %u", i);
-			return res;
 		}
+	} else {
+		res = handle_available_semaphores();
+		if (res)
+			panic();
 	}
 
 	/* Security and privilege RIF configuration */
@@ -4373,36 +4406,6 @@ static TEE_Result apply_rcc_rif_config(bool is_tdcid)
 		io_clrsetbits32(pdata->rcc_base + RCC_CIDCFGR(i),
 				RCC_CIDCFGR_CONF_MASK,
 				pdata->conf_data.cid_confs[i]);
-
-		cidcfgr = io_read32(pdata->rcc_base + RCC_CIDCFGR(i));
-
-		/*
-		 * Take semaphore if the resource is in semaphore mode
-		 * and secured
-		 */
-		if (!stm32_rif_semaphore_enabled_and_ok(cidcfgr, RIF_CID1) ||
-		    !(io_read32(pdata->rcc_base + RCC_SECCFGR(index)) &
-		      BIT(i % 32))) {
-			res =
-			stm32_rif_release_semaphore(pdata->rcc_base +
-						    RCC_SEMCR(i),
-						    RCC_NB_MAX_CID_SUPPORTED);
-			if (res) {
-				EMSG("Could not release semaphore for res%u",
-				     i);
-				return res;
-			}
-		} else {
-			res =
-			stm32_rif_acquire_semaphore(pdata->rcc_base +
-						    RCC_SEMCR(i),
-						    RCC_NB_MAX_CID_SUPPORTED);
-			if (res) {
-				EMSG("Could not acquire semaphore for res%u",
-				     i);
-				return res;
-			}
-		}
 	}
 
 	for (index = 0; index < RCC_NB_CONFS; index++) {
@@ -4411,6 +4414,9 @@ static TEE_Result apply_rcc_rif_config(bool is_tdcid)
 				pdata->conf_data.lock_conf[index]);
 	}
 
+	res = handle_available_semaphores();
+	if (res)
+		return res;
 end:
 	if (IS_ENABLED(CFG_TEE_CORE_DEBUG)) {
 		for (index = 0; index < RCC_NB_CONFS; index++) {
@@ -4474,13 +4480,20 @@ static TEE_Result stm32_rcc_rif_pm(enum pm_op op, unsigned int pm_hint,
 	if (res)
 		return res;
 
-	if (!PM_HINT_IS_STATE(pm_hint, CONTEXT) || !is_tdcid)
+	if (!PM_HINT_IS_STATE(pm_hint, CONTEXT))
 		return TEE_SUCCESS;
 
-	if (op == PM_OP_RESUME)
-		res = stm32_rcc_rif_pm_resume();
-	else
+	if (op == PM_OP_RESUME) {
+		if (!is_tdcid)
+			res = handle_available_semaphores();
+		else
+			res = stm32_rcc_rif_pm_resume();
+	} else {
+		if (!is_tdcid)
+			return TEE_SUCCESS;
+
 		res = stm32_rcc_rif_pm_suspend();
+	}
 
 	return res;
 }
@@ -4574,6 +4587,12 @@ static TEE_Result stm32mp2_clk_probe(const void *fdt, int node,
 			     fdt_get_name(fdt, subnode, NULL), res);
 			goto err;
 		}
+	}
+
+	if (IS_ENABLED(CFG_STM32_CM33TDCID)) {
+		res = handle_available_semaphores();
+		if (res)
+			return res;
 	}
 
 	rc = clk_stm32_init(priv, stm32_rcc_base());
