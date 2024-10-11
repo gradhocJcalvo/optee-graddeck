@@ -945,6 +945,27 @@
 						domain-name = "ck_icn_m_etr";
 						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
 					};
+
+					clock@71 {
+						reg = <CK_SCMI_HSI_KER_CK>;
+						domain-name = "hsi_ker_ck";
+						clocks = <&rcc HSI_KER_CK>;
+						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
+					};
+
+					clock@72 {
+						reg = <CK_SCMI_HSE_KER_CK>;
+						domain-name = "hse_ker_ck";
+						clocks = <&rcc HSE_KER_CK>;
+						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
+					};
+
+					clock@73 {
+						reg = <CK_SCMI_MSI_KER_CK>;
+						domain-name = "msi_ker_ck";
+						clocks = <&rcc MSI_KER_CK>;
+						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
+					};
 				};
 			};
 
@@ -1836,6 +1857,27 @@
 						reg = <CK_SCMI_KER_ETR>;
 						clocks = <&rcc CK_KER_ETR>;
 						domain-name = "ck_icn_m_etr";
+						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
+					};
+
+					clock@71 {
+						reg = <CK_SCMI_HSI_KER_CK>;
+						domain-name = "hsi_ker_ck";
+						clocks = <&rcc HSI_KER_CK>;
+						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
+					};
+
+					clock@72 {
+						reg = <CK_SCMI_HSE_KER_CK>;
+						domain-name = "hse_ker_ck";
+						clocks = <&rcc HSE_KER_CK>;
+						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
+					};
+
+					clock@73 {
+						reg = <CK_SCMI_MSI_KER_CK>;
+						domain-name = "msi_ker_ck";
+						clocks = <&rcc MSI_KER_CK>;
 						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
 					};
 				};
