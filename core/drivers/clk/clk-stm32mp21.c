@@ -1556,9 +1556,14 @@ static void stm32mp2_clk_xbar_on_hsi(struct clk_stm32_priv *priv)
 	uintptr_t xbar0cfgr = priv->base + RCC_XBAR0CFGR;
 	uint32_t i = 0;
 
-	for (i = 0; i < XBAR_ROOT_CHANNEL_NB; i++)
+	if (IS_ENABLED(CFG_STM32_CM33TDCID))
+		return;
+
+	for (i = 0; i < XBAR_ROOT_CHANNEL_NB; i++) {
 		io_clrsetbits32(xbar0cfgr + (0x4 * i),
 				RCC_XBAR0CFGR_XBAR0SEL_MASK, XBAR_SRC_HSI);
+	}
+
 }
 
 static int stm32mp2_a35_pll1_start(void)
