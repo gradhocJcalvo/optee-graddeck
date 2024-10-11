@@ -129,6 +129,16 @@ void *stm32_rproc_get(uint32_t rproc_id)
 	return rproc;
 }
 
+bool stm32_rproc_is_secure(uint32_t rproc_id)
+{
+	struct stm32_rproc_instance *rproc = stm32_rproc_get(rproc_id);
+
+	if (rproc)
+		return !rproc->cdata->ns_loading;
+
+	return false;
+}
+
 /* Re-apply default access right on the memory regions */
 static TEE_Result
 stm32_rproc_release_mems_access(struct stm32_rproc_instance *rproc)
