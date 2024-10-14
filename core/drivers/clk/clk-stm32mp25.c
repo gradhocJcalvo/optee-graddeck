@@ -12,6 +12,7 @@
 #include <drivers/stm32mp25_rcc.h>
 #include <dt-bindings/clock/stm32mp25-clks.h>
 #include <dt-bindings/clock/stm32mp25-clksrc.h>
+#include <dt-bindings/soc/stm32mp25-rifsc.h>
 #include <initcall.h>
 #include <io.h>
 #include <kernel/boot.h>
@@ -1436,7 +1437,6 @@ static int stm32_clk_parse_fdt(const void *fdt, int node,
 
 		stm32_rif_parse_cfg(rif_conf,
 				    &pdata->conf_data,
-				    RCC_NB_MAX_CID_SUPPORTED,
 				    RCC_NB_RIF_RES);
 	}
 
@@ -2215,7 +2215,8 @@ static int stm32_clk_configure_mux(struct clk_stm32_priv *priv __unused,
 	bool sem_taken = false;
 	int ret = 0;
 
-	if (tab_mux_rifsc[mux].is_rifsc && SEM_EN_AND_OK(cidcfgr, RIF_CID1)) {
+	if (tab_mux_rifsc[mux].is_rifsc &&
+	    stm32_rif_semaphore_enabled_and_ok(cidcfgr, RIF_CID1)) {
 		if (stm32_rif_acquire_semaphore(rifsc_base +
 						_RIFSC_RISC_PER0_SEMCR +
 						per_offset,
@@ -4752,7 +4753,7 @@ static TEE_Result apply_rcc_rif_config(bool is_tdcid)
 		cidcfgr = io_read32(pdata->rcc_base + RCC_CIDCFGR(i));
 
 		/* Check if the resource is in semaphore mode */
-		if (SEM_MODE_INCORRECT(cidcfgr))
+		if (!stm32_rif_semaphore_enabled_and_ok(cidcfgr, RIF_CID1))
 			continue;
 
 		/* If not TDCID, we want to acquire semaphores assigned to us */
@@ -4794,7 +4795,7 @@ static TEE_Result apply_rcc_rif_config(bool is_tdcid)
 		 * Take semaphore if the resource is in semaphore mode
 		 * and secured
 		 */
-		if (SEM_MODE_INCORRECT(cidcfgr) ||
+		if (!stm32_rif_semaphore_enabled_and_ok(cidcfgr, RIF_CID1) ||
 		    !(io_read32(pdata->rcc_base + RCC_SECCFGR(index)) &
 		      BIT(i % 32))) {
 			res =

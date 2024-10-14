@@ -144,7 +144,7 @@ static TEE_Result apply_rif_config(struct hpdma_pdata *hpdma_d, bool is_tdcid)
 		cidcfgr = io_read32(hpdma_d->base + _HPDMA_CIDCFGR(i));
 
 		/* Check if the channel is in semaphore mode */
-		if (SEM_MODE_INCORRECT(cidcfgr))
+		if (!stm32_rif_semaphore_enabled_and_ok(cidcfgr, RIF_CID1))
 			continue;
 
 		/* If not TDCID, we want to acquire semaphores assigned to us */
@@ -201,7 +201,7 @@ static TEE_Result apply_rif_config(struct hpdma_pdata *hpdma_d, bool is_tdcid)
 		 * Take semaphore if the resource is in semaphore
 		 * mode and secured.
 		 */
-		if (SEM_MODE_INCORRECT(cidcfgr) ||
+		if (!stm32_rif_semaphore_enabled_and_ok(cidcfgr, RIF_CID1) ||
 		    !(io_read32(hpdma_d->base + _HPDMA_SECCFGR) & BIT(i))) {
 			res =
 			stm32_rif_release_semaphore(hpdma_d->base +
@@ -305,7 +305,6 @@ static TEE_Result parse_dt(const void *fdt, int node,
 		rif_conf = fdt32_to_cpu(cuint[i]);
 
 		stm32_rif_parse_cfg(rif_conf, hpdma_d->conf_data,
-				    HPDMA_NB_MAX_CID_SUPPORTED,
 				    HPDMA_RIF_CHANNELS);
 	}
 

@@ -295,7 +295,6 @@ static void stm32_exti_rif_parse_dt(struct stm32_exti_pdata *exti,
 		rif_conf = fdt32_to_cpu(cuint[i]);
 
 		stm32_rif_parse_cfg(rif_conf, &conf_data,
-				    stm32_exti_maxcid(exti),
 				    stm32_exti_nbevents(exti));
 	}
 

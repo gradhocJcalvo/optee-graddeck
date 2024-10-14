@@ -123,7 +123,7 @@ static TEE_Result apply_rif_config(void)
 		cidcfgr = io_read32(fmc_d->base + _FMC_CIDCFGR(i));
 
 		/* Check if the controller is in semaphore mode */
-		if (SEM_MODE_INCORRECT(cidcfgr))
+		if (!stm32_rif_semaphore_enabled_and_ok(cidcfgr, RIF_CID1))
 			continue;
 
 		/* If not TDCID, we want to acquire semaphores assigned to us */
@@ -160,7 +160,7 @@ static TEE_Result apply_rif_config(void)
 		 * Take semaphore if the resource is in semaphore mode
 		 * and secured
 		 */
-		if (SEM_MODE_INCORRECT(cidcfgr) ||
+		if (!stm32_rif_semaphore_enabled_and_ok(cidcfgr, RIF_CID1) ||
 		    !(io_read32(fmc_d->base + _FMC_SECCFGR) & BIT(i))) {
 			res =
 			stm32_rif_release_semaphore(fmc_d->base + _FMC_SEMCR(i),
@@ -271,7 +271,6 @@ static TEE_Result parse_dt(const void *fdt, int node)
 		rif_conf = fdt32_to_cpu(cuint[i]);
 
 		stm32_rif_parse_cfg(rif_conf, fmc_d->conf_data,
-				    FMC_NB_MAX_CID_SUPPORTED,
 				    FMC_RIF_CONTROLLERS);
 	}
 

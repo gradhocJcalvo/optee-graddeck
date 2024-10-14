@@ -8,6 +8,7 @@
 #include <drivers/regulator.h>
 #include <drivers/stm32mp25_pwr.h>
 #include <drivers/stm32_rif.h>
+#include <dt-bindings/soc/stm32mp25-rifsc.h>
 #include <io.h>
 #include <kernel/delay.h>
 #include <kernel/dt.h>

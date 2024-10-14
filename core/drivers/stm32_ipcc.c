@@ -9,6 +9,7 @@
 #include <drivers/clk_dt.h>
 #include <drivers/stm32_rif.h>
 #include <drivers/mailbox.h>
+#include <io.h>
 #include <kernel/boot.h>
 #include <kernel/delay.h>
 #include <kernel/dt.h>
@@ -97,8 +98,6 @@
  * Miscellaneous
  */
 #define IPCC_NB_MAX_RIF_CHAN		U(16)
-
-#define IPCC_NB_MAX_CID_SUPPORTED	U(7)
 
 enum {
 	IPCC_ITR_RXO,
@@ -714,7 +713,6 @@ static TEE_Result parse_dt(const void *fdt, int node, struct ipcc_pdata *ipcc_d)
 		rif_conf = fdt32_to_cpu(cuint[i]);
 
 		stm32_rif_parse_cfg(rif_conf, ipcc_d->conf_data,
-				    IPCC_NB_MAX_CID_SUPPORTED,
 				    IPCC_NB_MAX_RIF_CHAN * 2);
 	}
 

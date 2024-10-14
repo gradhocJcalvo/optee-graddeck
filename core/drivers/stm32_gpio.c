@@ -424,10 +424,11 @@ static bool pin_is_accessible(struct stm32_gpio_bank *bank, unsigned int pin)
 	if (!(cidcfgr & _CIDCFGR_CFEN)) {
 		/* Resource can be accessed when CID filtering is disabled */
 		accessible = true;
-	} else if (SCID_OK(cidcfgr, GPIO_CIDCFGR_SCID_MASK, RIF_CID1)) {
+	} else if (stm32_rif_scid_ok(cidcfgr, GPIO_CIDCFGR_SCID_MASK,
+				     RIF_CID1)) {
 		/* Resource can be accessed if CID1 is statically allowed */
 		accessible = true;
-	} else if (SEM_EN_AND_OK(cidcfgr, RIF_CID1)) {
+	} else if (stm32_rif_semaphore_enabled_and_ok(cidcfgr, RIF_CID1)) {
 		/* We must acquire the semaphore to access the resource */
 		res = stm32_rif_acquire_semaphore(bank->base + GPIO_SEMCR(pin),
 						  GPIO_MAX_CID_SUPPORTED);
@@ -866,6 +867,7 @@ static bool bank_is_registered(const void *fdt, int node)
 	return false;
 }
 
+#ifdef CFG_STM32_RIF
 static TEE_Result apply_rif_config(struct stm32_gpio_bank *bank,
 				   uint32_t gpios_mask)
 {
@@ -896,7 +898,7 @@ static TEE_Result apply_rif_config(struct stm32_gpio_bank *bank,
 		cidcfgr = io_read32(bank->base + GPIO_CIDCFGR(i));
 
 		/* Check if the controller is in semaphore mode */
-		if (SEM_MODE_INCORRECT(cidcfgr))
+		if (!stm32_rif_semaphore_enabled_and_ok(cidcfgr, RIF_CID1))
 			continue;
 
 		/* If not TDCID, we want to acquire semaphores assigned to us */
@@ -934,7 +936,7 @@ static TEE_Result apply_rif_config(struct stm32_gpio_bank *bank,
 		 * Take semaphore if the resource is in semaphore mode
 		 * and secured.
 		 */
-		if (SEM_MODE_INCORRECT(cidcfgr) ||
+		if (!stm32_rif_semaphore_enabled_and_ok(cidcfgr, RIF_CID1) ||
 		    !(io_read32(bank->base + GPIO_SECR_OFFSET) & BIT(i))) {
 			res = stm32_rif_release_semaphore(bank->base +
 				GPIO_SEMCR(i),
@@ -987,6 +989,13 @@ out:
 
 	return res;
 }
+#else /* CFG_STM32_RIF */
+static TEE_Result apply_rif_config(struct stm32_gpio_bank *bank __unused,
+				   uint32_t gpios_mask __unused)
+{
+	return TEE_SUCCESS;
+}
+#endif /* CFG_STM32_RIF */
 
 /* Forward reference to stm32_gpio_set_conf_sec() defined below */
 static void stm32_gpio_set_conf_sec(struct stm32_gpio_bank *bank);
@@ -1020,7 +1029,7 @@ static TEE_Result stm32_gpio_fw_configure(struct firewall_query *firewall)
 		 * and apply it.
 		 */
 		stm32_rif_parse_cfg(firewall->args[0], bank->rif_cfg,
-				    GPIO_MAX_CID_SUPPORTED, bank->ngpios);
+				    bank->ngpios);
 		return apply_rif_config(bank, gpios_mask);
 	}
 
@@ -1104,7 +1113,7 @@ static void stm32_parse_gpio_rif_conf(struct stm32_gpio_bank *bank,
 
 	for (i = 0; i < nb_rif_conf; i++)
 		stm32_rif_parse_cfg(fdt32_to_cpu(cuint[i]), bank->rif_cfg,
-				    GPIO_MAX_CID_SUPPORTED, bank->ngpios);
+				    bank->ngpios);
 }
 
 /* Get GPIO bank information from the DT */

@@ -837,7 +837,6 @@ static TEE_Result parse_dt(const void *fdt, int node)
 		rif_conf = fdt32_to_cpu(cuint[i]);
 
 		stm32_rif_parse_cfg(rif_conf, rtc_dev.conf_data,
-				    RTC_NB_MAX_CID_SUPPORTED,
 				    RTC_NB_RIF_RESOURCES);
 	}
 

@@ -9,6 +9,7 @@
 #include <drivers/clk_dt.h>
 #include <drivers/stm32_rif.h>
 #include <drivers/stm32mp25_pwr.h>
+#include <drivers/stm32mp_dt_bindings.h>
 #include <io.h>
 #include <kernel/boot.h>
 #include <kernel/delay.h>
@@ -149,7 +150,7 @@ static TEE_Result apply_rif_config(bool is_tdcid)
 		 * Therefore, there's no need to handle SEMCR not existing for
 		 * these resources.
 		 */
-		if (SEM_MODE_INCORRECT(cidcfgr))
+		if (!stm32_rif_semaphore_enabled_and_ok(cidcfgr, RIF_CID1))
 			continue;
 
 		/* If not TDCID, we want to acquire semaphores assigned to us */
@@ -201,7 +202,7 @@ static TEE_Result apply_rif_config(bool is_tdcid)
 		}
 
 		/* Check if the resources is in semaphore mode */
-		if (SEM_MODE_INCORRECT(cidcfgr))
+		if (!stm32_rif_semaphore_enabled_and_ok(cidcfgr, RIF_CID1))
 			continue;
 
 		res = stm32_rif_release_semaphore(pwr_d->base +
@@ -281,7 +282,6 @@ static void parse_dt(const void *fdt, int node)
 
 	for (i = 0; i < pwr_d->nb_ressources; i++)
 		stm32_rif_parse_cfg(fdt32_to_cpu(cuint[i]), pwr_d->conf_data,
-				    _PWR_NB_MAX_CID_SUPPORTED,
 				    _PWR_NB_RESSOURCES);
 
 skip_rif:

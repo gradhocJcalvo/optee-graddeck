@@ -25,6 +25,7 @@
 #if defined(CFG_STM32MP21)
 #include <drivers/stm32mp21_rcc.h>
 #endif
+#include <drivers/stm32mp_dt_bindings.h>
 #include <io.h>
 #include <kernel/boot.h>
 #include <kernel/delay.h>
@@ -251,7 +252,6 @@
  * RIF miscellaneous
  */
 #define TAMP_RIF_RESOURCES		U(3)
-#define TAMP_NB_MAX_CID_SUPPORTED	U(7)
 
 enum stm32_tamp_out_id {
 	OUT_TAMP1 = LAST_TAMP,
@@ -2006,7 +2006,6 @@ static TEE_Result stm32_tamp_parse_fdt(struct stm32_tamp_platdata *pdata,
 			rif_conf = fdt32_to_cpu(cuint[i]);
 
 			stm32_rif_parse_cfg(rif_conf, pdata->conf_data,
-					    TAMP_NB_MAX_CID_SUPPORTED,
 					    TAMP_RIF_RESOURCES);
 		}
 	}
