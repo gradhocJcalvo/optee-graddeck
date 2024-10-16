@@ -104,10 +104,50 @@ vaddr_t stm32_pwr_base(void)
 	return pwr_d->base;
 }
 
+static TEE_Result handle_available_semaphores(void)
+{
+	TEE_Result res = TEE_ERROR_GENERIC;
+	uint32_t cidcfgr = 0;
+	unsigned int i = 0;
+
+	for (i = _PWR_NB_NS_RESSOURCES ; i < _PWR_NB_RESSOURCES; i++) {
+		unsigned int wio_offset = i + 1 - _PWR_NB_NS_RESSOURCES;
+		vaddr_t reg_offset = pwr_d->base + _PWR_WIO_SEMCR(wio_offset);
+
+		if (!(BIT(i) & pwr_d->conf_data->access_mask[0]))
+			continue;
+
+		cidcfgr = io_read32(pwr_d->base + _PWR_WIO_CIDCFGR(wio_offset));
+
+		if (!stm32_rif_semaphore_enabled_and_ok(cidcfgr, RIF_CID1))
+			continue;
+
+		if (!(io_read32(pwr_d->base + _PWR_WIOSECCFGR) &
+		      BIT(wio_offset - 1))) {
+			res = stm32_rif_release_semaphore(reg_offset,
+							  MAX_CID_SUPPORTED);
+			if (res) {
+				EMSG("Cannot release semaphore for resource %"PRIu32,
+				     wio_offset);
+				return res;
+			}
+		} else {
+			res = stm32_rif_acquire_semaphore(reg_offset,
+							  MAX_CID_SUPPORTED);
+			if (res) {
+				EMSG("Cannot acquire semaphore for resource %"PRIu32,
+				     wio_offset);
+				return res;
+			}
+		}
+	}
+
+	return TEE_SUCCESS;
+}
+
 static TEE_Result apply_rif_config(bool is_tdcid)
 {
 	TEE_Result res = TEE_ERROR_ACCESS_DENIED;
-	uint32_t cidcfgr = 0;
 	uint32_t r_priv = 0;
 	uint32_t r_sec = 0;
 	uint32_t wio_priv = 0;
@@ -118,49 +158,31 @@ static TEE_Result apply_rif_config(bool is_tdcid)
 	if (!pwr_d->conf_data)
 		return TEE_SUCCESS;
 
-	for (i = 0; i < _PWR_NB_RESSOURCES; i++) {
-		if (!(BIT(i) & pwr_d->conf_data->access_mask[0]))
-			continue;
+	if (is_tdcid) {
+		for (i = 0; i < _PWR_NB_RESSOURCES; i++) {
+			if (!(BIT(i) & pwr_d->conf_data->access_mask[0]))
+				continue;
 
-		/*
-		 * When TDCID, OP-TEE should be the one to set the CID filtering
-		 * configuration. Clearing previous configuration prevents
-		 * undesired events during the only legitimate configuration.
-		 */
-		if (i < _PWR_NB_NS_RESSOURCES) {
-			if (is_tdcid)
+			/*
+			 * When TDCID, OP-TEE should be the one to set the CID
+			 * filtering configuration. Clearing previous
+			 * configuration prevents undesired events during the
+			 * only legitimate configuration.
+			 */
+			if (i < _PWR_NB_NS_RESSOURCES) {
 				io_clrbits32(pwr_d->base + _PWR_R_CIDCFGR(i),
 					     _PWR_CIDCFGR_R_CONF_MASK);
-
-			cidcfgr = io_read32(pwr_d->base + _PWR_R_CIDCFGR(i));
-		} else {
-			wio_offset = i - _PWR_NB_NS_RESSOURCES + 1;
-			if (is_tdcid)
+			} else {
+				wio_offset = i + 1 - _PWR_NB_NS_RESSOURCES;
 				io_clrbits32(pwr_d->base +
 					     _PWR_WIO_CIDCFGR(wio_offset),
 					     _PWR_CIDCFGR_W_CONF_MASK);
-
-			cidcfgr = io_read32(pwr_d->base +
-					    _PWR_WIO_CIDCFGR(wio_offset));
+			}
 		}
-
-		/*
-		 * Check if the resources is in semaphore mode.
-		 * Non shareable resources won't ever have SEMEN bit set to 1.
-		 * Therefore, there's no need to handle SEMCR not existing for
-		 * these resources.
-		 */
-		if (!stm32_rif_semaphore_enabled_and_ok(cidcfgr, RIF_CID1))
-			continue;
-
-		/* If not TDCID, we want to acquire semaphores assigned to us */
-		res = stm32_rif_acquire_semaphore(pwr_d->base +
-						  _PWR_WIO_SEMCR(wio_offset),
-						  _PWR_NB_MAX_CID_SUPPORTED);
-		if (res) {
-			EMSG("Couldn't acquire semaphore for resources %u", i);
-			return res;
-		}
+	} else {
+		res = handle_available_semaphores();
+		if (res)
+			panic();
 	}
 
 	/* Separate non-shareable resources RIF configuration */
@@ -182,6 +204,11 @@ static TEE_Result apply_rif_config(bool is_tdcid)
 	io_clrsetbits32(pwr_d->base + _PWR_WIOSECCFGR, _PWR_WIO_SECCFGR_MASK,
 			wio_sec);
 
+	if (!is_tdcid) {
+		res = TEE_SUCCESS;
+		goto out;
+	}
+
 	for (i = 0; i < _PWR_NB_RESSOURCES; i++) {
 		if (!(BIT(i) & pwr_d->conf_data->access_mask[0]))
 			continue;
@@ -190,30 +217,20 @@ static TEE_Result apply_rif_config(bool is_tdcid)
 			io_clrsetbits32(pwr_d->base + _PWR_R_CIDCFGR(i),
 					_PWR_CIDCFGR_R_CONF_MASK,
 					pwr_d->conf_data->cid_confs[i]);
-			cidcfgr = io_read32(pwr_d->base + _PWR_R_CIDCFGR(i));
 		} else {
-			wio_offset = i - _PWR_NB_NS_RESSOURCES + 1;
+			wio_offset = i + 1 - _PWR_NB_NS_RESSOURCES;
 			io_clrsetbits32(pwr_d->base +
 					_PWR_WIO_CIDCFGR(wio_offset),
 					_PWR_CIDCFGR_W_CONF_MASK,
 					pwr_d->conf_data->cid_confs[i]);
-			cidcfgr = io_read32(pwr_d->base +
-					    _PWR_WIO_CIDCFGR(wio_offset));
-		}
-
-		/* Check if the resources is in semaphore mode */
-		if (!stm32_rif_semaphore_enabled_and_ok(cidcfgr, RIF_CID1))
-			continue;
-
-		res = stm32_rif_release_semaphore(pwr_d->base +
-						  _PWR_WIO_SEMCR(wio_offset),
-						  _PWR_NB_MAX_CID_SUPPORTED);
-		if (res) {
-			EMSG("Couldn't release semaphore resources %u", i);
-			return res;
 		}
 	}
 
+	res = handle_available_semaphores();
+	if (res)
+		panic();
+
+out:
 	if (IS_ENABLED(CFG_TEE_CORE_DEBUG)) {
 		/* Check that RIF config are applied, panic otherwise */
 		if ((io_read32(pwr_d->base + _PWR_RPRIVCFGR) &
@@ -243,7 +260,7 @@ static TEE_Result apply_rif_config(bool is_tdcid)
 		}
 	}
 
-	return TEE_SUCCESS;
+	return res;
 }
 
 static void parse_dt(const void *fdt, int node)
