@@ -489,13 +489,10 @@ static void stm32_exti_pm_resume(struct stm32_exti_pdata *exti)
 }
 
 static TEE_Result
-stm32_exti_pm(enum pm_op op, unsigned int pm_hint,
+stm32_exti_pm(enum pm_op op, unsigned int pm_hint __unused,
 	      const struct pm_callback_handle *pm_handle __unused)
 {
 	struct stm32_exti_pdata *exti = NULL;
-
-	if (!PM_HINT_IS_STATE(pm_hint, CONTEXT))
-		return TEE_SUCCESS;
 
 	SLIST_FOREACH(exti, &stm32_exti_list, link) {
 		if (op == PM_OP_SUSPEND)
