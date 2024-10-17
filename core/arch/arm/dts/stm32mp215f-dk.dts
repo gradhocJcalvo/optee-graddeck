@@ -242,6 +242,27 @@
 					regulator-off-in-suspend;
 				};
 			};
+			v_gpo3: gpo3 {
+				regulator-name = "gpo3";
+				regulator-min-microvolt = <3300000>;
+				regulator-max-microvolt = <3300000>;
+				regulator-always-on;
+				st,pwrctrl-sel = <1>;
+				st,pwrctrl-enable;
+
+				default {
+					regulator-on-in-suspend;
+				};
+				lplv {
+					regulator-on-in-suspend;
+				};
+				standby {
+					regulator-on-in-suspend;
+				};
+				off {
+					regulator-off-in-suspend;
+				};
+			};
 		};
 	};
 };
