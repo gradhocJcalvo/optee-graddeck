@@ -2497,6 +2497,26 @@ static const struct clk_ops clk_stm32_oscillator_msi_ops = {
 	.restore_context = clk_stm32_osc_msi_pm_restore,
 };
 
+static TEE_Result clk_stm32_osc_ker_enable(struct clk *clk)
+{
+	if (stm32_rcc_has_access_by_id(RCC_RIF_OSCILLATORS))
+		return clk_stm32_gate_enable(clk);
+
+	return TEE_SUCCESS;
+}
+
+static void clk_stm32_osc_ker_disable(struct clk *clk)
+{
+	if (stm32_rcc_has_access_by_id(RCC_RIF_OSCILLATORS))
+		clk_stm32_gate_disable(clk);
+}
+
+static const struct clk_ops clk_stm32_osc_ker_ops = {
+	.enable		= clk_stm32_osc_ker_enable,
+	.disable	= clk_stm32_osc_ker_disable,
+	.is_enabled	= clk_stm32_gate_is_enabled,
+};
+
 static TEE_Result clk_stm32_hse_div_set_rate(struct clk *clk,
 					     unsigned long rate,
 					     unsigned long parent_rate)
@@ -3417,7 +3437,7 @@ static const struct clk_ops ck_timer_ops = {
 
 #define STM32_OSC_KER(_name, _flags, _gate_id)\
 	struct clk _name = {\
-		.ops = &clk_stm32_gate_ops,\
+		.ops = &clk_stm32_osc_ker_ops,\
 		.priv = &(struct clk_stm32_gate_cfg){\
 			.gate_id = (_gate_id),\
 		},\
