@@ -1220,7 +1220,11 @@ static TEE_Result initialize_bsec(void)
 
 	plat_bsec_get_static_cfg(&cfg);
 
-	va = core_mmu_get_va(cfg.shadow, MEM_AREA_RAM_SEC, SIZE_4K);
+	if (IS_ENABLED(CFG_STM32_CM33TDCID))
+		va = core_mmu_get_va(cfg.shadow, MEM_AREA_RAM_NSEC, SIZE_4K);
+	else
+		va = core_mmu_get_va(cfg.shadow, MEM_AREA_RAM_SEC, SIZE_4K);
+
 	if (!va)
 		return TEE_ERROR_GENERIC;
 
