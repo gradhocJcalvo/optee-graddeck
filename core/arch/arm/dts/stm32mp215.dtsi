@@ -26,9 +26,5 @@
 			access-controllers = <&rifsc STM32MP21_RIFSC_LTDC_L2_ID>;
 			access-controller-names = "l3";
 		};
-		rot {
-			access-controllers = <&rifsc STM32MP21_RIFSC_LTDC_ROT_ID>;
-			access-controller-names = "rot";
-		};
 	};
 };
