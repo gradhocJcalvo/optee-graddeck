@@ -13,6 +13,9 @@
 #include <assert.h>
 #include <drivers/clk_dt.h>
 #include <drivers/stm32_etzpc.h>
+#ifdef CFG_STM32MP15
+#include <drivers/stm32mp1_rcc.h>
+#endif
 #include <drivers/firewall.h>
 #include <drivers/stm32mp_dt_bindings.h>
 #include <initcall.h>
@@ -166,6 +169,44 @@ static enum etzpc_decprot_attributes etzpc_binding2decprot(uint32_t mode)
 	}
 }
 
+static void
+sanitize_decprot_config(uint32_t decprot_id __maybe_unused,
+			enum etzpc_decprot_attributes attr __maybe_unused)
+{
+#ifdef CFG_STM32MP15
+	/*
+	 * STM32MP15: check dependency on RCC TZEN/MCKPROT configuration
+	 * when a ETZPC resource is secured or isolated for Cortex-M
+	 * coprocessor.
+	 */
+	switch (attr) {
+	case ETZPC_DECPROT_S_RW:
+	case ETZPC_DECPROT_NS_R_S_W:
+		if (!stm32_rcc_is_secure()) {
+			IMSG("WARNING: RCC tzen:0, insecure ETZPC hardening %"PRIu32":%s",
+			     decprot_id, etzpc_decprot_strings[attr]);
+			if (!IS_ENABLED(CFG_INSECURE))
+				panic();
+		}
+		break;
+	case ETZPC_DECPROT_MCU_ISOLATION:
+		if (!stm32_rcc_is_secure() || !stm32_rcc_is_mckprot()) {
+			IMSG("WARNING: RCC tzen:%u mckprot:%u, insecure ETZPC hardening %"PRIu32":%s",
+			     stm32_rcc_is_secure(), stm32_rcc_is_mckprot(),
+			     decprot_id, etzpc_decprot_strings[attr]);
+			if (!IS_ENABLED(CFG_INSECURE))
+				panic();
+		}
+		break;
+	case ETZPC_DECPROT_NS_RW:
+		break;
+	default:
+		assert(0);
+		break;
+	}
+#endif
+}
+
 static void etzpc_do_configure_decprot(struct etzpc_device *etzpc_dev,
 				       uint32_t decprot_id,
 				       enum etzpc_decprot_attributes attr)
@@ -180,6 +221,8 @@ static void etzpc_do_configure_decprot(struct etzpc_device *etzpc_dev,
 
 	FMSG("ID : %"PRIu32", CONF %s", decprot_id,
 	     etzpc_decprot_strings[attr]);
+
+	sanitize_decprot_config(decprot_id, attr);
 
 	exceptions = etzpc_lock(etzpc_dev);
 
@@ -533,6 +576,8 @@ static TEE_Result stm32_etzpc_configure_memory(struct firewall_query *firewall,
 				EMSG("Internal RAM configuration locked");
 				return TEE_ERROR_ACCESS_DENIED;
 			}
+
+			sanitize_decprot_config(id, attr);
 
 			return TEE_SUCCESS;
 		}
