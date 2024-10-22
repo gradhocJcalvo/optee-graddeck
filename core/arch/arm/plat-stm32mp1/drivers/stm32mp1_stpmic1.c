@@ -761,28 +761,6 @@ void stm32mp_put_pmic(void)
 		stm32_i2c_suspend(i2c_handle);
 }
 
-static void register_non_secure_pmic(void)
-{
-	/* Allow this function to be called when STPMIC1 not used */
-	if (!i2c_handle->base.pa)
-		return;
-
-	stm32mp_register_non_secure_pinctrl(i2c_handle->pinctrl);
-	if (i2c_handle->pinctrl_sleep)
-		stm32mp_register_non_secure_pinctrl(i2c_handle->pinctrl_sleep);
-
-	stm32mp_register_non_secure_periph_iomem(i2c_handle->base.pa);
-}
-
-static void register_secure_pmic(void)
-{
-	stm32mp_register_secure_pinctrl(i2c_handle->pinctrl);
-	if (i2c_handle->pinctrl_sleep)
-		stm32mp_register_secure_pinctrl(i2c_handle->pinctrl_sleep);
-
-	stm32mp_register_secure_periph_iomem(i2c_handle->base.pa);
-}
-
 static void init_pmic_secure_state(void)
 {
 	if (i2c_handle->i2c_secure)
@@ -808,11 +786,6 @@ static TEE_Result initialize_pmic(const void *fdt, int pmic_node)
 
 	DMSG("PMIC version = 0x%02lx", pmic_version);
 	stm32mp_put_pmic();
-
-	if (pmic_is_secure())
-		register_secure_pmic();
-	else
-		register_non_secure_pmic();
 
 	parse_regulator_fdt_nodes(fdt, pmic_node);
 
