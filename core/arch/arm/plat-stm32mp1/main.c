@@ -393,6 +393,7 @@ static TEE_Result init_stm32mp1_drivers(void)
 {
 	struct dt_driver_provider *prov = NULL;
 	TEE_Result res = TEE_ERROR_GENERIC;
+	uint32_t __maybe_unused state = 0;
 	uint32_t query_arg[1] = { };
 	struct firewall_query firewall = {
 		.args = query_arg,
@@ -431,6 +432,15 @@ static TEE_Result init_stm32mp1_drivers(void)
 
 	/* Configure SRAMx secure hardening */
 	configure_srams(prov);
+
+#ifdef CFG_STM32MP15
+	/* Device in Secure Closed state require RCC secure hardening */
+	if (stm32_bsec_get_state(&state))
+		panic();
+
+	if (state == BSEC_STATE_SEC_CLOSED && !stm32_rcc_is_secure())
+		panic("Closed device mandates secure RCC");
+#endif
 
 	return TEE_SUCCESS;
 }
