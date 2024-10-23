@@ -868,11 +868,51 @@ static bool bank_is_registered(const void *fdt, int node)
 }
 
 #ifdef CFG_STM32_RIF
+static TEE_Result handle_available_semaphores(struct stm32_gpio_bank *bank,
+					      uint32_t gpios_mask)
+{
+	TEE_Result res = TEE_ERROR_GENERIC;
+	uint32_t cidcfgr = 0;
+	unsigned int i = 0;
+
+	for (i = 0 ; i < bank->ngpios; i++) {
+		if (!(BIT(i) & gpios_mask) ||
+		    !(BIT(i) & bank->rif_cfg->access_mask[0]))
+			continue;
+
+		cidcfgr = io_read32(bank->base + GPIO_CIDCFGR(i));
+
+		if (!stm32_rif_semaphore_enabled_and_ok(cidcfgr, RIF_CID1))
+			continue;
+
+		if (!(io_read32(bank->base + GPIO_SECR_OFFSET) & BIT(i))) {
+			res = stm32_rif_release_semaphore(bank->base +
+							  GPIO_SEMCR(i),
+							  MAX_CID_SUPPORTED);
+			if (res) {
+				EMSG("Cannot release semaphore for resource %"PRIu32,
+				     i);
+				return res;
+			}
+		} else {
+			res = stm32_rif_acquire_semaphore(bank->base +
+							  GPIO_SEMCR(i),
+							  MAX_CID_SUPPORTED);
+			if (res) {
+				EMSG("Cannot acquire semaphore for resource %"PRIu32,
+				     i);
+				return res;
+			}
+		}
+	}
+
+	return TEE_SUCCESS;
+}
+
 static TEE_Result apply_rif_config(struct stm32_gpio_bank *bank,
 				   uint32_t gpios_mask)
 {
 	TEE_Result res = TEE_ERROR_GENERIC;
-	uint32_t cidcfgr = 0;
 	unsigned int i = 0;
 
 	if (!bank->rif_cfg)
@@ -881,33 +921,25 @@ static TEE_Result apply_rif_config(struct stm32_gpio_bank *bank,
 	if (clk_enable(bank->clock))
 		panic();
 
-	for (i = 0; i < bank->ngpios; i++) {
-		if (!(BIT(i) & gpios_mask) ||
-		    !(BIT(i) & bank->rif_cfg->access_mask[0]))
-			continue;
+	if (bank->is_tdcid) {
+		for (i = 0; i < bank->ngpios; i++) {
+			if (!(BIT(i) & gpios_mask) ||
+			    !(BIT(i) & bank->rif_cfg->access_mask[0]))
+				continue;
 
-		/*
-		 * When TDCID, OP-TEE should be the one to set the CID filtering
-		 * configuration. Clearing previous configuration prevents
-		 * undesired events during the only legitimate configuration.
-		 */
-		if (bank->is_tdcid)
+			/*
+			 * When TDCID, OP-TEE should be the one to set the CID
+			 * filtering configuration. Clearing previous
+			 * configuration prevents undesired events during the
+			 * only legitimate configuration.
+			 */
 			io_clrbits32(bank->base + GPIO_CIDCFGR(i),
 				     GPIO_CIDCFGR_CONF_MASK);
-
-		cidcfgr = io_read32(bank->base + GPIO_CIDCFGR(i));
-
-		/* Check if the controller is in semaphore mode */
-		if (!stm32_rif_semaphore_enabled_and_ok(cidcfgr, RIF_CID1))
-			continue;
-
-		/* If not TDCID, we want to acquire semaphores assigned to us */
-		res = stm32_rif_acquire_semaphore(bank->base + GPIO_SEMCR(i),
-						  GPIO_MAX_CID_SUPPORTED);
-		if (res) {
-			EMSG("Could not acquire semaphore for pin %u", i);
-			goto out;
 		}
+	} else {
+		res = handle_available_semaphores(bank, gpios_mask);
+		if (res)
+			panic();
 	}
 
 	/* Security and privilege RIF configuration */
@@ -929,33 +961,6 @@ static TEE_Result apply_rif_config(struct stm32_gpio_bank *bank,
 		io_clrsetbits32(bank->base + GPIO_CIDCFGR(i),
 				GPIO_CIDCFGR_CONF_MASK,
 				bank->rif_cfg->cid_confs[i]);
-
-		cidcfgr = io_read32(bank->base + GPIO_CIDCFGR(i));
-
-		/*
-		 * Take semaphore if the resource is in semaphore mode
-		 * and secured.
-		 */
-		if (!stm32_rif_semaphore_enabled_and_ok(cidcfgr, RIF_CID1) ||
-		    !(io_read32(bank->base + GPIO_SECR_OFFSET) & BIT(i))) {
-			res = stm32_rif_release_semaphore(bank->base +
-				GPIO_SEMCR(i),
-				GPIO_MAX_CID_SUPPORTED);
-			if (res) {
-				EMSG("Could not release semaphore for pin%u",
-				     i);
-				goto out;
-			}
-		} else {
-			res = stm32_rif_acquire_semaphore(bank->base +
-				GPIO_SEMCR(i),
-				GPIO_MAX_CID_SUPPORTED);
-			if (res) {
-				EMSG("Could not acquire semaphore for pin%u",
-				     i);
-				goto out;
-			}
-		}
 	}
 
 	/*
@@ -965,6 +970,11 @@ static TEE_Result apply_rif_config(struct stm32_gpio_bank *bank,
 	io_clrsetbits32(bank->base + GPIO_RCFGLOCKR_OFFSET, gpios_mask,
 			bank->rif_cfg->lock_conf[0]);
 
+	res = handle_available_semaphores(bank, gpios_mask);
+	if (res)
+		panic();
+
+out:
 	if (IS_ENABLED(CFG_TEE_CORE_DEBUG)) {
 		/* Check that RIF config are applied, panic otherwise */
 		if ((io_read32(bank->base + GPIO_PRIVCFGR_OFFSET) &
@@ -984,7 +994,6 @@ static TEE_Result apply_rif_config(struct stm32_gpio_bank *bank,
 		}
 	}
 
-out:
 	clk_disable(bank->clock);
 
 	return res;
@@ -1482,7 +1491,9 @@ static TEE_Result stm32_gpio_sec_config_resume(void)
 			bank->rif_cfg->access_mask[0] = GENMASK_32(bank->ngpios,
 								   0);
 
-			apply_rif_config(bank, bank->rif_cfg->access_mask[0]);
+			if (apply_rif_config(bank,
+					     bank->rif_cfg->access_mask[0]))
+				panic();
 		} else {
 			stm32_gpio_set_conf_sec(bank);
 		}
