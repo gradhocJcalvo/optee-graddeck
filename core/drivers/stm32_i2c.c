@@ -708,7 +708,6 @@ TEE_Result stm32_i2c_get_setup_from_fdt(void *fdt, int node,
 	assert(info.reg != DT_INFO_INVALID_REG &&
 	       info.reg_size != DT_INFO_INVALID_REG_SIZE);
 
-	init->dt_status = info.status;
 	init->pbase = info.reg;
 	init->reg_size = info.reg_size;
 
@@ -1659,7 +1658,6 @@ static TEE_Result stm32_i2c_probe(const void *fdt, int node,
 	if (!i2c_handle_p)
 		return TEE_ERROR_OUT_OF_MEMORY;
 
-	i2c_handle_p->dt_status = init_data.dt_status;
 	i2c_handle_p->reg_size = init_data.reg_size;
 	i2c_handle_p->clock = init_data.clock;
 	i2c_handle_p->base.pa = init_data.pbase;
