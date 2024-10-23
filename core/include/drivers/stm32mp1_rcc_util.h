@@ -24,16 +24,6 @@ extern const struct clk_ops stm32mp1_clk_ops;
 struct rstctrl *stm32mp_rcc_reset_id_to_rstctrl(unsigned int binding_id);
 #endif
 
-#ifdef CFG_STM32MP1_SHARED_RESOURCES
-/* Register parent clocks of @clock (ID used in clock DT bindings) as secure */
-void stm32mp_register_clock_parents_secure(unsigned long clock_id);
-#else
-static inline
-void stm32mp_register_clock_parents_secure(unsigned long clock_id __unused)
-{
-}
-#endif
-
 /* Save PLL1 configuration data for low power sequence if any */
 void stm32mp1_clk_lp_save_opp_pll1_settings(uint8_t *data, size_t size);
 
