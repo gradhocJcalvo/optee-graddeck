@@ -914,8 +914,10 @@ static TEE_Result apply_rif_config(struct stm32_gpio_bank *bank,
 	io_clrsetbits32(bank->base + GPIO_SECR_OFFSET, gpios_mask,
 			bank->rif_cfg->sec_conf[0]);
 
-	if (!bank->is_tdcid)
+	if (!bank->is_tdcid) {
+		res = TEE_SUCCESS;
 		goto out;
+	}
 
 	for (i = 0; i < bank->ngpios; i++) {
 		if (!(BIT(i) & gpios_mask) ||
@@ -983,7 +985,7 @@ static TEE_Result apply_rif_config(struct stm32_gpio_bank *bank,
 out:
 	clk_disable(bank->clock);
 
-	return TEE_SUCCESS;
+	return res;
 }
 
 /* Forward reference to stm32_gpio_set_conf_sec() defined below */
