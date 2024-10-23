@@ -85,17 +85,6 @@ uint32_t may_spin_lock(unsigned int *lock);
 void may_spin_unlock(unsigned int *lock, uint32_t exceptions);
 
 #ifdef CFG_STM32MP1_SHARED_RESOURCES
-/* Return true if @clock_id is shared by secure and non-secure worlds */
-bool stm32mp_nsec_can_access_clock(unsigned long clock_id);
-#else /* CFG_STM32MP1_SHARED_RESOURCES */
-static inline bool stm32mp_nsec_can_access_clock(unsigned long clock_id
-						 __unused)
-{
-	return true;
-}
-#endif /* CFG_STM32MP1_SHARED_RESOURCES */
-
-#ifdef CFG_STM32MP1_SHARED_RESOURCES
 /* Return true if and only if @reset_id relates to a non-secure peripheral */
 bool stm32mp_nsec_can_access_reset(unsigned int reset_id);
 #else /* CFG_STM32MP1_SHARED_RESOURCES */
