@@ -21,7 +21,7 @@ scpfw-out-path := $(out-dir)/$(libdir)
 # This script was validated against SCP-firmware 2.11.0 development branch,
 # from commit f1d894921d76 ("product/optee-fvp: Add new OPTEE FVP product").
 scpfw-integ-version-maj = 2
-scpfw-integ-version-min = 11
+scpfw-integ-version-min = 13
 scpfw-integ-version-pat = 0
 scpfw-integ-version = $(scpfw-integ-version-maj).$(scpfw-integ-version-min).$(scpfw-integ-version-pat)
 
