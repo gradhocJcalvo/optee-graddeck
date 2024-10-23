@@ -97,6 +97,7 @@ $(call force,CFG_SCMI_SERVER_RESET_CONSUMER,n)
 $(call force,CFG_STM32_BSEC_WRITE,n)
 $(call force,CFG_STM32MP_PROVISIONING,n)
 $(call force,CFG_TA_STM32MP_NVMEM,n)
+$(call force,CFG_STM32MP2_CLK_CAL,n)
 endif
 
 $(call force,CFG_ARM_GIC_PM,y)
@@ -120,6 +121,7 @@ $(call force,CFG_STM32_HSE_MONITORING,y)
 $(call force,CFG_STM32_PWR,y)
 $(call force,CFG_STM32_PWR_REGUL,y)
 $(call force,CFG_STM32MP_CLK_CORE,y)
+CFG_STM32MP2_CLK_CAL ?= y
 CFG_STM32MP_REMOTEPROC ?= y
 $(call force,CFG_WITH_ARM_TRUSTED_FW,y)
 $(call force,CFG_WITH_LPAE,y)
