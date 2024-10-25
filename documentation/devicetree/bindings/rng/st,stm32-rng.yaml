@@ -18,6 +18,7 @@ properties:
     enum:
       - st,stm32-rng
       - st,stm32mp13-rng
+      - st,stm32mp21-rng
       - st,stm32mp25-rng
 
   reg:
@@ -57,7 +58,9 @@ allOf:
       properties:
         compatible:
           contains:
-            const: st,stm32mp25-rng
+            enum:
+              - st,stm32mp21-rng
+              - st,stm32mp25-rng
     then:
       properties:
         clocks:
