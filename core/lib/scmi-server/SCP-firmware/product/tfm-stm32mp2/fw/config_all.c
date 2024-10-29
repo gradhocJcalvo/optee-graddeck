@@ -740,6 +740,8 @@ static void set_resources(struct scpfw_config *cfg)
                     mod_stm32_pd_config->name = scmi_pd->name;
                     mod_stm32_pd_config->clk = scmi_pd->clk;
                     mod_stm32_pd_config->regu = scmi_pd->regu;
+                    mod_stm32_pd_config->firewall = scmi_pd->firewall;
+                    mod_stm32_pd_config->n_firewall = scmi_pd->n_firewall;
 
                     stm32_pd_elt_k->name = scmi_pd->name;
                     stm32_pd_elt_k->data = (void *)mod_stm32_pd_config;
