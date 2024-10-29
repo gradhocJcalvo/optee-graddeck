@@ -8,7 +8,7 @@
 	cryp1: cryp@42030000 {
 		compatible = "st,stm32mp1-cryp";
 		reg = <0x42030000 0x400>;
-		interrupts = <GIC_SPI 144 IRQ_TYPE_LEVEL_HIGH>;
+		interrupts = <GIC_SPI 131 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&rcc CK_BUS_CRYP1>;
 		resets = <&rcc CRYP1_R>;
 		status = "disabled";
@@ -17,7 +17,7 @@
 	hash1: hash@42030400 {
 		compatible = "st,stm32mp13-hash";
 		reg = <0x42030400  0x400>;
-		interrupts = <GIC_SPI 145 IRQ_TYPE_LEVEL_HIGH>;
+		interrupts = <GIC_SPI 132 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&rcc CK_BUS_HASH1>;
 		resets = <&rcc HASH1_R>;
 		status = "disabled";
@@ -45,7 +45,7 @@
 	pka: pka@42032000 {
 		compatible = "st,stm32mp13-pka64";
 		reg = <0x42032000 0x2000>;
-		interrupts = <GIC_SPI 146 IRQ_TYPE_LEVEL_HIGH>;
+		interrupts = <GIC_SPI 133 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&rcc CK_BUS_PKA>, <&rcc CK_BUS_RNG1>;
 		clock-names = "bus", "rng";
 		resets = <&rcc PKA_R>;

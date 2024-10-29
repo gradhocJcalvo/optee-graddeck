@@ -2085,7 +2085,7 @@
 			usart2: serial@400e0000 {
 				compatible = "st,stm32h7-uart";
 				reg = <0x400e0000 0x400>;
-				interrupts = <GIC_SPI 115 IRQ_TYPE_LEVEL_HIGH>;
+				interrupts = <GIC_SPI 102 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_USART2>;
 				access-controllers = <&rifsc STM32MP21_RIFSC_USART2_ID>;
 				status = "disabled";
@@ -2094,7 +2094,7 @@
 			usart3: serial@400f0000 {
 				compatible = "st,stm32h7-uart";
 				reg = <0x400f0000 0x400>;
-				interrupts = <GIC_SPI 116 IRQ_TYPE_LEVEL_HIGH>;
+				interrupts = <GIC_SPI 103 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_USART3>;
 				access-controllers = <&rifsc STM32MP21_RIFSC_USART3_ID>;
 				status = "disabled";
@@ -2103,7 +2103,7 @@
 			uart4: serial@40100000 {
 				compatible = "st,stm32h7-uart";
 				reg = <0x40100000 0x400>;
-				interrupts = <GIC_SPI 126 IRQ_TYPE_LEVEL_HIGH>;
+				interrupts = <GIC_SPI 113 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_UART4>;
 				access-controllers = <&rifsc STM32MP21_RIFSC_UART4_ID>;
 				status = "disabled";
@@ -2112,7 +2112,7 @@
 			uart5: serial@40110000 {
 				compatible = "st,stm32h7-uart";
 				reg = <0x40110000 0x400>;
-				interrupts = <GIC_SPI 127 IRQ_TYPE_LEVEL_HIGH>;
+				interrupts = <GIC_SPI 114 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_UART5>;
 				access-controllers = <&rifsc STM32MP21_RIFSC_UART5_ID>;
 				status = "disabled";
@@ -2145,7 +2145,7 @@
 			usart6: serial@40220000 {
 				compatible = "st,stm32h7-uart";
 				reg = <0x40220000 0x400>;
-				interrupts = <GIC_SPI 136 IRQ_TYPE_LEVEL_HIGH>;
+				interrupts = <GIC_SPI 123 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_USART6>;
 				access-controllers = <&rifsc STM32MP21_RIFSC_USART6_ID>;
 				status = "disabled";
@@ -2154,7 +2154,7 @@
 			usart1: serial@40330000 {
 				compatible = "st,stm32h7-uart";
 				reg = <0x40330000 0x400>;
-				interrupts = <GIC_SPI 114 IRQ_TYPE_LEVEL_HIGH>;
+				interrupts = <GIC_SPI 101 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_USART1>;
 				access-controllers = <&rifsc STM32MP21_RIFSC_USART1_ID>;
 				status = "disabled";
@@ -2163,7 +2163,7 @@
 			uart7: serial@40370000 {
 				compatible = "st,stm32h7-uart";
 				reg = <0x40370000 0x400>;
-				interrupts = <GIC_SPI 148 IRQ_TYPE_LEVEL_HIGH>;
+				interrupts = <GIC_SPI 135 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_UART7>;
 				access-controllers = <&rifsc STM32MP21_RIFSC_UART7_ID>;
 				status = "disabled";
@@ -2240,7 +2240,7 @@
 			hash2: hash@42010000  {
 				compatible = "st,stm32mp13-hash";
 				reg = <0x42010000  0x400>;
-				interrupts = <GIC_SPI 145 IRQ_TYPE_LEVEL_HIGH>;
+				interrupts = <GIC_SPI 178 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_BUS_HASH2>;
 				resets = <&rcc HASH2_R>;
 				access-controllers = <&rifsc STM32MP21_RIFSC_HASH2_ID>;
@@ -2392,7 +2392,7 @@
 		iac: iac@42090000 {
 			compatible = "st,stm32mp25-iac";
 			reg = <0x42090000 0x400>;
-			interrupts = <GIC_SPI 246 IRQ_TYPE_LEVEL_HIGH>;
+			interrupts = <GIC_SPI 201 IRQ_TYPE_LEVEL_HIGH>;
 		};
 
 		risaf1: risaf@420a0000 {
@@ -2504,7 +2504,7 @@
 		serc: serc@44080000 {
 			compatible = "st,stm32mp25-serc";
 			reg = <0x44080000 0x1000>;
-			interrupts = <GIC_SPI 240 IRQ_TYPE_LEVEL_HIGH>;
+			interrupts = <GIC_SPI 195 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc CK_BUS_SERC>;
 		};
 
