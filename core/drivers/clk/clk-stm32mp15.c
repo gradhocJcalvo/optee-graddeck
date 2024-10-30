@@ -3590,6 +3590,12 @@ static TEE_Result stm32mp1_clock_provider_probe(const void *fdt, int offs,
 	else
 		enable_rcc_tzen();
 
+	/*
+	 * Default disable MCKPROT, it may be enabled later from
+	 * STM32 remoteproc driver.
+	 */
+	stm32_rcc_set_mckprot(false);
+
 	rc = fdt_stm32_clk_parse(fdt, offs, pdata);
 	if (rc) {
 		EMSG("Failed to parse clock node: %d", rc);

@@ -629,11 +629,6 @@ static void check_rcc_secure_configuration(void)
 		else
 			panic();
 	}
-
-	if (!need_mckprot && mckprot) {
-		DMSG("Disable RCC MCKPROT");
-		stm32_rcc_set_mckprot(false);
-	}
 }
 
 static TEE_Result stm32mp1_init_final_shres(void)
