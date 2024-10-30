@@ -1405,16 +1405,6 @@ static void __maybe_unused disable_rcc_tzen(void)
 	io_clrbits32(stm32_rcc_base() + RCC_TZCR, RCC_TZCR_TZEN);
 }
 
-void stm32mp1_clk_mcuss_protect(bool enable)
-{
-	uintptr_t rcc_base = stm32_rcc_base();
-
-	if (enable)
-		io_setbits32(rcc_base + RCC_TZCR, RCC_TZCR_MCKPROT);
-	else
-		io_clrbits32(rcc_base + RCC_TZCR, RCC_TZCR_MCKPROT);
-}
-
 #ifdef CFG_STM32_CPU_OPP
 static bool stm32mp1_clk_pll1_settings_are_valid(void)
 {

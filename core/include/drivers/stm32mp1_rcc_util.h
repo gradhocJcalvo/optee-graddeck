@@ -34,9 +34,6 @@ void stm32mp_register_clock_parents_secure(unsigned long clock_id __unused)
 }
 #endif
 
-/* Protect the MCU clock subsytem */
-void stm32mp1_clk_mcuss_protect(bool enable);
-
 /* Save PLL1 configuration data for low power sequence if any */
 void stm32mp1_clk_lp_save_opp_pll1_settings(uint8_t *data, size_t size);
 
