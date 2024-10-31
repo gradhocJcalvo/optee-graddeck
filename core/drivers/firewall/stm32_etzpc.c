@@ -106,10 +106,10 @@ struct etzpc_device {
 };
 
 static const char *const etzpc_decprot_strings[] __maybe_unused = {
-	"ETZPC_DECPROT_S_RW",
-	"ETZPC_DECPROT_NS_R_S_W",
-	"ETZPC_DECPROT_MCU_ISOLATION",
-	"ETZPC_DECPROT_NS_RW",
+	[ETZPC_DECPROT_S_RW] = "ETZPC_DECPROT_S_RW",
+	[ETZPC_DECPROT_NS_R_S_W] = "ETZPC_DECPROT_NS_R_S_W",
+	[ETZPC_DECPROT_MCU_ISOLATION] = "ETZPC_DECPROT_MCU_ISOLATION",
+	[ETZPC_DECPROT_NS_RW] = "ETZPC_DECPROT_NS_RW",
 };
 
 /* Temporary firewall controller reference */
