@@ -3402,7 +3402,7 @@
 			compatible = "st,stm32mp25-stgen";
 			reg = <0x48080000 0x1000>;
 			clocks = <&rcc CK_BUS_STGEN>, <&rcc CK_KER_STGEN>;
-			clock-names = "bus", "tsgen_clk";
+			clock-names = "bus", "stgen_clk";
 			st,tsgen-clk-source = <&rcc HSE_CK>;
 		};
 

@@ -36,8 +36,8 @@ struct stm32_stgen_compat_data {
 };
 
 struct stgen_pdata {
-	struct clk *tsgen_clock;
-	struct clk *tsgen_clock_source;
+	struct clk *stgen_clock;
+	struct clk *stgen_clock_source;
 	struct clk *bus_clock;
 	struct stm32_rtc_calendar *calendar;
 	uint32_t cnt_h;
@@ -110,7 +110,7 @@ static void stm32_stgen_pm_suspend(void)
 
 static void stm32_stgen_pm_resume(void)
 {
-	unsigned long clock_src_rate = clk_get_rate(stgen_d.tsgen_clock_source);
+	unsigned long clock_src_rate = clk_get_rate(stgen_d.stgen_clock_source);
 	uint64_t counter_val = ((uint64_t)stgen_d.cnt_h << 32) | stgen_d.cnt_l;
 	struct stm32_rtc_calendar cur_calendar = { };
 	uint64_t nb_pm_count_ticks = 0;
@@ -182,26 +182,26 @@ static TEE_Result parse_dt(const void *fdt, int node)
 	else if (res)
 		panic("No stgen bus clock available in device tree");
 
-	res = clk_dt_get_by_name(fdt, node, "tsgen_clk", &stgen_d.tsgen_clock);
+	res = clk_dt_get_by_name(fdt, node, "stgen_clk", &stgen_d.stgen_clock);
 	if (res == TEE_ERROR_DEFER_DRIVER_INIT)
 		return TEE_ERROR_DEFER_DRIVER_INIT;
 	else if (res)
-		panic("No tsgen clock available in device tree");
+		panic("No stgen clock available in device tree");
 
 	cuint = fdt_getprop(fdt, node, "st,tsgen-clk-source", &lenp);
 	if (!cuint) {
-		DMSG("No tsgen clock source found");
+		DMSG("No stgen clock source found");
 		return TEE_SUCCESS;
 	}
 
 	lenp /= sizeof(uint32_t);
 	if (lenp != 2)
-		panic("Incorrect tsgen clock source");
+		panic("Incorrect stgen clock source");
 
-	stgen_d.tsgen_clock_source =
+	stgen_d.stgen_clock_source =
 		stm32mp_rcc_clock_id_to_clk(fdt32_to_cpu(cuint[1]));
 
-	assert(stgen_d.tsgen_clock_source);
+	assert(stgen_d.stgen_clock_source);
 
 	return TEE_SUCCESS;
 }
@@ -213,7 +213,7 @@ static TEE_Result stgen_probe(const void *fdt, int node,
 	uint64_t stgen_counter = 0;
 	unsigned long clock_source_rate = 0;
 	unsigned long initial_stgen_rate = 0;
-	struct clk *tsgen_source = NULL;
+	struct clk *stgen_source = NULL;
 	const struct stm32_stgen_compat_data *compat_d = compat_data;
 
 	res = parse_dt(fdt, node);
@@ -225,34 +225,34 @@ static TEE_Result stgen_probe(const void *fdt, int node,
 		return TEE_ERROR_OUT_OF_MEMORY;
 
 	/*
-	 * Some SoCs may have intermediate clock signals between tsgen and
-	 * desired tsgen clock source. Use tsgen_source to ease manipulation.
+	 * Some SoCs may have intermediate clock signals between stgen and
+	 * desired stgen clock source. Use stgen_source to ease manipulation.
 	 */
-	tsgen_source = stgen_d.tsgen_clock;
+	stgen_source = stgen_d.stgen_clock;
 	if (compat_d->intermediate_clock_parent) {
-		tsgen_source = clk_get_parent(stgen_d.tsgen_clock);
-		assert(tsgen_source);
+		stgen_source = clk_get_parent(stgen_d.stgen_clock);
+		assert(stgen_source);
 	}
 
-	res = clk_enable(stgen_d.tsgen_clock);
+	res = clk_enable(stgen_d.stgen_clock);
 	if (res)
 		goto err;
 
 	res = clk_enable(stgen_d.bus_clock);
 	if (res) {
-		clk_disable(stgen_d.tsgen_clock);
+		clk_disable(stgen_d.stgen_clock);
 		goto err;
 	}
 
 	/*
-	 * Do nothing if tsgen_clock parent clock is already
+	 * Do nothing if stgen_clock parent clock is already
 	 * targeted clock source or if there is no STGEN source clock
 	 */
-	if (!stgen_d.tsgen_clock_source ||
-	    clk_get_parent(tsgen_source) == stgen_d.tsgen_clock_source)
+	if (!stgen_d.stgen_clock_source ||
+	    clk_get_parent(stgen_source) == stgen_d.stgen_clock_source)
 		goto end;
 
-	initial_stgen_rate = clk_get_rate(stgen_d.tsgen_clock);
+	initial_stgen_rate = clk_get_rate(stgen_d.stgen_clock);
 
 	/*
 	 * Disable STGEN counter. At cold boot, we accept the counter delta
@@ -260,15 +260,15 @@ static TEE_Result stgen_probe(const void *fdt, int node,
 	 */
 	io_clrbits32(stgen_d.base + STGENC_CNTCR, BIT(0));
 
-	clock_source_rate = clk_get_rate(stgen_d.tsgen_clock_source);
+	clock_source_rate = clk_get_rate(stgen_d.stgen_clock_source);
 
-	res = clk_set_parent(tsgen_source, stgen_d.tsgen_clock_source);
+	res = clk_set_parent(stgen_source, stgen_d.stgen_clock_source);
 	if (res)
-		panic("Couldn't set tsgen source");
+		panic("Couldn't set stgen source");
 
-	res = clk_set_rate(tsgen_source, clock_source_rate);
+	res = clk_set_rate(stgen_source, clock_source_rate);
 	if (res)
-		panic("Couldn't set tsgen clock rate");
+		panic("Couldn't set stgen clock rate");
 
 	io_write32(stgen_d.base + STGENC_CNTFID0, clock_source_rate);
 	if (io_read32(stgen_d.base + STGENC_CNTFID0) != clock_source_rate)
