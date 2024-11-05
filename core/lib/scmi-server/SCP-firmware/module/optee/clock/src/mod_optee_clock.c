@@ -14,6 +14,8 @@
 #include <fwk_module.h>
 #include <fwk_log.h>
 
+#include <arch_main.h>
+
 #include <mod_clock.h>
 #include <mod_optee_clock.h>
 
@@ -121,13 +123,16 @@ static int set_state(fwk_id_t dev_id, enum mod_clock_state state)
         }
     } else {
         if (!ctx->enabled) {
+            TEE_Result res;
+
             FWK_LOG_DEBUG(
                 MOD_NAME "SCMI optee_clock (%u/\"%s\") enable",
                 fwk_id_get_element_idx(dev_id),
                 clk_get_name(ctx->clk));
 
-            if (clk_enable(ctx->clk)) {
-                return FWK_E_DEVICE;
+            res = clk_enable(ctx->clk);
+            if (res) {
+                return scmi_tee_result_to_fwk_status(res);
             }
 
             ctx->enabled = true;
