@@ -212,8 +212,10 @@ static void stm32mp1_pwr_itr_enable_nolock(size_t it)
 
 	VERBOSE_PWR("Pwr irq enable");
 
-	if (IS_ENABLED(CFG_STM32_EXTI))
+	if (IS_ENABLED(CFG_STM32_EXTI)) {
+		stm32_exti_unmask(priv->exti, PWR_EXTI_WKUP1 + it);
 		stm32_exti_enable_wake(priv->exti, PWR_EXTI_WKUP1 + it);
+	}
 
 	io_setbits32(priv->base + MPUWKUPENR, BIT(it));
 }
@@ -226,8 +228,10 @@ static void stm32mp1_pwr_itr_disable_nolock(size_t it)
 
 	io_clrbits32(priv->base + MPUWKUPENR, BIT(it));
 
-	if (IS_ENABLED(CFG_STM32_EXTI))
+	if (IS_ENABLED(CFG_STM32_EXTI)) {
+		stm32_exti_mask(priv->exti, PWR_EXTI_WKUP1 + it);
 		stm32_exti_disable_wake(priv->exti, PWR_EXTI_WKUP1 + it);
+	}
 }
 
 static TEE_Result stm32_pwr_irq_set_trig(size_t it, unsigned int flags)
