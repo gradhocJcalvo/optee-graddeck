@@ -207,6 +207,8 @@ struct rtc_compat {
  * @itr_handler: Interrupt handler
  * @notif_id: Notification ID
  * @wait_alarm_return_status: Status of the wait alarm
+ * @exti: EXTI data associated to wake-up interruption
+ * @rtc: information for OP-TEE RTC device
  */
 struct rtc_device {
 	struct io_pa_va base;
@@ -224,7 +226,6 @@ struct rtc_device {
 	enum rtc_wait_alarm_status wait_alarm_return_status;
 	struct stm32_exti_pdata *exti;
 	struct rtc *rtc;
-	bool alarm_wake;
 };
 
 /* Expect a single RTC instance */
@@ -1252,33 +1253,23 @@ stm32_rtc_wait_alarm(struct rtc *rtc __unused,
 	return TEE_SUCCESS;
 }
 
+#ifdef CFG_STM32_EXTI
 static TEE_Result stm32_rtc_set_alarm_wakeup_status(struct rtc *rtc __unused,
 						    bool status)
 {
 	if (!rtc_dev.rtc->is_wakeup_source)
 		return TEE_ERROR_NOT_SUPPORTED;
 
-	rtc_dev.alarm_wake = status;
+	if (status)
+		stm32_exti_enable_wake(rtc_dev.exti,
+				       rtc_dev.compat.exti_line_nb);
+	else
+		stm32_exti_disable_wake(rtc_dev.exti,
+					rtc_dev.compat.exti_line_nb);
+
 	return TEE_SUCCESS;
 }
-
-static TEE_Result
-stm32_rtc_pm(enum pm_op op, uint32_t pm_hint __unused,
-	     const struct pm_callback_handle *pm_handle __unused)
-{
-	if (op == PM_OP_SUSPEND) {
-#ifdef STM32_EXTI
-		if (rtc_dev.alarm_wake)
-			stm32_exti_enable_wake(rtc_dev.exti,
-					       rtc_dev.compat.exti_line_nb);
-		else
-			stm32_exti_disable_wake(rtc_dev.exti,
-						rtc_dev.compat.exti_line_nb);
 #endif
-	}
-
-	return TEE_SUCCESS;
-}
 
 static const struct rtc_ops stm32_rtc_ops = {
 	.get_time = stm32_rtc_get_time,
@@ -1288,7 +1279,9 @@ static const struct rtc_ops stm32_rtc_ops = {
 	.enable_alarm = stm32_rtc_enable_alarm,
 	.wait_alarm = stm32_rtc_wait_alarm,
 	.cancel_wait = stm32_rtc_cancel_wait_alarm,
+#ifdef CFG_STM32_EXTI
 	.set_alarm_wakeup_status = stm32_rtc_set_alarm_wakeup_status,
+#endif
 };
 
 static struct rtc stm32_rtc = {
@@ -1365,10 +1358,6 @@ static TEE_Result stm32_rtc_probe(const void *fdt, int node,
 		res = clk_enable(rtc_dev.pclk);
 		if (res)
 			return res;
-
-		if (rtc_dev.rtc->is_wakeup_source)
-			register_pm_core_service_cb(stm32_rtc_pm, NULL,
-						    "stm32-rtc");
 
 		res = stm32_rtc_init();
 		if (res)
