@@ -103,7 +103,7 @@ static TEE_Result stm32_hpdma_syscfg_set_arcr(struct hpdma_pdata *hpdma_d)
 	if (SYSCON_ID(SYSCON_SYSCFG, offset) != SYSCFG_HPDMAARCR) {
 		EMSG("HPDMA offset for axi address remap is incorrect: %u",
 		     offset);
-		return TEE_ERROR_BAD_PARAMETERS;
+		panic();
 	}
 
 	/* Verify that mask is consistent */
@@ -112,7 +112,7 @@ static TEE_Result stm32_hpdma_syscfg_set_arcr(struct hpdma_pdata *hpdma_d)
 	      mask == SYSCFG_HPDMAARCR_HPDMA3AREN)) {
 		EMSG("HPDMA bitmask for axi address remap is incorrect: %u",
 		     mask);
-		return TEE_ERROR_BAD_PARAMETERS;
+		panic();
 	}
 
 	stm32mp_syscfg_write(SYSCFG_HPDMAARCR, mask, mask);
@@ -330,6 +330,8 @@ static TEE_Result parse_dt(const void *fdt, int node,
 static void stm32_hpdma_pm_resume(struct hpdma_pdata *hpdma)
 {
 	apply_rif_config(hpdma, true);
+
+	stm32_hpdma_syscfg_set_arcr(hpdma);
 }
 
 static void stm32_hpdma_pm_suspend(struct hpdma_pdata *hpdma)
