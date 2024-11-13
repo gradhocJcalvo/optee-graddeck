@@ -252,6 +252,13 @@ RPROC_SIGN_KEY ?= keys/default.pem
 # Increase the RESERVED VA SPACE to be able to map reserved-memory regions
 # assigned to the remote processor.
 CFG_RESERVED_VASPACE_SIZE = 32 * 1024 * 1024
+
+# Co-processor encryption using test key is dedicated to insecure development
+# configuration only.
+CFG_REMOTEPROC_ENC_TESTKEY ?= n
+ifeq ($(CFG_REMOTEPROC_ENC_TESTKEY),y)
+$(call force,CFG_INSECURE,y,Required by CFG_REMOTEPROC_ENC_TESTKEY)
+endif
 endif
 
 # Default enable HWRNG PTA support
