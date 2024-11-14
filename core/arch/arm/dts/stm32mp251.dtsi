@@ -155,7 +155,6 @@
 				power-domains {
 					#address-cells = <1>;
 					#size-cells = <0>;
-					#power-domain-cells = <1>;
 
 					pd_gpu: pd@0 {
 						reg = <PD_SCMI_GPU>;
@@ -172,7 +171,6 @@
 				clocks {
 					#address-cells = <1>;
 					#size-cells = <0>;
-					#clock-cells = <1>;
 
 					clock@0 {
 						reg = <CK_SCMI_ICN_HS_MCU>;
@@ -1103,7 +1101,6 @@
 				resets {
 					#address-cells = <1>;
 					#size-cells = <0>;
-					#reset-cells = <1>;
 
 					reset@0 {
 						reg = <RST_SCMI_C1_R>;
@@ -1212,7 +1209,6 @@
 				clocks {
 					#address-cells = <1>;
 					#size-cells = <0>;
-					#clock-cells = <1>;
 
 					clock@0 {
 						reg = <CK_SCMI_ICN_HS_MCU>;
@@ -2144,7 +2140,6 @@
 				resets {
 					#address-cells = <1>;
 					#size-cells = <0>;
-					#reset-cells = <1>;
 
 					reset@0 {
 						reg = <RST_SCMI_C1_R>;
