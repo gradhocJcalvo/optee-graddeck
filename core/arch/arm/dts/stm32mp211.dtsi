@@ -1941,26 +1941,6 @@
 				regulators {
 					#address-cells = <1>;
 					#size-cells = <0>;
-
-					voltd-vddio1 {
-						reg = <VOLTD_SCMI_VDDIO1>;
-						voltd-supply = <&vddio1>;
-					};
-
-					voltd-vddio2 {
-						reg = <VOLTD_SCMI_VDDIO2>;
-						voltd-supply = <&vddio2>;
-					};
-
-					voltd-vddio3 {
-						reg = <VOLTD_SCMI_VDDIO3>;
-						voltd-supply = <&vddio3>;
-					};
-
-					voltd-vdda18adc {
-						reg = <VOLTD_SCMI_ADC>;
-						voltd-supply = <&vdda18adc>;
-					};
 				};
 			};
 		};
