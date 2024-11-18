@@ -1007,13 +1007,12 @@ static void stm32_bsec_shadow_load(uint32_t status)
 	bsec_unlock(exceptions);
 }
 
-static void stm32_bsec_shadow_init(bool force_load)
+static void stm32_bsec_shadow_init(void)
 {
 	uint32_t status = bsec_get_otp_status();
 
-	/* update shadow when forced or invalid */
-	if (force_load || bsec_dev.shadow->magic != BSEC_MAGIC)
-		stm32_bsec_shadow_load(status);
+	/* update bsec miror */
+	stm32_bsec_shadow_load(status);
 
 	/* always update status */
 	bsec_dev.shadow->state = init_state(status);
@@ -1205,7 +1204,7 @@ stm32_bsec_pm(enum pm_op op, unsigned int pm_hint,
 		check_reset_error();
 
 		/* re initialize the shadow */
-		stm32_bsec_shadow_init(false);
+		stm32_bsec_shadow_init();
 	}
 
 	return TEE_SUCCESS;
@@ -1254,7 +1253,7 @@ static TEE_Result initialize_bsec(void)
 		check_reset_error();
 
 		/* initialize the shadow */
-		stm32_bsec_shadow_init(true);
+		stm32_bsec_shadow_init();
 
 		register_pm_core_service_cb(stm32_bsec_pm, NULL, "stm32-bsec");
 	}
