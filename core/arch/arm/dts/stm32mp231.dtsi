@@ -1136,31 +1136,31 @@
 			scmi_regulator: protocol@17 {
 				reg = <0x17>;
 
-				scmi_regu: regulators {
+				regulators {
 					#address-cells = <1>;
 					#size-cells = <0>;
 
-					voltd-vddio1 {
+					regulator@0 {
 						reg = <VOLTD_SCMI_VDDIO1>;
 						voltd-supply = <&vddio1>;
 					};
 
-					voltd-vddio2 {
+					regulator@1 {
 						reg = <VOLTD_SCMI_VDDIO2>;
 						voltd-supply = <&vddio2>;
 					};
 
-					voltd-vddio3 {
+					regulator@2 {
 						reg = <VOLTD_SCMI_VDDIO3>;
 						voltd-supply = <&vddio3>;
 					};
 
-					voltd-vddio4 {
+					regulator@3 {
 						reg = <VOLTD_SCMI_VDDIO4>;
 						voltd-supply = <&vddio4>;
 					};
 
-					voltd-vdda18adc {
+					regulator@7 {
 						reg = <VOLTD_SCMI_ADC>;
 						voltd-supply = <&vdda18adc>;
 					};
@@ -2153,7 +2153,7 @@
 					#address-cells = <1>;
 					#size-cells = <0>;
 
-					voltd-vdd33ucpd {
+					regulator@5 {
 						reg = <VOLTD_SCMI_UCPD>;
 						voltd-supply = <&vdd33ucpd>;
 					};
