@@ -284,13 +284,6 @@
 	status = "okay";
 	wakeup-gpios = <&gpioa 0 GPIO_ACTIVE_HIGH>, <0>, <0>, <0>, <0>, <0>;
 
-	vdd33ucpd {
-		status = "okay";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		vdd33ucpd-supply = <&vdd3v3_usb>;
-	};
-
 	vdda18adc {
 		status = "okay";
 		regulator-min-microvolt = <1800000>;
