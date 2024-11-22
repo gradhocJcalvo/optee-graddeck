@@ -259,6 +259,9 @@ CFG_REMOTEPROC_ENC_TESTKEY ?= n
 ifeq ($(CFG_REMOTEPROC_ENC_TESTKEY),y)
 $(call force,CFG_INSECURE,y,Required by CFG_REMOTEPROC_ENC_TESTKEY)
 endif
+
+# Co-processor public key verification against OTP fuses.
+CFG_REMOTEPROC_PUB_KEY_VERIFY ?= n
 endif
 
 # Default enable HWRNG PTA support
