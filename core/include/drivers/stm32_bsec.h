@@ -35,13 +35,13 @@ enum stm32_bsec_sec_state {
  * Structure and API function for BSEC driver to get some platform data.
  *
  * @base: BSEC interface registers physical base address
- * @shadow: BSEC shadow base address
+ * @mirror: BSEC mirror base address
  * @upper_start: Base ID for the BSEC upper words in the platform
  * @max_id: Max value for BSEC word ID for the platform
  */
 struct stm32_bsec_static_cfg {
 	paddr_t base;
-	paddr_t shadow;
+	paddr_t mirror;
 	unsigned int upper_start;
 	unsigned int max_id;
 };

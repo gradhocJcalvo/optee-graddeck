@@ -178,7 +178,7 @@ void plat_abort_handler(struct thread_abort_regs *regs __unused)
 void plat_bsec_get_static_cfg(struct stm32_bsec_static_cfg *cfg)
 {
 	cfg->base = BSEC3_BASE;
-	cfg->shadow = SRAM1_BASE;
+	cfg->mirror = SRAM1_BASE;
 	cfg->upper_start = STM32MP2_UPPER_OTP_START;
 	cfg->max_id = STM32MP2_OTP_MAX_ID;
 }
