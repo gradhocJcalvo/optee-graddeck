@@ -93,53 +93,68 @@ static TEE_Result rproc_pta_capabilities(uint32_t pt,
 	return TEE_SUCCESS;
 }
 
-static TEE_Result rproc_pta_decrypt_aes(uint32_t enc_algo, uint8_t *iv,
-					uint8_t *buff, size_t len)
+static TEE_Result rproc_get_otp_key(const char *name, uint8_t **key,
+				    size_t key_len)
 {
-	size_t key_len = TEE_AES_MAX_KEY_SIZE;
-	TEE_Result res = TEE_ERROR_GENERIC;
+	TEE_Result res = TEE_SUCCESS;
 	uint8_t otp_bit_offset = 0;
-	uint8_t *key = NULL;
 	uint32_t *key_buf = NULL;
 	size_t otp_bit_size = 0;
 	uint32_t otp_start = 0;
 	size_t otp_length = 0;
 	uint32_t otp_id = 0;
+
+	res = stm32_bsec_find_otp_in_nvmem_layout(name, &otp_start,
+						  &otp_bit_offset,
+						  &otp_bit_size);
+	if (res) {
+		EMSG("Can't find %s", name);
+		return res;
+	}
+
+	if (otp_bit_offset || otp_bit_size != key_len * CHAR_BIT) {
+		EMSG("Bad key OTP alignment");
+		return TEE_ERROR_GENERIC;
+	}
+
+	otp_length = key_len / sizeof(uint32_t);
+	key_buf = (uint32_t *)calloc(otp_length, sizeof(uint32_t));
+	if (!key_buf)
+		return TEE_ERROR_OUT_OF_MEMORY;
+
+	*key = (uint8_t *)key_buf;
+
+	for (otp_id = otp_start; otp_id < otp_start + otp_length;
+	     otp_id++, key_buf++) {
+		/* Read key in OTP */
+		res = stm32_bsec_read_otp(key_buf, otp_id);
+		if (res)
+			goto clean_key;
+	}
+
+	return TEE_SUCCESS;
+
+clean_key:
+	free_wipe(*key);
+	*key = NULL;
+
+	return res;
+}
+
+static TEE_Result rproc_pta_decrypt_aes(uint32_t enc_algo, uint8_t *iv,
+					uint8_t *buff, size_t len)
+{
+	size_t key_len = TEE_AES_MAX_KEY_SIZE;
+	TEE_Result res = TEE_ERROR_GENERIC;
+	uint8_t *key = NULL;
 	void *ctx = NULL;
 
 	if (IS_ENABLED(CFG_REMOTEPROC_ENC_TESTKEY)) {
 		key = aes_test_key;
 	} else {
-		res = stm32_bsec_find_otp_in_nvmem_layout("oem_rproc_enc_key",
-							  &otp_start,
-							  &otp_bit_offset,
-							  &otp_bit_size);
-		if (res) {
-			EMSG("Can't find oem_rproc_enc_key");
+		res = rproc_get_otp_key("oem_rproc_enc_key", &key, key_len);
+		if (res)
 			return res;
-		}
-
-		/* Only key on 256 bits is supported */
-		if (otp_bit_offset ||
-		    otp_bit_size != TEE_AES_MAX_KEY_SIZE * CHAR_BIT) {
-			EMSG("Bad AES key OTP alignment");
-			return TEE_ERROR_GENERIC;
-		}
-
-		otp_length = key_len / sizeof(uint32_t);
-		key_buf = (uint32_t *)calloc(otp_length, sizeof(uint32_t));
-		if (!key_buf)
-			return TEE_ERROR_OUT_OF_MEMORY;
-
-		key = (uint8_t *)key_buf;
-
-		for (otp_id = otp_start; otp_id < otp_start + otp_length;
-		     otp_id++, key_buf++) {
-			/* Read key in OTP */
-			res = stm32_bsec_read_otp(key_buf, otp_id);
-			if (res)
-				goto clean_key;
-		}
 	}
 
 	if (is_key_zero(key, key_len)) {
@@ -351,14 +366,45 @@ static TEE_Result rproc_pta_stop(uint32_t pt,
 	return TEE_SUCCESS;
 }
 
+static TEE_Result rproc_compute_hash(uint8_t *digest, const uint8_t *hash1,
+				     size_t hash1_size, const uint8_t *hash2,
+				     size_t hash2_size)
+{
+	TEE_Result res = TEE_SUCCESS;
+	void *ctx = NULL;
+
+	res = crypto_hash_alloc_ctx(&ctx, TEE_ALG_SHA256);
+	if (res)
+		return res;
+	res = crypto_hash_init(ctx);
+	if (res)
+		goto out;
+	res = crypto_hash_update(ctx, hash1, hash1_size);
+	if (res)
+		goto out;
+	res = crypto_hash_update(ctx, hash2, hash2_size);
+	if (res)
+		goto out;
+	res = crypto_hash_final(ctx, digest, TEE_SHA256_HASH_SIZE);
+
+out:
+	crypto_hash_free_ctx(ctx);
+
+	return res;
+}
+
 static TEE_Result rproc_pta_verify_rsa_signature(TEE_Param *hash,
 						 TEE_Param *sig, uint32_t algo)
 {
-	struct rsa_public_key key = { };
-	TEE_Result res = TEE_ERROR_GENERIC;
 	uint32_t e = TEE_U32_TO_BIG_ENDIAN(rproc_pub_key_exponent);
+	uint8_t publickey_hash[TEE_SHA256_HASH_SIZE] = { };
 	size_t hash_size = (size_t)hash->memref.size;
 	size_t sig_size = (size_t)sig->memref.size;
+	size_t key_len = TEE_AES_MAX_KEY_SIZE;
+	TEE_Result res = TEE_ERROR_GENERIC;
+	size_t exponent_size = sizeof(e);
+	struct rsa_public_key key = { };
+	uint8_t *key_hash = NULL;
 
 	res = crypto_acipher_alloc_rsa_public_key(&key, sig_size);
 	if (res)
@@ -373,10 +419,34 @@ static TEE_Result rproc_pta_verify_rsa_signature(TEE_Param *hash,
 	if (res)
 		goto out;
 
+	if (IS_ENABLED(CFG_REMOTEPROC_PUB_KEY_VERIFY)) {
+		res = rproc_get_otp_key("oem_rproc_pkh", &key_hash,
+					key_len);
+		if (res)
+			goto clean_key_hash;
+
+		res = rproc_compute_hash(publickey_hash, rproc_pub_key_modulus,
+					 rproc_pub_key_modulus_size,
+					 (const uint8_t *)&e,
+					 exponent_size);
+		if (res)
+			goto clean_key_hash;
+
+		if (consttime_memcmp(key_hash, publickey_hash,
+				     TEE_SHA256_HASH_SIZE) != 0) {
+			EMSG("Invalid public key");
+			res = TEE_ERROR_SECURITY;
+			goto clean_key_hash;
+		}
+	}
+
 	res = crypto_acipher_rsassa_verify(algo, &key, hash_size,
 					   hash->memref.buffer, hash_size,
 					   sig->memref.buffer, sig_size);
 
+clean_key_hash:
+	if (key_hash)
+		free_wipe(key_hash);
 out:
 	crypto_acipher_free_rsa_public_key(&key);
 
