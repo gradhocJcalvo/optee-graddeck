@@ -361,20 +361,7 @@ static TEE_Result stm32_etzpc_check_access(struct firewall_query *firewall)
 	if (id < etzpc_dev->ddata->num_per_sec) {
 		attr = etzpc_do_get_decprot(etzpc_dev, id);
 
-		/*
-		 * Access authorized if the attributes requested match the
-		 * current configuration, or if the requester is secure and
-		 * the device is not MCU isolated, or if the requester is
-		 * non-secure and the device is not MCU isolated and not secure
-		 */
-		if (attr == attr_req ||
-		    ((attr_req == ETZPC_DECPROT_S_RW ||
-		      attr_req == ETZPC_DECPROT_NS_R_S_W) && attr !=
-		     ETZPC_DECPROT_MCU_ISOLATION) ||
-		    ((attr_req == ETZPC_DECPROT_NS_RW ||
-		      attr_req == ETZPC_DECPROT_NS_R_S_W) && attr !=
-		     ETZPC_DECPROT_MCU_ISOLATION && attr !=
-		     ETZPC_DECPROT_S_RW))
+		if (attr == attr_req)
 			return TEE_SUCCESS;
 		else
 			return TEE_ERROR_ACCESS_DENIED;
