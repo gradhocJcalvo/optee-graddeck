@@ -2579,7 +2579,6 @@
 			#interrupt-cells = <2>;
 			#address-cells = <0>;
 			reg = <0x44220000 0x400>;
-			status = "disabled";
 		};
 
 		syscfg: syscon@44230000 {
@@ -2708,7 +2707,6 @@
 			#interrupt-cells = <2>;
 			#address-cells = <0>;
 			reg = <0x442d0000 0x400>;
-			status = "disabled";
 		};
 
 		rtc: rtc@46000000 {
