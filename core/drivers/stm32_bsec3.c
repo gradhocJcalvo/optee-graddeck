@@ -170,8 +170,10 @@ struct nvmem_cell {
 struct bsec_mirror {
 	uint32_t magic;
 	uint32_t state;
-	uint32_t value[OTP_MAX_SIZE];
-	uint32_t status[OTP_MAX_SIZE];
+	struct {
+		uint32_t value;
+		uint32_t status;
+	} otp[OTP_MAX_SIZE];
 };
 
 struct bsec_dev {
@@ -257,14 +259,14 @@ static TEE_Result shadow_otp(unsigned int otp)
 	uint32_t status = 0U;
 
 	/* if shadow is not allowed */
-	if (bsec_dev.mirror->status[otp] & PTA_BSEC_LOCK_SHADOW_R) {
-		bsec_dev.mirror->status[otp] |= PTA_BSEC_LOCK_ERROR;
-		bsec_dev.mirror->value[otp] = 0x0U;
+	if (bsec_dev.mirror->otp[otp].status & PTA_BSEC_LOCK_SHADOW_R) {
+		bsec_dev.mirror->otp[otp].status |= PTA_BSEC_LOCK_ERROR;
+		bsec_dev.mirror->otp[otp].value = 0x0U;
 
 		return TEE_ERROR_GENERIC;
 	}
 
-	bsec_dev.mirror->status[otp] &= ~PTA_BSEC_LOCK_ERROR;
+	bsec_dev.mirror->otp[otp].status &= ~PTA_BSEC_LOCK_ERROR;
 	for (i = 0U; i < MAX_NB_TRIES; i++) {
 		io_write32(bsec_base() + BSEC_OTPCR, otp);
 
@@ -279,11 +281,11 @@ static TEE_Result shadow_otp(unsigned int otp)
 		break;
 	}
 	if (status & BSEC_OTPSR_PPLF)
-		bsec_dev.mirror->status[otp] |= PTA_BSEC_LOCK_PERM;
+		bsec_dev.mirror->otp[otp].status |= PTA_BSEC_LOCK_PERM;
 	if (i == MAX_NB_TRIES || status & (BSEC_OTPSR_PPLMF | BSEC_OTPSR_AMEF |
 					   BSEC_OTPSR_DISTURBF |
 					   BSEC_OTPSR_DEDF)) {
-		bsec_dev.mirror->status[otp] |= PTA_BSEC_LOCK_ERROR;
+		bsec_dev.mirror->otp[otp].status |= PTA_BSEC_LOCK_ERROR;
 		return TEE_ERROR_GENERIC;
 	}
 
@@ -343,8 +345,8 @@ TEE_Result stm32_bsec_read_otp(uint32_t *val, uint32_t otp)
 		return TEE_ERROR_BAD_PARAMETERS;
 
 	/* for non-secure OTP: only return the mirror value */
-	if (!(bsec_dev.mirror->status[otp] & PTA_BSEC_STATUS_SECURE)) {
-		*val = bsec_dev.mirror->value[otp];
+	if (!(bsec_dev.mirror->otp[otp].status & PTA_BSEC_STATUS_SECURE)) {
+		*val = bsec_dev.mirror->otp[otp].value;
 
 		return TEE_SUCCESS;
 	}
@@ -377,8 +379,8 @@ TEE_Result stm32_bsec_shadow_read_otp(uint32_t *val, uint32_t otp)
 		return TEE_ERROR_BAD_PARAMETERS;
 
 	/* for non-secure OTP: only return the mirror value */
-	if (!(bsec_dev.mirror->status[otp] & PTA_BSEC_STATUS_SECURE)) {
-		*val = bsec_dev.mirror->value[otp];
+	if (!(bsec_dev.mirror->otp[otp].status & PTA_BSEC_STATUS_SECURE)) {
+		*val = bsec_dev.mirror->otp[otp].value;
 
 		return TEE_SUCCESS;
 	}
@@ -430,15 +432,15 @@ TEE_Result stm32_bsec_write_otp(uint32_t val, uint32_t otp)
 		io_write32(bsec_base() + BSEC_FVR(otp), val);
 
 		bsec_unlock(exceptions);
-	} else if ((bsec_dev.mirror->status[otp] & PTA_BSEC_STATUS_SECURE)) {
+	} else if (bsec_dev.mirror->otp[otp].status & PTA_BSEC_STATUS_SECURE) {
 		/* update of secure and not-shadowed OTP is not allowed */
 		return TEE_ERROR_ACCESS_DENIED;
 	}
 
 	/* Update the mirror memory when it is allowed */
-	if (!(bsec_dev.mirror->status[otp] & PTA_BSEC_STATUS_SECURE)) {
-		bsec_dev.mirror->value[otp] = val;
-		bsec_dev.mirror->status[otp] &= ~PTA_BSEC_LOCK_ERROR;
+	if (!(bsec_dev.mirror->otp[otp].status & PTA_BSEC_STATUS_SECURE)) {
+		bsec_dev.mirror->otp[otp].value = val;
+		bsec_dev.mirror->otp[otp].status &= ~PTA_BSEC_LOCK_ERROR;
 	}
 
 	return TEE_SUCCESS;
@@ -484,8 +486,8 @@ TEE_Result stm32_bsec_program_otp(uint32_t val, uint32_t otp)
 
 	exceptions = bsec_lock();
 
-	bsec_dev.mirror->value[otp] = 0x0U;
-	bsec_dev.mirror->status[otp] |= PTA_BSEC_LOCK_ERROR;
+	bsec_dev.mirror->otp[otp].value = 0x0U;
+	bsec_dev.mirror->otp[otp].status |= PTA_BSEC_LOCK_ERROR;
 
 	for (i = 0U; i < MAX_NB_TRIES; i++) {
 		uint32_t status = 0U;
@@ -531,9 +533,11 @@ TEE_Result stm32_bsec_program_otp(uint32_t val, uint32_t otp)
 			     otp, fvr, val);
 
 		/* update the mirror memory if allowed */
-		if (!(bsec_dev.mirror->status[otp] & PTA_BSEC_STATUS_SECURE)) {
-			bsec_dev.mirror->value[otp] = fvr;
-			bsec_dev.mirror->status[otp] &= ~PTA_BSEC_LOCK_ERROR;
+		if (!(bsec_dev.mirror->otp[otp].status &
+		      PTA_BSEC_STATUS_SECURE)) {
+			bsec_dev.mirror->otp[otp].value = fvr;
+			bsec_dev.mirror->otp[otp].status &=
+				~PTA_BSEC_LOCK_ERROR;
 		}
 	}
 
@@ -652,7 +656,7 @@ TEE_Result stm32_bsec_set_sr_lock(uint32_t otp)
 		 * even if the lock is activated.
 		 */
 		io_write32(bsec_base() + BSEC_SRLOCK(bank), bank_value);
-		bsec_dev.mirror->status[otp] |= PTA_BSEC_LOCK_SHADOW_R;
+		bsec_dev.mirror->otp[otp].status |= PTA_BSEC_LOCK_SHADOW_R;
 		result = TEE_SUCCESS;
 	}
 
@@ -668,7 +672,7 @@ TEE_Result stm32_bsec_read_sr_lock(uint32_t otp, bool *value)
 	if (otp > bsec_dev.max_id)
 		return TEE_ERROR_BAD_PARAMETERS;
 
-	*value = bsec_dev.mirror->status[otp] & PTA_BSEC_LOCK_SHADOW_R;
+	*value = bsec_dev.mirror->otp[otp].status & PTA_BSEC_LOCK_SHADOW_R;
 
 	return TEE_SUCCESS;
 }
@@ -710,7 +714,7 @@ TEE_Result stm32_bsec_set_sw_lock(uint32_t otp)
 		 * even if the lock is activated.
 		 */
 		io_write32(bsec_base() + BSEC_SWLOCK(bank), bank_value);
-		bsec_dev.mirror->status[otp] |= PTA_BSEC_LOCK_SHADOW_W;
+		bsec_dev.mirror->otp[otp].status |= PTA_BSEC_LOCK_SHADOW_W;
 		result = TEE_SUCCESS;
 	}
 
@@ -726,7 +730,7 @@ TEE_Result stm32_bsec_read_sw_lock(uint32_t otp, bool *value)
 	if (otp > bsec_dev.max_id)
 		return TEE_ERROR_BAD_PARAMETERS;
 
-	*value = bsec_dev.mirror->status[otp] & PTA_BSEC_LOCK_SHADOW_W;
+	*value = bsec_dev.mirror->otp[otp].status & PTA_BSEC_LOCK_SHADOW_W;
 
 	/*
 	 * OEM keys are accessible only in ROM code
@@ -770,7 +774,7 @@ TEE_Result stm32_bsec_set_sp_lock(uint32_t otp)
 		 * even if the lock is activated.
 		 */
 		io_write32(bsec_base() + BSEC_SPLOCK(bank), bank_value);
-		bsec_dev.mirror->status[otp] |= PTA_BSEC_LOCK_SHADOW_P;
+		bsec_dev.mirror->otp[otp].status |= PTA_BSEC_LOCK_SHADOW_P;
 		result = TEE_SUCCESS;
 	}
 
@@ -786,7 +790,7 @@ TEE_Result stm32_bsec_read_sp_lock(uint32_t otp, bool *value)
 	if (otp > bsec_dev.max_id)
 		return TEE_ERROR_BAD_PARAMETERS;
 
-	*value = bsec_dev.mirror->status[otp] & PTA_BSEC_LOCK_SHADOW_P;
+	*value = bsec_dev.mirror->otp[otp].status & PTA_BSEC_LOCK_SHADOW_P;
 
 	return TEE_SUCCESS;
 }
@@ -828,7 +832,7 @@ TEE_Result stm32_bsec_permanent_lock_otp(uint32_t otp)
 	}
 
 	if (!result)
-		bsec_dev.mirror->status[otp] |= PTA_BSEC_LOCK_PERM;
+		bsec_dev.mirror->otp[otp].status |= PTA_BSEC_LOCK_PERM;
 
 	bsec_unlock(exceptions);
 
@@ -842,7 +846,7 @@ TEE_Result stm32_bsec_read_permanent_lock(uint32_t otp, bool *value)
 	if (otp > bsec_dev.max_id)
 		return TEE_ERROR_BAD_PARAMETERS;
 
-	*value = bsec_dev.mirror->status[otp] & PTA_BSEC_LOCK_PERM;
+	*value = bsec_dev.mirror->otp[otp].status & PTA_BSEC_LOCK_PERM;
 
 	return TEE_SUCCESS;
 }
@@ -862,7 +866,7 @@ bool stm32_bsec_can_access_otp(uint32_t otp)
 		return false;
 
 	/* manage HIDEUP */
-	if ((bsec_dev.mirror->status[otp] & HIDEUP_ERROR) == HIDEUP_ERROR)
+	if ((bsec_dev.mirror->otp[otp].status & HIDEUP_ERROR) == HIDEUP_ERROR)
 		return false;
 
 	if (otp > bsec_dev.max_id)
@@ -890,13 +894,13 @@ bool stm32_bsec_nsec_can_access_otp(uint32_t otp)
 		return false;
 
 	/* manage HIDEUP */
-	if ((bsec_dev.mirror->status[otp] & HIDEUP_ERROR) == HIDEUP_ERROR)
+	if ((bsec_dev.mirror->otp[otp].status & HIDEUP_ERROR) == HIDEUP_ERROR)
 		return false;
 
 	/* upper OTP with provisioning tag and not locked are accessible */
-	if ((bsec_dev.mirror->status[otp] & PTA_BSEC_STATUS_PROVISIONING) ==
+	if ((bsec_dev.mirror->otp[otp].status & PTA_BSEC_STATUS_PROVISIONING) ==
 	    PTA_BSEC_STATUS_PROVISIONING &&
-	    (bsec_dev.mirror->status[otp] & PTA_BSEC_LOCK_PERM) !=
+	    (bsec_dev.mirror->otp[otp].status & PTA_BSEC_LOCK_PERM) !=
 	    PTA_BSEC_LOCK_PERM)
 		return true;
 
@@ -933,7 +937,7 @@ static uint32_t init_state(uint32_t status)
 			EMSG("BSEC invalid nvstates %#x\n", nvstates);
 		} else {
 			state = BSEC_STATE_SEC_OPEN;
-			if (bsec_dev.mirror->value[OTP_SECURE_BOOT] &
+			if (bsec_dev.mirror->otp[OTP_SECURE_BOOT].value &
 			    OTP_CLOSED_SECURE)
 				state = BSEC_STATE_SEC_CLOSED;
 		}
@@ -962,8 +966,8 @@ static void stm32_bsec_mirror_load(uint32_t status)
 	if (status & BSEC_OTPSR_HIDEUP) {
 		for (otp = bsec_dev.upper_base;
 		     otp <= bsec_dev.max_id ; otp++) {
-			bsec_dev.mirror->status[otp] |= HIDEUP_ERROR;
-			bsec_dev.mirror->value[otp] = 0x0U;
+			bsec_dev.mirror->otp[otp].status |= HIDEUP_ERROR;
+			bsec_dev.mirror->otp[otp].value = 0x0U;
 		}
 		max_id = bsec_dev.upper_base - 1;
 	}
@@ -979,13 +983,16 @@ static void stm32_bsec_mirror_load(uint32_t status)
 		mask = otp_bit(otp);
 
 		if (srlock[bank] & mask)
-			bsec_dev.mirror->status[otp] |= PTA_BSEC_LOCK_SHADOW_R;
+			bsec_dev.mirror->otp[otp].status |=
+				PTA_BSEC_LOCK_SHADOW_R;
 		if (swlock[bank] & mask)
-			bsec_dev.mirror->status[otp] |= PTA_BSEC_LOCK_SHADOW_W;
+			bsec_dev.mirror->otp[otp].status |=
+				PTA_BSEC_LOCK_SHADOW_W;
 		if (splock[bank] & mask)
-			bsec_dev.mirror->status[otp] |= PTA_BSEC_LOCK_SHADOW_P;
+			bsec_dev.mirror->otp[otp].status |=
+				PTA_BSEC_LOCK_SHADOW_P;
 
-		if (bsec_dev.mirror->status[otp] & PTA_BSEC_STATUS_SECURE)
+		if (bsec_dev.mirror->otp[otp].status & PTA_BSEC_STATUS_SECURE)
 			continue;
 
 		/*
@@ -993,14 +1000,15 @@ static void stm32_bsec_mirror_load(uint32_t status)
 		 * They are stored in last OTPs
 		 */
 		if (otp >= OEM_KEY_FIRST_OTP) {
-			bsec_dev.mirror->status[otp] |= PTA_BSEC_LOCK_SHADOW_R;
+			bsec_dev.mirror->otp[otp].status |=
+				PTA_BSEC_LOCK_SHADOW_R;
 			continue;
 		}
 
 		/* reload shadow to read Permanent Programing Lock Flag */
 		shadow_otp(otp);
 
-		bsec_dev.mirror->value[otp] = io_read32(bsec_base() +
+		bsec_dev.mirror->otp[otp].value = io_read32(bsec_base() +
 					      BSEC_FVR(otp));
 	}
 
@@ -1159,7 +1167,7 @@ static void initialize_nvmem_layout_from_dt(void *fdt, int bsec_node)
 		if (fdt_getprop(fdt, node, "st,secure-otp", NULL)) {
 			for (otp = cell->otp_id;
 			     otp < cell->otp_id + otp_nb; otp++)
-				bsec_dev.mirror->status[otp] |=
+				bsec_dev.mirror->otp[otp].status |=
 					PTA_BSEC_STATUS_SECURE;
 		}
 		/* check if provisioning is allowed */
@@ -1167,7 +1175,7 @@ static void initialize_nvmem_layout_from_dt(void *fdt, int bsec_node)
 				     "st,non-secure-otp-provisioning", NULL)) {
 			for (otp = cell->otp_id;
 			     otp < cell->otp_id + otp_nb; otp++)
-				bsec_dev.mirror->status[otp] |=
+				bsec_dev.mirror->otp[otp].status |=
 					PTA_BSEC_STATUS_PROVISIONING;
 		}
 	}
