@@ -2918,6 +2918,12 @@
 				reg = <0x240 0x20>;
 			};
 
+			oem_rproc_pkh: oem_rproc_pkh@2c0 {
+				/* 0x2C0 -> otp176 */
+				reg = <0x2C0 0x20>;
+				st,non-secure-otp-provisioning;
+			};
+
 			oem_fip_enc_key: otp260@410 {
 				reg = <0x410 0x20>;
 				st,non-secure-otp-provisioning;
