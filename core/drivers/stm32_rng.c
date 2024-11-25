@@ -734,7 +734,7 @@ static const struct stm32_rng_driver_data mp21_data[] = {
 		.has_cond_reset = true,
 		.has_power_optim = true,
 		.cr = 0x00800D00,
-		.nscr = 0x01F7,
+		.nscr = 0x01FF,
 		.htcr = 0xAAC7,
 	},
 };
