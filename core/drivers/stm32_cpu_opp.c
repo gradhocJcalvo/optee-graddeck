@@ -294,15 +294,9 @@ static TEE_Result scp_set_regu_voltage(struct regulator *regulator __unused,
 				       int uv)
 {
 	TEE_Result res = TEE_ERROR_GENERIC;
-	int cur_uv = 0;
-
-	cur_uv = regulator_get_voltage(cpu_opp.regul);
-	if (uv == cur_uv)
-		return TEE_SUCCESS;
 
 #ifdef CFG_STM32MP13
-	if (cur_uv > MPU_RAM_LOW_SPEED_THRESHOLD &&
-	    uv <= MPU_RAM_LOW_SPEED_THRESHOLD)
+	if (uv <= MPU_RAM_LOW_SPEED_THRESHOLD)
 		io_setbits32(stm32_pwr_base(), PWR_CR1_MPU_RAM_LOW_SPEED);
 #endif
 
@@ -311,8 +305,7 @@ static TEE_Result scp_set_regu_voltage(struct regulator *regulator __unused,
 		return res;
 
 #ifdef CFG_STM32MP13
-	if (cur_uv <= MPU_RAM_LOW_SPEED_THRESHOLD &&
-	    uv > MPU_RAM_LOW_SPEED_THRESHOLD)
+	if (uv > MPU_RAM_LOW_SPEED_THRESHOLD)
 		io_clrbits32(stm32_pwr_base(), PWR_CR1_MPU_RAM_LOW_SPEED);
 #endif
 
