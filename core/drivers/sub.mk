@@ -39,6 +39,7 @@ srcs-$(CFG_STM32_BSEC) += stm32_bsec.c
 srcs-$(CFG_STM32_BSEC3) += stm32_bsec3.c
 srcs-$(CFG_STM32_CPU_OPP) += stm32_cpu_opp.c
 srcs-$(CFG_STM32_GPU_OPP) += stm32_gpu_opp.c
+srcs-$(CFG_STM32_DBGMCU_MBX) += stm32_dbgmcu_mbx.c
 srcs-$(CFG_STM32_EXTI) += stm32_exti.c
 srcs-$(CFG_STM32_FMC) += stm32_fmc.c
 srcs-$(CFG_STM32_GPIO) += stm32_gpio.c
