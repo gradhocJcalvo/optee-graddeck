@@ -1755,6 +1755,15 @@ static int clk_stm32_pll_set_mux(struct clk_stm32_priv *priv __unused,
 	return 0;
 }
 
+static int clk_stm32_pll_check_mux(struct clk_stm32_priv *priv __unused,
+				   uint32_t src)
+{
+	int mux = (src & MUX_ID_MASK) >> MUX_ID_SHIFT;
+	int sel = (src & MUX_SEL_MASK) >> MUX_SEL_SHIFT;
+
+	return stm32_mux_get_parent(mux) != (size_t)sel;
+}
+
 static int clk_stm32_pll1_init(struct clk_stm32_priv *priv,
 			       int pll_idx __unused,
 			       struct stm32_pll_dt_cfg *pll_conf)
@@ -1770,7 +1779,11 @@ static int clk_stm32_pll1_init(struct clk_stm32_priv *priv,
 
 	stm32mp2_a35_ss_on_bypass();
 
-	ret = clk_stm32_pll_set_mux(priv, pll_conf->src);
+	if (stm32_rcc_has_access_by_id(RCC_RIF_PLL4_TO_8))
+		ret = clk_stm32_pll_set_mux(priv, pll_conf->src);
+	else
+		ret = clk_stm32_pll_check_mux(priv, pll_conf->src);
+
 	if (ret != 0)
 		panic();
 
