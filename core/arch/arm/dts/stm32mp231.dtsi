@@ -2194,6 +2194,7 @@
 			interrupts = <GIC_SPI 173 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "rx";
 			clocks = <&rcc CK_BUS_IPCC1>;
+			st,proc-id = <0>;
 		};
 
 		ommanager: ommanager@40500000 {
