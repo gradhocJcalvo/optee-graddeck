@@ -1982,6 +1982,7 @@
 			interrupts = <GIC_SPI 154 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "rx";
 			clocks = <&rcc CK_BUS_IPCC1>;
+			st,proc-id = <0>;
 		};
 
 		rifsc: bus@42080000 {
