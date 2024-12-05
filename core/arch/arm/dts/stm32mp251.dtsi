@@ -2250,6 +2250,7 @@
 			interrupts = <GIC_SPI 173 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "rx";
 			clocks = <&rcc CK_BUS_IPCC1>;
+			st,proc-id = <0>;
 		};
 
 		ommanager: ommanager@40500000 {
@@ -3391,6 +3392,7 @@
 			compatible = "st,stm32mp25-ipcc";
 			reg = <0x46250000 0x400>;
 			clocks = <&rcc CK_BUS_IPCC2>;
+			st,proc-id = <1>;
 		};
 
 		stgenc: stgen@48080000 {
