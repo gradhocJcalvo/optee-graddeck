@@ -674,7 +674,7 @@ static TEE_Result parse_dt(const void *fdt, int node, struct ipcc_pdata *ipcc_d)
 	 * according to proc ID mailbox lbase. rbase mailbox are swapped.
 	 */
 	(void)fdt_read_uint32(fdt, node, "st,proc-id", &proc_id);
-	if (proc_id == 2) {
+	if (proc_id == 1) {
 		ipcc_d->lbase = ipcc_d->base + IPCC_C2CR;
 		ipcc_d->rbase = ipcc_d->base + IPCC_C1CR;
 	} else {
