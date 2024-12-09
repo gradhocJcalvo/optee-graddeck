@@ -96,7 +96,6 @@
  * @hw_version - Watchdog HW version
  * @last_refresh - Time of last watchdog refresh
  * @wdt_chip - Wathcdog chip instance
- * @link - Link in registered watchdog instance list
  * @max_hw_timeout - Maximum hardware timeout
  */
 struct stm32_iwdg_device {
@@ -114,12 +113,8 @@ struct stm32_iwdg_device {
 	unsigned int hw_version;
 	TEE_Time last_refresh;
 	struct wdt_chip wdt_chip;
-	SLIST_ENTRY(stm32_iwdg_device) link;
 	unsigned long max_hw_timeout;
 };
-
-static SLIST_HEAD(iwdg_dev_list_head, stm32_iwdg_device) iwdg_dev_list =
-	SLIST_HEAD_INITIALIZER(iwdg_dev_list_head);
 
 static uint32_t sr_ewif_mask(struct stm32_iwdg_device *iwdg)
 {
@@ -540,40 +535,22 @@ static TEE_Result stm32_iwdg_setup(struct stm32_iwdg_device *iwdg,
 	return TEE_SUCCESS;
 }
 
-static TEE_Result
-stm32_iwdg_pm(enum pm_op op, unsigned int pm_hint __unused,
-	      const struct pm_callback_handle *pm_handle __unused)
+static TEE_Result stm32_iwdg_pm(enum pm_op op, unsigned int pm_hint __unused,
+				const struct pm_callback_handle *pm_handle)
 {
-	struct stm32_iwdg_device *iwdg = NULL;
+	struct stm32_iwdg_device *iwdg = PM_CALLBACK_GET_HANDLE(pm_handle);
 
-	SLIST_FOREACH(iwdg, &iwdg_dev_list, link) {
-		if (op == PM_OP_RESUME) {
-			clk_enable(iwdg->clk_lsi);
-			clk_enable(iwdg->clk_pclk);
-		} else {
-			clk_disable(iwdg->clk_lsi);
-			clk_disable(iwdg->clk_pclk);
-		}
+	if (op == PM_OP_RESUME) {
+		clk_enable(iwdg->clk_lsi);
+		clk_enable(iwdg->clk_pclk);
+	} else {
+		clk_disable(iwdg->clk_lsi);
+		clk_disable(iwdg->clk_pclk);
 	}
 
 	return TEE_SUCCESS;
 }
 DECLARE_KEEP_PAGER_PM(stm32_iwdg_pm);
-
-static TEE_Result stm32_iwdg_register(struct stm32_iwdg_device *iwdg)
-{
-	TEE_Result res = TEE_ERROR_GENERIC;
-
-	iwdg->wdt_chip.ops = &stm32_iwdg_ops;
-
-	res = watchdog_register(&iwdg->wdt_chip);
-	if (res)
-		return res;
-
-	SLIST_INSERT_HEAD(&iwdg_dev_list, iwdg, link);
-
-	return TEE_SUCCESS;
-}
 
 static TEE_Result stm32_iwdg_probe(const void *fdt, int node,
 				   const void *compat_data __unused)
@@ -589,11 +566,13 @@ static TEE_Result stm32_iwdg_probe(const void *fdt, int node,
 	if (res)
 		goto err;
 
-	res = stm32_iwdg_register(iwdg);
+	iwdg->wdt_chip.ops = &stm32_iwdg_ops;
+
+	res = watchdog_register(&iwdg->wdt_chip);
 	if (res)
 		goto err;
 
-	register_pm_core_service_cb(stm32_iwdg_pm, NULL, "stm32-iwdg");
+	register_pm_core_service_cb(stm32_iwdg_pm, iwdg, "stm32-iwdg");
 
 	return TEE_SUCCESS;
 
