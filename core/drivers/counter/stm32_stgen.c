@@ -252,9 +252,6 @@ static TEE_Result stgen_probe(const void *fdt, int node,
 
 static const struct dt_device_match stm32_stgen_match_table[] = {
 	{
-		.compatible = "st,stm32mp1-stgen"
-	},
-	{
 		.compatible = "st,stm32mp25-stgen"
 	},
 	{ }
