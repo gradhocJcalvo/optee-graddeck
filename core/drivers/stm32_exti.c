@@ -184,6 +184,13 @@ void stm32_exti_unmask(struct stm32_exti_pdata *exti, uint32_t exti_line)
 	cpu_spin_unlock_xrestore(&exti->lock, exceptions);
 }
 
+uint32_t stm32_exti_read_imr(struct stm32_exti_pdata *exti, unsigned int bank)
+{
+	assert(bank < _EXTI_BANK_NR);
+
+	return io_read32(exti->base + _EXTI_C1IMR(bank));
+}
+
 void stm32_exti_enable_wake(struct stm32_exti_pdata *exti, uint32_t exti_line)
 {
 	uint32_t mask = BIT(exti_line % 32);
