@@ -24,6 +24,10 @@
 #include <arch_interrupt.h>
 #include <arch_main.h>
 
+#include <kernel/mutex.h>
+
+static struct mutex process_lock = MUTEX_INITIALIZER;
+
 static const struct fwk_arch_init_driver scmi_init_driver = {
     .interrupt = arch_interrupt_init,
 };
@@ -69,11 +73,15 @@ void scmi_process_mbx_smt(unsigned int fwk_id)
 
     device_id.value = fwk_id;
 
+    mutex_lock(&process_lock);
+
     optee_mbx_signal_smt_message(device_id);
 
     fwk_process_event_queue();
 
     fwk_log_flush();
+
+    mutex_unlock(&process_lock);
 #endif
 }
 
@@ -85,11 +93,15 @@ void scmi_process_mbx_msg(unsigned int fwk_id, void *in_buf, size_t in_size,
 
     device_id.value = fwk_id;
 
+    mutex_lock(&process_lock);
+
     optee_mbx_signal_msg_message(device_id, in_buf, in_size, out_buf, out_size);
 
     fwk_process_event_queue();
 
     fwk_log_flush();
+
+    mutex_unlock(&process_lock);
 #endif
 }
 
