@@ -299,11 +299,15 @@
 	vddio2 {
 		status = "okay";
 		vddio2-supply = <&vdda_1v8>;
+		/* Keep always-on because it can not be enabled by non secure */
+		regulator-always-on;
 	};
 
 	vddio3 {
 		status = "okay";
 		vddio3-supply = <&vddio_pmic>;
+		/* Keep always-on because it can not be enabled by non secure */
+		regulator-always-on;
 	};
 
 	vddio {
