@@ -35,9 +35,9 @@
 #include <libfdt.h>
 #include <mm/core_memprot.h>
 #include <stdbool.h>
-#if defined(CFG_STM32MP25) || defined(CFG_STM32MP23)
+#if defined(CFG_STM32MP25) || defined(CFG_STM32MP23) || defined(CFG_STM32MP21)
 #include <stm32_sysconf.h>
-#endif /* defined(CFG_STM32MP25) || defined(CFG_STM32MP23) */
+#endif /* defined(CFG_STM32MP25) || defined(CFG_STM32MP23) || defined(CFG_STM32MP21) */
 #include <stm32_util.h>
 
 
@@ -2068,10 +2068,10 @@ static TEE_Result stm32_tamp_probe(const void *fdt, int node,
 		goto err;
 	}
 
-#if defined(CFG_STM32MP25) || defined(CFG_STM32MP23)
+#if defined(CFG_STM32MP25) || defined(CFG_STM32MP23) || defined(CFG_STM32MP21)
 	if (stm32_tamp.pdata.mask_pot_reset)
 		stm32mp_syscfg_write(SYSCFG_POTTAMPRSTCR, BIT(0), BIT(0));
-#endif /* defined(CFG_STM32MP25) || defined(CFG_STM32MP23) */
+#endif /* defined(CFG_STM32MP25) || defined(CFG_STM32MP23) || defined(CFG_STM32MP21) */
 
 	/*
 	 * Select extra IP to add in the deleted/blocked IP in case of
