@@ -2034,6 +2034,7 @@
 				clock-names = "mux";
 				#address-cells = <1>;
 				#size-cells = <0>;
+				access-controllers = <&rifsc STM32MP21_RIFSC_LPTIM2_ID>;
 				status = "disabled";
 
 				counter {
@@ -2274,6 +2275,7 @@
 				clock-names = "mux";
 				#address-cells = <1>;
 				#size-cells = <0>;
+				access-controllers = <&rifsc STM32MP21_RIFSC_LPTIM3_ID>;
 				status = "disabled";
 
 				counter {
@@ -2307,6 +2309,7 @@
 				clock-names = "mux";
 				#address-cells = <1>;
 				#size-cells = <0>;
+				access-controllers = <&rifsc STM32MP21_RIFSC_LPTIM4_ID>;
 				status = "disabled";
 
 				counter {
@@ -2340,6 +2343,7 @@
 				clock-names = "mux";
 				#address-cells = <1>;
 				#size-cells = <0>;
+				access-controllers = <&rifsc STM32MP21_RIFSC_LPTIM5_ID>;
 				status = "disabled";
 
 				counter {
