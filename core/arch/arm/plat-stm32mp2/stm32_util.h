@@ -26,8 +26,6 @@ static inline void stm32mp_register_gpioz_pin_count(size_t count __unused) { }
 
 void __noreturn do_reset(const char *str);
 
-TEE_Result stm32_activate_internal_tamper(int id);
-
 #ifdef CFG_STM32_CPU_OPP
 bool stm32mp_supports_cpu_opp(uint32_t opp_id);
 #endif /*CFG_STM32_CPU_OPP*/
