@@ -575,10 +575,10 @@ static void set_scmi_comm_resources(struct scpfw_config *cfg)
     unsigned int channel_index = 0;
     unsigned int __maybe_unused msg_smt_index = 0, optee_smt_index = 0;
     size_t i, j;
-    /* @cfg does not consider agent #0 this the reserved platform/server agent */
-    size_t scmi_agent_count = cfg->agent_count + 1;
+    size_t scmi_agent_count = cfg->agent_count;
 
-    scmi_agent_table = fwk_mm_calloc(scmi_agent_count,
+    /* @cfg does not consider agent #0 this the reserved platform/server agent */
+    scmi_agent_table = fwk_mm_calloc(scmi_agent_count + 1,
                                      sizeof(*scmi_agent_table));
 
     scmi_service_elt = fwk_mm_calloc(scpfw_resource_counter.channel_count + 1,
