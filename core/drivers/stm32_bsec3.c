@@ -914,15 +914,13 @@ TEE_Result stm32_bsec_get_state(enum stm32_bsec_sec_state *state)
 
 static uint32_t init_state(uint32_t status)
 {
-	uint32_t bsec_sr = 0U, nvstates = 0U, state = 0U;
+	uint32_t state = BSEC_STATE_INVALID;
 
-	bsec_sr = io_read32(bsec_base() + BSEC_SR);
-
-	state = BSEC_STATE_INVALID;
 	if (status & BSEC_OTPSR_INIT_DONE) {
 		/* NVSTATES is only valid if INIT_DONE = 1 */
-		nvstates = (bsec_sr & BSEC_SR_NVSTATES_MASK) >>
-			   BSEC_SR_NVSTATES_SHIFT;
+		uint32_t bsec_sr = io_read32(bsec_base() + BSEC_SR);
+		uint32_t nvstates = (bsec_sr & BSEC_SR_NVSTATES_MASK) >>
+				    BSEC_SR_NVSTATES_SHIFT;
 
 		/* Only 1 supported state = CLOSED */
 		if (nvstates != BSEC_SR_NVSTATES_CLOSED) {
