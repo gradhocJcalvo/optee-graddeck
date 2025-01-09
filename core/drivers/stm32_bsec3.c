@@ -43,14 +43,6 @@ static_assert(!(IS_ENABLED(CFG_STM32_CM33TDCID) &&
 #define BSEC_VERR			U(0xFF4)
 #define BSEC_IPIDR			U(0xFF8)
 
-/* BSEC_SR register fields */
-#define BSEC_SR_BUSY			BIT(0)
-#define BSEC_SR_HVALID			BIT(1)
-#define BSEC_SR_STATE_MASK		GENMASK_32(31, 26)
-#define BSEC_SR_STATE_SHIFT		26U
-#define BSEC_SR_STATE_OPEN		U(0x16)
-#define BSEC_SR_STATE_CLOSED		U(0x0D)
-
 /* BSEC_OTPCR register fields */
 #define BSEC_OTPCR_PROG			BIT(13)
 #define BSEC_OTPCR_PPLOCK		BIT(14)
@@ -124,6 +116,7 @@ static_assert(!(IS_ENABLED(CFG_STM32_CM33TDCID) &&
 #define BSEC_DENR_NI		BSEC_DENR_v(0x0fdf)
 
 /* BSEC_SR register fields */
+#define BSEC_SR_BUSY			BIT(0)
 #define BSEC_SR_HVALID			BIT(1)
 #define BSEC_SR_NVSTATES_MASK		GENMASK_32(31, 26)
 #define BSEC_SR_NVSTATES_SHIFT		26U
