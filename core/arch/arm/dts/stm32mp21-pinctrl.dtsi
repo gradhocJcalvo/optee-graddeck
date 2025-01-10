@@ -61,4 +61,11 @@
 			slew-rate = <0>;
 		};
 	};
+
+	i2c3_sleep_pins_a: i2c3-sleep-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('Z', 1, ANALOG)>, /* I2C3_SCL */
+				 <STM32_PINMUX('Z', 0, ANALOG)>; /* I2C3_SDA */
+		};
+	};
 };
