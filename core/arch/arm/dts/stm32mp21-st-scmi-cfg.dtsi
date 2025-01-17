@@ -10,12 +10,13 @@
 #include <dt-bindings/scmi/scmi-clock.h>
 
 / {
-	scmi: scmi {
+	scmi {
 		compatible = "optee,scmi-server";
 		#address-cells = <1>;
 		#size-cells = <0>;
 
-		agent_a35_ns: agent@1 {
+		/* SCMI agent for cortex A35 non-secure */
+		agent@1 {
 			reg = <1>;
 			compatible = "linaro,scmi-optee";
 			scmi-channel-id = <0>;
@@ -526,27 +527,6 @@
 						clocks = <&rcc HSE_DIV2_CK>;
 					};
 
-					clock@47 {
-						reg = <CK_SCMI_CPU1>;
-						clocks = <&rcc CK_CPU1>;
-						domain-name = "ck_cpu1";
-						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
-					};
-
-					clock@48 {
-						reg = <CK_SCMI_SYSCPU1>;
-						clocks = <&rcc CK_BUS_SYSCPU1>;
-						domain-name = "ck_bus_syscpu1";
-						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
-					};
-
-					clock@49 {
-						reg = <CK_SCMI_PLL2>;
-						clocks = <&rcc PLL2_CK>;
-						domain-name = "ck_pll2";
-						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
-					};
-
 					clock@4a {
 						reg = <CK_SCMI_RTC>;
 						domain-name = "ck_bus_rtc";
@@ -614,20 +594,6 @@
 						reg = <CK_SCMI_TIMG2>;
 						domain-name = "timg2_ck";
 						clocks = <&rcc TIMG2_CK>;
-						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
-					};
-
-					clock@54 {
-						reg = <CK_SCMI_BKPSRAM>;
-						clocks = <&rcc CK_BUS_BKPSRAM>;
-						domain-name = "ck_bus_bkpsram";
-						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
-					};
-
-					clock@55 {
-						reg = <CK_SCMI_BSEC>;
-						clocks = <&rcc CK_BUS_BSEC>;
-						domain-name = "ck_bus_bsec";
 						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
 					};
 
@@ -743,26 +709,6 @@
 						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
 					};
 
-					clock@66 {
-						reg = <CK_SCMI_RETRAM>;
-						clocks = <&rcc CK_BUS_RETRAM>;
-						domain-name = "ck_bus_retram";
-						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
-					};
-
-					clock@67 {
-						reg = <CK_SCMI_SRAM1>;
-						clocks = <&rcc CK_BUS_SRAM1>;
-						domain-name = "ck_bus_sram1";
-						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
-					};
-
-					clock@68 {
-						reg = <CK_SCMI_SYSRAM>;
-						clocks = <&rcc CK_BUS_SYSRAM>;
-						domain-name = "ck_icn_s_sysram";
-						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
-					};
 
 					clock@69 {
 						reg = <CK_SCMI_OSPI1>;
@@ -789,13 +735,6 @@
 						reg = <CK_SCMI_SYSATB>;
 						domain-name = "ck_sys_atb";
 						clocks = <&rcc CK_BUS_SYSATB>;
-						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
-					};
-
-					clock@6d {
-						reg = <CK_SCMI_TSDBG>;
-						clocks = <&rcc CK_KER_TSDBG>;
-						domain-name = "ck_ker_tsdbg";
 						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
 					};
 
@@ -850,22 +789,10 @@
 					#address-cells = <1>;
 					#size-cells = <0>;
 
-					reset@0 {
-						reg = <RST_SCMI_C1_R>;
-						domain-name = "c1";
-						resets = <&rcc C1_R>;
-					};
-
 					reset@1 {
 						reg = <RST_SCMI_C2_R>;
 						domain-name = "c2";
 						resets = <&m33_rproc 0>;
-					};
-
-					reset@2 {
-						reg = <RST_SCMI_C1_HOLDBOOT_R>;
-						domain-name = "c1_holdboot";
-						resets = <&rcc C1_HOLDBOOT_R>;
 					};
 
 					reset@3 {
@@ -924,7 +851,8 @@
 			};
 		};
 
-		agent_m33_ns: agent@2 {
+		/* SCMI agent for cortex M33 */
+		agent@2 {
 			reg = <2>;
 			compatible = "arm,scmi";
 			scmi-channel-id = <0>;
@@ -1438,41 +1366,6 @@
 						clocks = <&rcc HSE_DIV2_CK>;
 					};
 
-					clock@47 {
-						reg = <CK_SCMI_CPU1>;
-						clocks = <&rcc CK_CPU1>;
-						domain-name = "ck_cpu1";
-						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
-					};
-
-					clock@48 {
-						reg = <CK_SCMI_SYSCPU1>;
-						clocks = <&rcc CK_BUS_SYSCPU1>;
-						domain-name = "ck_bus_syscpu1";
-						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
-					};
-
-					clock@49 {
-						reg = <CK_SCMI_PLL2>;
-						clocks = <&rcc PLL2_CK>;
-						domain-name = "ck_pll2";
-						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
-					};
-
-					clock@4a {
-						reg = <CK_SCMI_RTC>;
-						clocks = <&rcc CK_BUS_RTC>;
-						domain-name = "ck_bus_rtc";
-						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
-					};
-
-					clock@4b {
-						reg = <CK_SCMI_RTCCK>;
-						clocks = <&rcc RTC_CK>;
-						domain-name = "rtc_ck";
-						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
-					};
-
 					clock@4c {
 						reg = <CK_SCMI_ICN_APB1>;
 						domain-name = "ck_icn_apb1";
@@ -1533,27 +1426,6 @@
 						reg = <CK_SCMI_BKPSRAM>;
 						domain-name = "ck_bus_bkpsram";
 						clocks = <&rcc CK_BUS_BKPSRAM>;
-						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
-					};
-
-					clock@55 {
-						reg = <CK_SCMI_BSEC>;
-						clocks = <&rcc CK_BUS_BSEC>;
-						domain-name = "ck_bus_bsec";
-						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
-					};
-
-					clock@56 {
-						reg = <CK_SCMI_BUS_ETR>;
-						clocks = <&rcc CK_BUS_ETR>;
-						domain-name = "ck_icn_p_etr";
-						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
-					};
-
-					clock@57 {
-						reg = <CK_SCMI_FMC>;
-						clocks = <&rcc CK_KER_FMC>;
-						domain-name = "ck_ker_fmc";
 						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
 					};
 
@@ -1627,108 +1499,11 @@
 						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
 					};
 
-					clock@62 {
-						reg = <CK_SCMI_HPDMA1>;
-						clocks = <&rcc CK_BUS_HPDMA1>;
-						domain-name = "ck_bus_hpdma1";
-						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
-					};
-
-					clock@63 {
-						reg = <CK_SCMI_HPDMA2>;
-						clocks = <&rcc CK_BUS_HPDMA2>;
-						domain-name = "ck_bus_hpdma2";
-						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
-					};
-
-					clock@64 {
-						reg = <CK_SCMI_HPDMA3>;
-						clocks = <&rcc CK_BUS_HPDMA3>;
-						domain-name = "ck_bus_hpdma3";
-						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
-					};
-
-					clock@65 {
-						reg = <CK_SCMI_IPCC1>;
-						clocks = <&rcc CK_BUS_IPCC1>;
-						domain-name = "ck_bus_ipcc1";
-						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
-					};
-
-					clock@66 {
-						reg = <CK_SCMI_RETRAM>;
-						clocks = <&rcc CK_BUS_RETRAM>;
-						domain-name = "ck_bus_retram";
-						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
-					};
-
-					clock@67 {
-						reg = <CK_SCMI_SRAM1>;
-						clocks = <&rcc CK_BUS_SRAM1>;
-						domain-name = "ck_bus_sram1";
-						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
-					};
-
-					clock@68 {
-						reg = <CK_SCMI_SYSRAM>;
-						clocks = <&rcc CK_BUS_SYSRAM>;
-						domain-name = "ck_icn_s_sysram";
-						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
-					};
 
 					clock@69 {
 						reg = <CK_SCMI_OSPI1>;
 						domain-name = "ck_ker_ospi1";
 						clocks = <&rcc CK_KER_OSPI1>;
-						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
-					};
-
-					clock@6a {
-						reg = <CK_SCMI_TPIU>;
-						clocks = <&rcc CK_KER_TPIU>;
-						domain-name = "ck_ker_tpiu";
-						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
-					};
-
-					clock@6b {
-						reg = <CK_SCMI_SYSDBG>;
-						clocks = <&rcc CK_SYSDBG>;
-						domain-name = "ck_sys_dbg";
-						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
-					};
-
-					clock@6c {
-						reg = <CK_SCMI_SYSATB>;
-						clocks = <&rcc CK_BUS_SYSATB>;
-						domain-name = "ck_sys_atb";
-						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
-					};
-
-					clock@6d {
-						reg = <CK_SCMI_TSDBG>;
-						clocks = <&rcc CK_KER_TSDBG>;
-						domain-name = "ck_ker_tsdbg";
-						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
-					};
-
-					clock@6e {
-						reg = <CK_SCMI_BUS_STM>;
-						clocks = <&rcc CK_BUS_STM>;
-						domain-name = "ck_icn_p_stm";
-						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
-					};
-
-					clock@6f {
-						reg = <CK_SCMI_KER_STM>;
-						clocks = <&rcc CK_KER_STM>;
-						domain-name = "ck_icn_s_stm";
-						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
-					};
-
-					clock@70 {
-						reg = <CK_SCMI_KER_ETR>;
-						clocks = <&rcc CK_KER_ETR>;
-						domain-name = "ck_icn_m_etr";
 						flags = <SCMI_CLOCK_DEFAULT_ENABLED>;
 					};
 
@@ -1761,36 +1536,6 @@
 				resets {
 					#address-cells = <1>;
 					#size-cells = <0>;
-
-					reset@0 {
-						reg = <RST_SCMI_C1_R>;
-						domain-name = "c1";
-						resets = <&rcc C1_R>;
-					};
-
-					reset@1 {
-						reg = <RST_SCMI_C2_R>;
-						domain-name = "c2";
-						resets = <&m33_rproc 0>;
-					};
-
-					reset@2 {
-						reg = <RST_SCMI_C1_HOLDBOOT_R>;
-						domain-name = "c1_holdboot";
-						resets = <&rcc C1_HOLDBOOT_R>;
-					};
-
-					reset@3 {
-						reg = <RST_SCMI_C2_HOLDBOOT_R>;
-						domain-name = "c2_holdboot";
-						resets = <&m33_rproc 1>;
-					};
-
-					reset@4 {
-						reg = <RST_SCMI_FMC>;
-						domain-name = "fmc";
-						resets = <&rcc FMC_R>;
-					};
 
 					reset@5 {
 						reg = <RST_SCMI_OSPI1>;
