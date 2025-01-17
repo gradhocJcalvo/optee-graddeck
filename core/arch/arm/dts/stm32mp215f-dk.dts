@@ -13,6 +13,7 @@
 #include "stm32mp215f-dk-ca35tdcid-resmem.dtsi"
 #include "stm32mp215f-dk-ca35tdcid-rif.dtsi"
 #include "stm32mp21-pinctrl.dtsi"
+#include "stm32mp21-st-scmi-cfg.dtsi"
 #include "stm32mp21xxan-pinctrl.dtsi"
 
 / {

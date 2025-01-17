@@ -17,6 +17,7 @@
 #include "stm32mp235f-dk-ca35tdcid-resmem.dtsi"
 #include "stm32mp235f-dk-ca35tdcid-rif.dtsi"
 #include "stm32mp25-pinctrl.dtsi"
+#include "stm32mp23-st-scmi-cfg.dtsi"
 #include "stm32mp25xxal-pinctrl.dtsi"
 
 / {
