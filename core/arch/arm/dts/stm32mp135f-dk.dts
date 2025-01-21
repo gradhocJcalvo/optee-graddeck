@@ -686,7 +686,7 @@
 	st,tamp-passive-nb-sample = <4>;
 	st,tamp-passive-sample-clk-div = <16384>;
 	wakeup-source;
-	wakeup-parent = <&exti>;
+	wakeup-parent = <&exti 0xffff 0>;
 
 	/* Tamper button */
 	tamp-button {

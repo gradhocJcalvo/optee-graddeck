@@ -763,7 +763,7 @@
 		pwr: pwr@44210000 {
 			compatible = "st,stm32mp21-pwr";
 			reg = <0x44210000 0x400>;
-			wakeup-parent = <&exti1>;
+			wakeup-parent = <&exti1 0xffff 0>;
 			interrupts = <GIC_SPI 190 IRQ_TYPE_LEVEL_HIGH>;
 			wakeup-gpios = <0>, <0>, <0>, <0>, <0>, <0>;
 			status = "disabled";

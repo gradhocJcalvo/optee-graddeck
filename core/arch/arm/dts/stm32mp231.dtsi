@@ -827,7 +827,7 @@
 		pwr: pwr@44210000 {
 			compatible = "st,stm32mp25-pwr";
 			reg = <0x44210000 0x400>;
-			wakeup-parent = <&exti1>;
+			wakeup-parent = <&exti1 0xffff 0>;
 			interrupts = <GIC_SPI 226 IRQ_TYPE_LEVEL_HIGH>;
 			wakeup-gpios = <0>, <0>, <0>, <0>, <0>, <0>;
 			status = "disabled";
@@ -1130,7 +1130,7 @@
 			clocks = <&rcc CK_BUS_RTC>, <&rcc RTC_CK>;
 			clock-names = "pclk", "rtc_ck";
 			wakeup-source;
-			wakeup-parent = <&exti2>;
+			wakeup-parent = <&exti2 0xffff 0>;
 			interrupts = <GIC_SPI 15 IRQ_TYPE_LEVEL_HIGH>;
 		};
 
