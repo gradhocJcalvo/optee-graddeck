@@ -10,12 +10,14 @@
 #include <kernel/boot.h>
 #include <kernel/dt.h>
 #include <kernel/dt_driver.h>
+#include <kernel/interrupt.h>
 #include <kernel/pm.h>
 #include <kernel/spinlock.h>
 #include <libfdt.h>
 #include <mm/core_memprot.h>
 #include <sys/queue.h>
 #include <tee_api_types.h>
+#include <util.h>
 
 /* Registers */
 #define _EXTI_RTSR(n)		(0x000U + (n) * 0x20U)
@@ -57,6 +59,7 @@
 #define _EXTI_BANK_NR		3U
 
 struct stm32_exti_pdata {
+	struct itr_chip chip;
 	vaddr_t base;
 	unsigned int lock;
 	uint32_t hwcfgr1;
@@ -76,6 +79,12 @@ struct stm32_exti_pdata {
 
 	bool glock;
 };
+
+static struct stm32_exti_pdata *
+itr_chip_to_stm32_exti_pdata(struct itr_chip *chip)
+{
+	return container_of(chip, struct stm32_exti_pdata, chip);
+}
 
 static uint32_t stm32_exti_get_bank(uint32_t exti_line)
 {
@@ -530,16 +539,30 @@ stm32_exti_pm(enum pm_op op, unsigned int pm_hint,
 TEE_Result stm32_exti_get_pdata(const void *fdt, int nodeoffset,
 				struct stm32_exti_pdata **exti)
 {
-	return dt_driver_device_from_node_idx_prop("wakeup-parent",
-						   fdt, nodeoffset, 0,
-						   DT_DRIVER_INTERRUPT, exti);
+	struct itr_desc itr_desc = { };
+	TEE_Result res = TEE_ERROR_GENERIC;
+
+	res = dt_driver_device_from_node_idx_prop("wakeup-parent",
+						  fdt, nodeoffset, 0,
+						  DT_DRIVER_INTERRUPT,
+						  &itr_desc);
+	if (res)
+		return res;
+
+	*exti = itr_chip_to_stm32_exti_pdata(itr_desc.chip);
+
+	return TEE_SUCCESS;
 }
 
 static TEE_Result
-stm32_exti_get_handle(struct dt_pargs *pargs __unused, void *data,
-		      struct stm32_exti_pdata **out_data)
+stm32_exti_dt_get_chip_cb(struct dt_pargs *pargs __unused, void *priv_data,
+			  struct itr_desc *itr_desc)
 {
-	*out_data = data;
+	struct stm32_exti_pdata *exti = priv_data;
+
+	itr_desc->chip = &exti->chip;
+	itr_desc->itr_num = 0;
+
 	return TEE_SUCCESS;
 }
 
@@ -572,10 +595,8 @@ static TEE_Result stm32_exti_probe(const void *fdt, int node,
 			goto err;
 	}
 
-	res = dt_driver_register_provider(fdt, node,
-					  (get_of_device_func)
-					  stm32_exti_get_handle,
-					  (void *)exti, DT_DRIVER_INTERRUPT);
+	res = interrupt_register_provider(fdt, node, stm32_exti_dt_get_chip_cb,
+					  (void *)exti);
 	if (res)
 		goto err;
 
