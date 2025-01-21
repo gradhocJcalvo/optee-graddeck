@@ -527,6 +527,14 @@ stm32_exti_pm(enum pm_op op, unsigned int pm_hint,
 	return TEE_SUCCESS;
 }
 
+TEE_Result stm32_exti_get_pdata(const void *fdt, int nodeoffset,
+				struct stm32_exti_pdata **exti)
+{
+	return dt_driver_device_from_node_idx_prop("wakeup-parent",
+						   fdt, nodeoffset, 0,
+						   DT_DRIVER_INTERRUPT, exti);
+}
+
 static TEE_Result
 stm32_exti_get_handle(struct dt_pargs *pargs __unused, void *data,
 		      struct stm32_exti_pdata **out_data)

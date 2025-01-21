@@ -2016,10 +2016,7 @@ static TEE_Result stm32_tamp_parse_fdt(struct stm32_tamp_platdata *pdata,
 	parse_bkpregs_dt_conf(pdata, fdt, node);
 
 	if (pdata->is_wakeup_source && IS_ENABLED(CFG_STM32_EXTI)) {
-		res = dt_driver_device_from_node_idx_prop("wakeup-parent",
-							  fdt, node, 0,
-							  DT_DRIVER_INTERRUPT,
-							  &pdata->exti);
+		res = stm32_exti_get_pdata(fdt, node, &pdata->exti);
 		if (res == TEE_ERROR_DEFER_DRIVER_INIT)
 			return TEE_ERROR_DEFER_DRIVER_INIT;
 		if (res)

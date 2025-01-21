@@ -795,10 +795,7 @@ static TEE_Result parse_dt(const void *fdt, int node)
 	}
 
 	if (rtc_dev.rtc->is_wakeup_source) {
-		res = dt_driver_device_from_node_idx_prop("wakeup-parent",
-							  fdt, node, 0,
-							  DT_DRIVER_INTERRUPT,
-							  &rtc_dev.exti);
+		res = stm32_exti_get_pdata(fdt, node, &rtc_dev.exti);
 		if (res == TEE_ERROR_ITEM_NOT_FOUND) {
 			EMSG("DT property 'wakeup-source' requires 'wakeup-parent'");
 			return res;

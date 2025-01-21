@@ -11,6 +11,26 @@
 struct stm32_exti_pdata;
 
 /*
+ * Recover the pointer to stm32_exti_pdata from DT property
+ * "wakeup-parent"
+ * @fdt: FDT base address
+ * @nodeoffset: node offset in the FDT
+ * @exti: the EXTI private data
+ */
+#ifdef CFG_STM32_EXTI
+TEE_Result stm32_exti_get_pdata(const void *fdt, int nodeoffset,
+				struct stm32_exti_pdata **exti);
+#else
+static inline
+TEE_Result stm32_exti_get_pdata(const void *fdt __unused,
+				int nodeoffset __unused,
+				struct stm32_exti_pdata **exti __unused)
+{
+	return TEE_ERROR_NOT_IMPLEMENTED;
+}
+#endif
+
+/*
  * Set EXTI type in RTSR and FTSR EXTI registers
  * @exti_line: EXTI line number
  * @type: type (rising, falling or both) to set

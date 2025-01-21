@@ -400,10 +400,7 @@ stm32mp1_pwr_irq_probe(const void *fdt, int node,
 	priv->base = stm32_pwr_base();
 
 	if (IS_ENABLED(CFG_STM32_EXTI)) {
-		res = dt_driver_device_from_node_idx_prop("wakeup-parent",
-							  fdt, node, 0,
-							  DT_DRIVER_INTERRUPT,
-							  &priv->exti);
+		res = stm32_exti_get_pdata(fdt, node, &priv->exti);
 		if (res)
 			goto err;
 	}
