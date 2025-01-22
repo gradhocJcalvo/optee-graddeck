@@ -60,6 +60,16 @@
 #define _EXTI_BANK_NR		3U
 #define _EXTI_LINES_PER_BANK	32U
 
+/*
+ * struct stm32_exti_itr_hierarchy - EXTI line interrupt hierarchy
+ * @this: An EXIT interrupt number and its EXTI interrupt controller
+ * @parent: The interrupt (number and controller) that drives the interrupt
+ */
+struct stm32_exti_itr_hierarchy {
+	struct itr_desc this;
+	struct itr_desc parent;
+};
+
 struct stm32_exti_pdata {
 	struct itr_chip chip;
 	vaddr_t base;
@@ -77,6 +87,8 @@ struct stm32_exti_pdata {
 	uint32_t port_sel_cache[_EXTI_MAX_CR];
 	uint32_t *e_cids;
 	uint32_t *c_cids;
+	struct stm32_exti_itr_hierarchy *
+		hierarchy[_EXTI_LINES_PER_BANK * _EXTI_BANK_NR];
 
 	SLIST_ENTRY(stm32_exti_pdata) link;
 
@@ -129,7 +141,7 @@ static inline uint32_t stm32_exti_nbcpus(const struct stm32_exti_pdata *exti)
 	return bitfield + 1;
 }
 
-static bool __unused
+static bool
 stm32_exti_event_is_configurable(const struct stm32_exti_pdata *exti,
 				 unsigned int exti_line)
 {
@@ -291,6 +303,130 @@ void stm32_exti_set_gpio_port_sel(struct stm32_exti_pdata *exti, uint8_t bank,
 
 	cpu_spin_unlock_xrestore(&exti->lock, exceptions);
 }
+
+static struct itr_desc *
+stm32_exti_get_parent_itr(struct stm32_exti_pdata *exti, size_t it)
+{
+	if (!exti || it >= stm32_exti_nbevents(exti) || !exti->hierarchy[it])
+		panic();
+
+	return &exti->hierarchy[it]->parent;
+}
+
+/* Register and configure an interrupt */
+static void stm32_exti_op_add(struct itr_chip *chip __unused,
+			      size_t it __unused, uint32_t type __unused,
+			      uint32_t prio __unused)
+{
+	/* TODO: this function is mandatory but not used. Will be removed! */
+	panic();
+}
+
+/* Enable an interrupt */
+static void stm32_exti_op_enable(struct itr_chip *chip, size_t it)
+{
+	struct stm32_exti_pdata *exti = itr_chip_to_stm32_exti_pdata(chip);
+	struct itr_desc *parent = stm32_exti_get_parent_itr(exti, it);
+
+	stm32_exti_unmask(exti, it);
+
+	interrupt_enable(parent->chip, parent->itr_num);
+}
+
+/* Disable an interrupt */
+static void stm32_exti_op_disable(struct itr_chip *chip, size_t it)
+{
+	struct stm32_exti_pdata *exti = itr_chip_to_stm32_exti_pdata(chip);
+	struct itr_desc *parent = stm32_exti_get_parent_itr(exti, it);
+
+	stm32_exti_mask(exti, it);
+
+	interrupt_disable(parent->chip, parent->itr_num);
+}
+
+/* Mask an interrupt, may be called from an interrupt context */
+static void stm32_exti_op_mask(struct itr_chip *chip, size_t it)
+{
+	struct stm32_exti_pdata *exti = itr_chip_to_stm32_exti_pdata(chip);
+	struct itr_desc *parent = stm32_exti_get_parent_itr(exti, it);
+
+	stm32_exti_mask(exti, it);
+
+	interrupt_mask(parent->chip, parent->itr_num);
+}
+
+/* Unmask an interrupt, may be called from an interrupt context */
+static void stm32_exti_op_unmask(struct itr_chip *chip, size_t it)
+{
+	struct stm32_exti_pdata *exti = itr_chip_to_stm32_exti_pdata(chip);
+	struct itr_desc *parent = stm32_exti_get_parent_itr(exti, it);
+
+	stm32_exti_unmask(exti, it);
+
+	interrupt_unmask(parent->chip, parent->itr_num);
+}
+
+/* Raise per-cpu interrupt (optional) */
+static void stm32_exti_op_raise_pi(struct itr_chip *chip, size_t it)
+{
+	struct stm32_exti_pdata *exti = itr_chip_to_stm32_exti_pdata(chip);
+	struct itr_desc *parent = stm32_exti_get_parent_itr(exti, it);
+
+	if (interrupt_can_raise_pi(parent->chip))
+		interrupt_raise_pi(parent->chip, parent->itr_num);
+}
+
+/* Raise a SGI (optional) */
+static void stm32_exti_op_raise_sgi(struct itr_chip *chip, size_t it,
+				    uint32_t cpu_mask)
+{
+	struct stm32_exti_pdata *exti = itr_chip_to_stm32_exti_pdata(chip);
+	struct itr_desc *parent = stm32_exti_get_parent_itr(exti, it);
+
+	if (interrupt_can_raise_sgi(parent->chip))
+		interrupt_raise_sgi(parent->chip, parent->itr_num, cpu_mask);
+}
+
+/* Set interrupt/cpu affinity (optional) */
+static void stm32_exti_op_set_affinity(struct itr_chip *chip, size_t it,
+				       uint8_t cpu_mask)
+{
+	struct stm32_exti_pdata *exti = itr_chip_to_stm32_exti_pdata(chip);
+	struct itr_desc *parent = stm32_exti_get_parent_itr(exti, it);
+
+	if (interrupt_can_set_affinity(parent->chip))
+		interrupt_set_affinity(parent->chip, parent->itr_num,
+				       cpu_mask);
+}
+
+/* Enable/disable power-management wake-on of an interrupt (optional) */
+static void stm32_exti_op_set_wake(struct itr_chip *chip, size_t it,
+				   bool on)
+{
+	struct stm32_exti_pdata *exti = itr_chip_to_stm32_exti_pdata(chip);
+	struct itr_desc *parent = stm32_exti_get_parent_itr(exti, it);
+
+	if (on)
+		stm32_exti_enable_wake(exti, it);
+	else
+		stm32_exti_disable_wake(exti, it);
+
+	if (interrupt_can_set_wake(parent->chip))
+		interrupt_set_wake(parent->chip, parent->itr_num, on);
+}
+
+static const struct itr_ops stm32_exti_ops = {
+	.add		= stm32_exti_op_add,
+	.enable		= stm32_exti_op_enable,
+	.disable	= stm32_exti_op_disable,
+	.mask		= stm32_exti_op_mask,
+	.unmask		= stm32_exti_op_unmask,
+	.raise_pi	= stm32_exti_op_raise_pi,
+	.raise_sgi	= stm32_exti_op_raise_sgi,
+	.set_affinity	= stm32_exti_op_set_affinity,
+	.set_wake	= stm32_exti_op_set_wake,
+};
+DECLARE_KEEP_PAGER(stm32_exti_ops);
 
 static void stm32_exti_rif_parse_dt(struct stm32_exti_pdata *exti,
 				    const void *fdt, int node)
@@ -549,6 +685,21 @@ stm32_exti_pm(enum pm_op op, unsigned int pm_hint,
 	return TEE_SUCCESS;
 }
 
+static enum itr_return stm32_exti_it_handler(struct itr_handler *h)
+{
+	struct stm32_exti_itr_hierarchy *hierarchy = h->data;
+	struct itr_desc *itr_desc = &hierarchy->this;
+	struct stm32_exti_pdata *exti =
+		itr_chip_to_stm32_exti_pdata(itr_desc->chip);
+
+	interrupt_call_handlers(itr_desc->chip, itr_desc->itr_num);
+
+	if (stm32_exti_event_is_configurable(exti, itr_desc->itr_num))
+		stm32_exti_clear(exti, itr_desc->itr_num);
+
+	return ITRR_HANDLED;
+}
+
 TEE_Result stm32_exti_get_pdata(const void *fdt, int nodeoffset,
 				struct stm32_exti_pdata **exti)
 {
@@ -567,14 +718,62 @@ TEE_Result stm32_exti_get_pdata(const void *fdt, int nodeoffset,
 	return TEE_SUCCESS;
 }
 
+/* Callback for "interrupts" and "interrupts-extended" DT node properties */
+/* FIXME: currently handling "wakeup-parent" too */
 static TEE_Result
-stm32_exti_dt_get_chip_cb(struct dt_pargs *pargs __unused, void *priv_data,
+stm32_exti_dt_get_chip_cb(struct dt_pargs *pargs, void *priv_data,
 			  struct itr_desc *itr_desc)
 {
 	struct stm32_exti_pdata *exti = priv_data;
+	struct stm32_exti_itr_hierarchy *hierarchy = NULL;
+	size_t exti_line = 0;
+	uint32_t type = 0;
+	TEE_Result res = TEE_ERROR_GENERIC;
+
+	if (pargs->args_count != 2)
+		return TEE_ERROR_GENERIC;
+
+	exti_line = pargs->args[0];
+	type = pargs->args[1];
 
 	itr_desc->chip = &exti->chip;
-	itr_desc->itr_num = 0;
+	itr_desc->itr_num = exti_line;
+
+	/* FIXME: "wakeup-parent" magic value. To be removed */
+	if (exti_line == 0xffff)
+		return TEE_SUCCESS;
+
+	if (exti_line >= stm32_exti_nbevents(exti))
+		return TEE_ERROR_GENERIC;
+
+	hierarchy = exti->hierarchy[exti_line];
+	if (!hierarchy) {
+		hierarchy = calloc(1, sizeof(*hierarchy));
+		if (!hierarchy)
+			return TEE_ERROR_OUT_OF_MEMORY;
+		exti->hierarchy[exti_line] = hierarchy;
+	}
+
+	hierarchy->this.chip = &exti->chip;
+	hierarchy->this.itr_num = exti_line;
+
+	res = interrupt_dt_get_by_index(pargs->fdt, pargs->phandle_node,
+					exti_line,
+					&hierarchy->parent.chip,
+					&hierarchy->parent.itr_num);
+	if (res)
+		return res;
+
+	res = interrupt_create_handler(hierarchy->parent.chip,
+				       hierarchy->parent.itr_num,
+				       stm32_exti_it_handler, hierarchy,
+				       ITRF_TRIGGER_LEVEL, NULL);
+	if (res)
+		return res;
+
+	/* set_type valid for configurable events only */
+	if (stm32_exti_event_is_configurable(exti, exti_line))
+		stm32_exti_set_type(exti, exti_line, type);
 
 	return TEE_SUCCESS;
 }
@@ -593,6 +792,12 @@ static TEE_Result stm32_exti_probe(const void *fdt, int node,
 		panic("Out of memory");
 
 	exti->lock = SPINLOCK_UNLOCK;
+	exti->chip.ops = &stm32_exti_ops;
+	exti->chip.name = strdup(fdt_get_name(fdt, node, NULL));
+
+	res = itr_chip_init(&exti->chip);
+	if (res)
+		panic();
 
 	fdt_fill_device_info(fdt, &dt_info, node);
 
@@ -624,6 +829,7 @@ static TEE_Result stm32_exti_probe(const void *fdt, int node,
 err:
 	free(exti->e_cids);
 	free(exti->c_cids);
+	free((char *)exti->chip.name);
 	free(exti);
 	return res;
 }
