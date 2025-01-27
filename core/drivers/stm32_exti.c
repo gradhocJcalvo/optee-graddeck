@@ -5,6 +5,7 @@
 
 #include <drivers/stm32_exti.h>
 #include <drivers/stm32_rif.h>
+#include <dt-bindings/interrupt-controller/irq.h>
 #include <io.h>
 #include <kernel/boot.h>
 #include <kernel/dt.h>
@@ -126,19 +127,20 @@ void stm32_exti_set_type(struct stm32_exti_pdata *exti, uint32_t exti_line,
 	unsigned int i = 0;
 
 	switch (type) {
-	case EXTI_TYPE_RISING:
+	case IRQ_TYPE_EDGE_RISING:
 		r_trig |= mask;
 		f_trig &= ~mask;
 		break;
-	case EXTI_TYPE_FALLING:
+	case IRQ_TYPE_EDGE_FALLING:
 		r_trig &= ~mask;
 		f_trig |= mask;
 		break;
-	case EXTI_TYPE_BOTH:
+	case IRQ_TYPE_EDGE_BOTH:
 		r_trig |= mask;
 		f_trig |= mask;
 		break;
 	default:
+		EMSG("Unsupported interrupt type 0x%"PRIx32, type);
 		panic();
 	}
 

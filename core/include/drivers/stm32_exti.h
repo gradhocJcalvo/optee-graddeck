@@ -8,10 +8,6 @@
 
 #include <tee_api_types.h>
 
-#define EXTI_TYPE_RISING	1
-#define EXTI_TYPE_FALLING	2
-#define EXTI_TYPE_BOTH	(EXTI_TYPE_RISING | EXTI_TYPE_FALLING)
-
 struct stm32_exti_pdata;
 
 /*
