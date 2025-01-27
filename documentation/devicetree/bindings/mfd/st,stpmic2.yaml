@@ -145,6 +145,10 @@ properties:
 
               regulator-off-in-suspend:
                 description: regulator should be off in suspend state.
+                  If it is controlled by a pwrctrl line, it is turned off
+                  once the pwrctrl state changes.
+                  If st,pwrctrl-enable is false, it is turned off during
+                  suspend preparation and re-enabled during resume.
                 type: boolean
 
               regulator-suspend-microvolt:

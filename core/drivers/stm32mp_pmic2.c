@@ -52,6 +52,8 @@ static bool stm32_pmic2;
  * @last_lp_mode: Last low power mode selected
  * @levels_desc: Description of the supported voltage levels
  * @levels: Voltage level value array related to description @levels_desc
+ * @power_control_en: PWRCTRL input line is enabled
+ * @forced_off: Regulator was forced off at suspend
  */
 struct pmic_regu {
 	struct stpmic2 *pmic;
@@ -62,6 +64,8 @@ struct pmic_regu {
 	int last_lp_mode;
 	struct regulator_voltages_desc levels_desc;
 	int *levels;
+	bool power_control_en;
+	bool forced_off;
 };
 
 /*
@@ -343,6 +347,36 @@ TEE_Result stm32_pmic2_apply_pm_state(struct regulator *regulator, uint8_t mode)
 	FMSG("%s: suspend state:%#"PRIx8" %d uV",
 	     regulator_name(regulator), state, lp_level_uv);
 
+	/*
+	 * If the LP state is controlled by the consumer (power control line
+	 * disabled), and the suspend state was requested as OFF in device tree,
+	 * then disable the regulator and put a message.
+	 */
+	if (!regu->power_control_en && (state & STPMIC2_LP_STATE_OFF)) {
+		bool enabled;
+
+		res = stpmic2_regulator_get_state(regu->pmic, regu->id,
+						  &enabled);
+		if (res)
+			return res;
+
+		if (enabled) {
+			res = stpmic2_regulator_set_state(regu->pmic, regu->id,
+							  false);
+			if (res)
+				return res;
+
+			IMSG("regulator %s forced OFF",
+			     regulator_name(regulator));
+
+			regu->forced_off = true;
+		} else {
+			regu->forced_off = false;
+		}
+
+		return TEE_SUCCESS;
+	}
+
 	if (mode == regu->last_lp_mode)
 		return TEE_SUCCESS;
 
@@ -367,6 +401,23 @@ TEE_Result stm32_pmic2_apply_pm_state(struct regulator *regulator, uint8_t mode)
 	}
 
 	regu->last_lp_mode = mode;
+
+	return TEE_SUCCESS;
+}
+
+TEE_Result stm32_pmic2_resume_regulator(struct regulator *regulator)
+{
+	TEE_Result res = TEE_ERROR_GENERIC;
+	struct pmic_regu *regu = regulator->priv;
+
+	if (regu->forced_off) {
+		/* Re-enable a regulator that was forced off in suspend */
+		res = stpmic2_regulator_set_state(regu->pmic, regu->id, true);
+		if (res)
+			return res;
+
+		regu->forced_off = false;
+	}
 
 	return TEE_SUCCESS;
 }
@@ -408,6 +459,9 @@ static TEE_Result pmic_supplied_init(struct regulator *regulator,
 		cuint = fdt_getprop(fdt, node, p->name, NULL);
 		if (!cuint)
 			continue;
+
+		if (p->prop == STPMIC2_PWRCTRL_EN)
+			regu->power_control_en = true;
 
 		value = fdt32_to_cpu(*cuint);
 		FMSG("%s: %d, %#"PRIx32, regulator_name(regulator), p->prop,
