@@ -1938,8 +1938,7 @@ static TEE_Result stm32_tamp_parse_fdt(struct stm32_tamp_platdata *pdata,
 	fdt_fill_device_info(fdt, &dt_tamp, node);
 
 	if (dt_tamp.reg == DT_INFO_INVALID_REG ||
-	    dt_tamp.reg_size == DT_INFO_INVALID_REG_SIZE ||
-	    dt_tamp.interrupt == DT_INFO_INVALID_INTERRUPT) {
+	    dt_tamp.reg_size == DT_INFO_INVALID_REG_SIZE) {
 		return TEE_ERROR_BAD_PARAMETERS;
 	}
 
@@ -1951,7 +1950,6 @@ static TEE_Result stm32_tamp_parse_fdt(struct stm32_tamp_platdata *pdata,
 			return res;
 	}
 
-	pdata->it = dt_tamp.interrupt;
 	pdata->base.pa = dt_tamp.reg;
 	io_pa_or_va_secure(&pdata->base, dt_tamp.reg_size);
 
@@ -2033,6 +2031,8 @@ static TEE_Result stm32_tamp_probe(const void *fdt, int node,
 	TEE_Result res = TEE_SUCCESS;
 	vaddr_t base = 0;
 	int subnode = -FDT_ERR_NOTFOUND;
+	struct itr_chip *chip = NULL;
+	size_t it_num = DT_INFO_INVALID_INTERRUPT;
 
 	/* Manage dependency on RNG driver */
 	res = dt_driver_get_crypto();
@@ -2041,6 +2041,10 @@ static TEE_Result stm32_tamp_probe(const void *fdt, int node,
 
 	/* Manage dependency on RTC driver */
 	res = stm32_rtc_driver_is_initialized();
+	if (res)
+		return res;
+
+	res = interrupt_dt_get_by_index(fdt, node, 0, &chip, &it_num);
 	if (res)
 		return res;
 
@@ -2118,11 +2122,9 @@ static TEE_Result stm32_tamp_probe(const void *fdt, int node,
 			goto err;
 	}
 
-	res = interrupt_alloc_add_handler(interrupt_get_main_chip(),
-					  stm32_tamp.pdata.it,
-					  stm32_tamp_it_handler,
-					  ITRF_TRIGGER_LEVEL, NULL,
-					  &stm32_tamp.itr);
+	res = interrupt_create_handler(chip, it_num, stm32_tamp_it_handler,
+				       NULL, ITRF_TRIGGER_LEVEL,
+				       &stm32_tamp.itr);
 	if (res)
 		goto err;
 
@@ -2136,7 +2138,7 @@ static TEE_Result stm32_tamp_probe(const void *fdt, int node,
 			DMSG("TAMP event are not configured as wakeup source");
 	}
 
-	interrupt_enable(interrupt_get_main_chip(), stm32_tamp.itr->it);
+	interrupt_enable(chip, it_num);
 
 	res = stm32_configure_tamp(fdt, node);
 	if (res)
@@ -2164,10 +2166,14 @@ err:
 		free(stm32_tamp.pdata.conf_data->access_mask);
 	}
 
-	if (stm32_tamp.itr)
+	if (stm32_tamp.itr) {
+		interrupt_disable(chip, it_num);
 		interrupt_remove_free_handler(stm32_tamp.itr);
+	}
 
 	free(stm32_tamp.pdata.bkpregs_conf);
+
+	clk_disable(stm32_tamp.pdata.clock);
 
 	return res;
 }
