@@ -9,7 +9,6 @@
 #include <drivers/clk.h>
 #include <drivers/clk_dt.h>
 #include <drivers/gpio.h>
-#include <drivers/stm32_exti.h>
 #include <drivers/stm32_gpio.h>
 #include <drivers/stm32_rtc.h>
 #include <drivers/stm32_tamp.h>
@@ -2013,14 +2012,6 @@ static TEE_Result stm32_tamp_parse_fdt(struct stm32_tamp_platdata *pdata,
 
 	parse_bkpregs_dt_conf(pdata, fdt, node);
 
-	if (pdata->is_wakeup_source && IS_ENABLED(CFG_STM32_EXTI)) {
-		res = stm32_exti_get_pdata(fdt, node, &pdata->exti);
-		if (res == TEE_ERROR_DEFER_DRIVER_INIT)
-			return TEE_ERROR_DEFER_DRIVER_INIT;
-		if (res)
-			panic("DT property 'wakeup-source' requires 'wakeup-parent'");
-	}
-
 	return TEE_SUCCESS;
 }
 
@@ -2129,11 +2120,8 @@ static TEE_Result stm32_tamp_probe(const void *fdt, int node,
 		goto err;
 
 	if (stm32_tamp.pdata.is_wakeup_source) {
-		struct stm32_tamp_compat *compat = stm32_tamp.pdata.compat;
-
-		if (IS_ENABLED(CFG_STM32_EXTI))
-			stm32_exti_enable_wake(stm32_tamp.pdata.exti,
-					       compat->exti_wakeup_line);
+		if (interrupt_can_set_wake(chip))
+			interrupt_set_wake(chip, it_num, true);
 		else
 			DMSG("TAMP event are not configured as wakeup source");
 	}
@@ -2193,7 +2181,6 @@ static const struct stm32_tamp_compat mp13_compat = {
 		.ext_tamp_size = ARRAY_SIZE(ext_tamp_mp13),
 		.pin_map = pin_map_mp13,
 		.pin_map_size = ARRAY_SIZE(pin_map_mp13),
-		.exti_wakeup_line = U(18),
 };
 
 static const struct stm32_tamp_compat mp15_compat = {
@@ -2205,7 +2192,6 @@ static const struct stm32_tamp_compat mp15_compat = {
 		.ext_tamp_size = ARRAY_SIZE(ext_tamp_mp15),
 		.pin_map = pin_map_mp15,
 		.pin_map_size = ARRAY_SIZE(pin_map_mp15),
-		.exti_wakeup_line = U(18),
 };
 
 static const struct stm32_tamp_compat mp25_compat = {
@@ -2223,7 +2209,6 @@ static const struct stm32_tamp_compat mp25_compat = {
 		.ext_tamp_size = ARRAY_SIZE(ext_tamp_mp25),
 		.pin_map = pin_map_mp25,
 		.pin_map_size = ARRAY_SIZE(pin_map_mp25),
-		.exti_wakeup_line = U(21),
 };
 
 static const struct stm32_tamp_compat mp23_compat = {
