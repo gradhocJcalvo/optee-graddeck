@@ -131,6 +131,13 @@
 				regulator-min-microvolt = <800000>;
 				regulator-max-microvolt = <900000>;
 				regulator-over-current-protection;
+
+				standby {
+					regulator-off-in-suspend;
+				};
+				off {
+					regulator-off-in-suspend;
+				};
 			};
 			vddio_pmic: buck4 {
 				regulator-name = "vddio_pmic";
@@ -271,6 +278,13 @@
 				regulator-min-microvolt = <3300000>;
 				regulator-max-microvolt = <3300000>;
 				regulator-over-current-protection;
+
+				standby {
+					regulator-off-in-suspend;
+				};
+				off {
+					regulator-off-in-suspend;
+				};
 			};
 			vpp_ddr: ldo5 {
 				regulator-name = "vpp_ddr";
