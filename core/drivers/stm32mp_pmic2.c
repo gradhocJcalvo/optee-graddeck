@@ -5,7 +5,6 @@
 
 #include <config.h>
 #include <drivers/regulator.h>
-#include <drivers/stm32_exti.h>
 #include <drivers/stm32_i2c.h>
 #if defined(CFG_STM32MP25) || defined(CFG_STM32MP23) || defined(CFG_STM32MP21)
 #include <drivers/stm32mp25_pwr.h>
