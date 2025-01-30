@@ -432,6 +432,7 @@
 				interrupts = <GIC_SPI 132 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_BUS_HASH1>;
 				resets = <&rcc HASH1_R>;
+				access-controllers = <&rifsc STM32MP21_RIFSC_HASH1_ID>;
 				status = "disabled";
 			};
 
@@ -441,6 +442,7 @@
 				clocks = <&clk_rcbsec>, <&rcc CK_BUS_RNG1>;
 				clock-names = "rng_clk", "rng_hclk";
 				resets = <&rcc RNG1_R>;
+				access-controllers = <&rifsc STM32MP21_RIFSC_RNG1_ID>;
 				status = "disabled";
 			};
 

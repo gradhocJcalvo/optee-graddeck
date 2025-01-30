@@ -4,6 +4,8 @@
  * Author: Alexandre Torgue <alexandre.torgue@foss.st.com> for STMicroelectronics.
  */
 
+#include <dt-bindings/soc/stm32mp21-rifsc.h>
+
 &rifsc {
 	cryp1: cryp@42030000 {
 		compatible = "st,stm32mp1-cryp";
@@ -11,6 +13,7 @@
 		interrupts = <GIC_SPI 131 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&rcc CK_BUS_CRYP1>;
 		resets = <&rcc CRYP1_R>;
+		access-controllers = <&rifsc STM32MP21_RIFSC_CRYP1_ID>;
 		status = "disabled";
 	};
 
@@ -21,6 +24,7 @@
 		clocks = <&rcc CK_BUS_SAES>, <&rcc CK_BUS_RNG1>;
 		clock-names = "bus", "rng";
 		resets = <&rcc SAES_R>;
+		access-controllers = <&rifsc STM32MP21_RIFSC_SAES_ID>, <&rifsc STM32MP21_RIFSC_RNG1_ID>;
 		status = "disabled";
 	};
 
@@ -31,6 +35,7 @@
 		clocks = <&rcc CK_BUS_PKA>, <&rcc CK_BUS_RNG1>;
 		clock-names = "bus", "rng";
 		resets = <&rcc PKA_R>;
+		access-controllers = <&rifsc STM32MP21_RIFSC_PKA_ID>, <&rifsc STM32MP21_RIFSC_RNG1_ID>;
 		status = "disabled";
 	};
 };
