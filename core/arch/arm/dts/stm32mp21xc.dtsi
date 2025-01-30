@@ -14,24 +14,6 @@
 		status = "disabled";
 	};
 
-	hash1: hash@42030400 {
-		compatible = "st,stm32mp13-hash";
-		reg = <0x42030400  0x400>;
-		interrupts = <GIC_SPI 132 IRQ_TYPE_LEVEL_HIGH>;
-		clocks = <&rcc CK_BUS_HASH1>;
-		resets = <&rcc HASH1_R>;
-		status = "disabled";
-	};
-
-	rng1: rng@42030800 {
-		compatible = "st,stm32mp21-rng";
-		reg = <0x42030800 0x400>;
-		clocks = <&clk_rcbsec>, <&rcc CK_BUS_RNG1>;
-		clock-names = "rng_clk", "rng_hclk";
-		resets = <&rcc RNG1_R>;
-		status = "disabled";
-	};
-
 	saes: saes@42030c00 {
 		compatible = "st,stm32mp13-saes";
 		reg = <0x42030c00 0x400>;
