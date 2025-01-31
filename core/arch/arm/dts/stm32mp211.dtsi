@@ -653,6 +653,12 @@
 				st,non-secure-otp-provisioning;
 			};
 
+			oem_adac_rotpkh: oem_adac_rotpkh@3b8 {
+				/* 0x3b8 -> otp238 */
+				reg = <0x3b8 0x20>;
+				st,non-secure-otp-provisioning;
+			};
+
 			oem_fip_enc_key: otp260@410 {
 				reg = <0x410 0x20>;
 				st,non-secure-otp-provisioning;
