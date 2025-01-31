@@ -34,4 +34,6 @@ void stm32_debug_suspend(unsigned long a0);
 
 bool stm32mp_allow_probe_shared_device(const void *fdt, int node);
 
+/* Get device ID from SYSCFG registers */
+uint32_t stm32mp_syscfg_get_chip_dev_id(void);
 #endif /*__STM32_UTIL_H__*/

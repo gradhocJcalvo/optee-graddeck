@@ -52,6 +52,10 @@ struct io_pa_va syscfg_base[SYSCON_NB_BANKS] = {
 #define SYSCFG_SAFERSTCR		SYSCON_ID(SYSCON_SYSCFG, 0x2018U)
 #define SYSCFG_SAFERSTCR_EN		BIT(0)
 
+/* SYSCFG device ID register definition */
+#define SYSCFG_IDC			SYSCON_ID(SYSCON_SYSCFG, 0x6400U)
+#define SYSCFG_IDC_DEV_ID_MASK		GENMASK_32(11, 0)
+
 /*
  * SYSCFG IO compensation register offsets (base relative)
  */
@@ -182,4 +186,11 @@ void stm32mp25_syscfg_set_safe_reset(bool status)
 		io_setbits32(addr, SYSCFG_SAFERSTCR_EN);
 	else
 		io_clrbits32(addr, SYSCFG_SAFERSTCR_EN);
+}
+
+uint32_t stm32mp_syscfg_get_chip_dev_id(void)
+{
+	vaddr_t addr = stm32mp_syscfg_base(SYSCON_SYSCFG) + SYSCFG_IDC;
+
+	return io_read32(addr) & SYSCFG_IDC_DEV_ID_MASK;
 }
