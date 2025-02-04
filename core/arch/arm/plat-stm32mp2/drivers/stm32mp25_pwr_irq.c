@@ -5,7 +5,6 @@
 
 #include <config.h>
 #include <drivers/gpio.h>
-#include <drivers/stm32_exti.h>
 #include <drivers/stm32_gpio.h>
 #include <drivers/stm32mp25_pwr.h>
 #include <dt-bindings/interrupt-controller/irq.h>
@@ -41,9 +40,6 @@
 
 #define WKUPPUPD_MASK		GENMASK_32(1, 0)
 #define WKUPPUPD_SHIFT		U(12)
-
-/* EXTI line number for PWR Wakeup pin 1 */
-#define PWR_EXTI_WKUP1		52
 
 enum wkup_pull_setting {
 	WKUP_NO_PULL = 0,
@@ -141,30 +137,16 @@ stm32_pwr_irq_set_pull_config(size_t it, enum wkup_pull_setting config)
 
 static void stm32mp25_pwr_itr_enable_nolock(size_t it)
 {
-	struct pwr_wkup_data *priv = pwr_wkup_d;
-
 	VERBOSE_PWR("Pwr irq enable %zu", it);
-
-	if (IS_ENABLED(CFG_STM32_EXTI) && priv->exti) {
-		stm32_exti_unmask(priv->exti, PWR_EXTI_WKUP1 + it);
-		stm32_exti_enable_wake(priv->exti, PWR_EXTI_WKUP1 + it);
-	}
 
 	io_setbits32(pwr_wkupcr_base(it), WKUPENCPU1);
 }
 
 static void stm32mp25_pwr_itr_disable_nolock(size_t it)
 {
-	struct pwr_wkup_data *priv = pwr_wkup_d;
-
 	VERBOSE_PWR("Pwr irq disable %zu", it);
 
 	io_clrbits32(pwr_wkupcr_base(it), WKUPENCPU1);
-
-	if (IS_ENABLED(CFG_STM32_EXTI) && priv->exti) {
-		stm32_exti_mask(priv->exti, PWR_EXTI_WKUP1 + it);
-		stm32_exti_disable_wake(priv->exti, PWR_EXTI_WKUP1 + it);
-	}
 }
 
 static TEE_Result stm32_pwr_irq_set_trig(size_t it, unsigned int flags)
@@ -341,10 +323,9 @@ static struct itr_chip stm32mp2_pwr_itr_chip = {
 };
 
 static TEE_Result stm32mp2_pwr_itr_dt_get(struct dt_pargs *args,
-					  void *priv_data,
+					  void *priv_data __unused,
 					  struct itr_desc *itr_desc_p)
 {
-	struct pwr_wkup_data *priv = priv_data;
 	TEE_Result res = TEE_ERROR_GENERIC;
 	unsigned int trigger_mode = 0;
 	unsigned int itr_num = 0;
@@ -354,7 +335,7 @@ static TEE_Result stm32mp2_pwr_itr_dt_get(struct dt_pargs *args,
 
 	VERBOSE_PWR("Pwr IRQ add");
 
-	assert(priv && args->args_count == 2);
+	assert(args->args_count == 2);
 
 	itr_num = args->args[0];
 	trigger_mode = args->args[1];
@@ -403,9 +384,6 @@ static TEE_Result stm32mp2_pwr_itr_dt_get(struct dt_pargs *args,
 		return res;
 	}
 
-	if (IS_ENABLED(CFG_STM32_EXTI) && priv->exti)
-		stm32_exti_set_tz(priv->exti, PWR_EXTI_WKUP1 + itr_num);
-
 	itr_desc_p->chip = &stm32mp2_pwr_itr_chip;
 	itr_desc_p->itr_num = itr_num;
 
@@ -431,12 +409,6 @@ TEE_Result stm32mp25_pwr_irq_probe(const void *fdt, int node)
 	res = itr_chip_init(&stm32mp2_pwr_itr_chip);
 	if (res)
 		panic();
-
-	if (IS_ENABLED(CFG_STM32_EXTI)) {
-		res = stm32_exti_get_pdata(fdt, node, &priv->exti);
-		if (res)
-			priv->exti = NULL;
-	}
 
 	res = interrupt_dt_get(fdt, node, &itr_chip, &itr_num);
 	if (res)

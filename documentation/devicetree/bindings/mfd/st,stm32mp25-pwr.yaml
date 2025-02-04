@@ -29,8 +29,6 @@ properties:
     description: contains the PWR Wake-up pin interrupt line.
     maxItems: 1
 
-  wakeup-parent: true
-
   wakeup-gpios:
     description: contains a list of GPIO spec describing each wake-up pin.
     maxItems: 6
@@ -72,7 +70,6 @@ examples:
     pwr: pwr@44210000 {
       compatible = "st,stm32mp25-pwr";
       reg = <0x44210000 0x400>;
-      wakeup-parent = <&exti1>;
       wakeup-gpios = <0>, <0>, <0>, <0>, <&gpiog 2 GPIO_PULL_UP>, <0>;
       interrupts = <GIC_SPI 226 IRQ_TYPE_LEVEL_HIGH>;
       interrupt-controller;
