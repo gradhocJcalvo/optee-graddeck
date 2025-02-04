@@ -775,6 +775,13 @@ stm32_exti_dt_get_chip_cb(struct dt_pargs *pargs, void *priv_data,
 	if (stm32_exti_event_is_configurable(exti, exti_line))
 		stm32_exti_set_type(exti, exti_line, type);
 
+	/*
+	 * Without RIF, predate the line by setting it as secure.
+	 * TODO: with RIF, check the permission
+	 */
+	if (!IS_ENABLED(CFG_STM32_RIF) || !stm32_exti_maxcid(exti))
+		stm32_exti_set_tz(exti, exti_line);
+
 	return TEE_SUCCESS;
 }
 
