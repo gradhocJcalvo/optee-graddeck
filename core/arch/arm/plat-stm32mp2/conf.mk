@@ -102,6 +102,7 @@ $(call force,CFG_STM32_TAMP,n)
 $(call force,CFG_STM32MP_PROVISIONING,n)
 $(call force,CFG_TA_STM32MP_NVMEM,n)
 $(call force,CFG_STM32MP2_CLK_CAL,n)
+$(call force,CFG_STM32_PSA_SERVICE,y)
 endif
 
 $(call force,CFG_ARM_GIC_PM,y)
@@ -359,6 +360,10 @@ endif
 CFG_DRIVERS_FIREWALL ?= y
 ifeq ($(call cfg-one-enabled, CFG_STM32_RISAF CFG_STM32_RIFSC),y)
 $(call force,CFG_DRIVERS_FIREWALL,y)
+endif
+
+ifeq ($(CFG_STM32_PSA_SERVICE),y)
+$(call force,CFG_RSE_COMMS,y)
 endif
 
 # Trusted User Interface
