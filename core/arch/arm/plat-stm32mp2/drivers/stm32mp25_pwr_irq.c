@@ -145,7 +145,7 @@ static void stm32mp25_pwr_itr_enable_nolock(size_t it)
 
 	VERBOSE_PWR("Pwr irq enable %zu", it);
 
-	if (IS_ENABLED(CFG_STM32_EXTI)) {
+	if (IS_ENABLED(CFG_STM32_EXTI) && priv->exti) {
 		stm32_exti_unmask(priv->exti, PWR_EXTI_WKUP1 + it);
 		stm32_exti_enable_wake(priv->exti, PWR_EXTI_WKUP1 + it);
 	}
@@ -161,7 +161,7 @@ static void stm32mp25_pwr_itr_disable_nolock(size_t it)
 
 	io_clrbits32(pwr_wkupcr_base(it), WKUPENCPU1);
 
-	if (IS_ENABLED(CFG_STM32_EXTI)) {
+	if (IS_ENABLED(CFG_STM32_EXTI) && priv->exti) {
 		stm32_exti_mask(priv->exti, PWR_EXTI_WKUP1 + it);
 		stm32_exti_disable_wake(priv->exti, PWR_EXTI_WKUP1 + it);
 	}
@@ -403,7 +403,7 @@ static TEE_Result stm32mp2_pwr_itr_dt_get(struct dt_pargs *args,
 		return res;
 	}
 
-	if (IS_ENABLED(CFG_STM32_EXTI))
+	if (IS_ENABLED(CFG_STM32_EXTI) && priv->exti)
 		stm32_exti_set_tz(priv->exti, PWR_EXTI_WKUP1 + itr_num);
 
 	itr_desc_p->chip = &stm32mp2_pwr_itr_chip;
@@ -435,7 +435,7 @@ TEE_Result stm32mp25_pwr_irq_probe(const void *fdt, int node)
 	if (IS_ENABLED(CFG_STM32_EXTI)) {
 		res = stm32_exti_get_pdata(fdt, node, &priv->exti);
 		if (res)
-			goto err;
+			priv->exti = NULL;
 	}
 
 	res = interrupt_dt_get(fdt, node, &itr_chip, &itr_num);
@@ -458,12 +458,6 @@ TEE_Result stm32mp25_pwr_irq_probe(const void *fdt, int node)
 	VERBOSE_PWR("Init pwr irq done");
 
 	return TEE_SUCCESS;
-
-err:
-	free(pwr_wkup_d);
-	pwr_wkup_d = NULL;
-
-	return res;
 }
 
 static enum itr_return pwr_it_user_handler(struct itr_handler *handler)
