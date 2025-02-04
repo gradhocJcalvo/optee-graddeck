@@ -72,7 +72,7 @@
 	pmic2: stpmic2@33 {
 		compatible = "st,stpmic2";
 		reg = <0x33>;
-		interrupts-extended = <&pwr 0 IRQ_TYPE_EDGE_FALLING>;
+		interrupts-extended = <&exti1 52 IRQ_TYPE_EDGE_FALLING>;
 		wakeup-source;
 		st,pmic-it-id = <IT_PKEY_FA IT_PKEY_RI>;
 		st,notif-it-id = <0 1>;
