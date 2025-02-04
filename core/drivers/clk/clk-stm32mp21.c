@@ -4148,8 +4148,10 @@ static void clk_stm32_set_flexgen_as_critical(void)
 	}
 }
 
-static bool clk_stm32_clock_is_critical(struct clk *clk)
+static bool clk_stm32_clock_is_critical(struct clk *clk __maybe_unused)
 {
+#ifndef CFG_STM32_CM33TDCID
+
 	struct clk *clk_criticals[] = {
 		&ck_hsi,
 		&ck_hse,
@@ -4189,7 +4191,7 @@ static bool clk_stm32_clock_is_critical(struct clk *clk)
 		if (clk == clk_critical)
 			return true;
 	}
-
+#endif /* CFG_STM32_CM33TDCID */
 	return false;
 }
 
