@@ -47,8 +47,7 @@ stm32mp25_pwr_itr_alloc_add(const void *fdt, int wp_node, size_t it,
 void stm32mp25_pwr_itr_enable(size_t it);
 void stm32mp25_pwr_itr_disable(size_t it);
 
-TEE_Result
-stm32mp25_pwr_irq_probe(const void *fdt, int node, int interrupt);
+TEE_Result stm32mp25_pwr_irq_probe(const void *fdt, int node);
 #endif /* CFG_STM32_PWR_IRQ */
 
 vaddr_t stm32_pwr_base(void);

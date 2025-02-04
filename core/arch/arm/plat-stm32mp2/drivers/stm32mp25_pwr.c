@@ -85,7 +85,6 @@
 
 struct pwr_pdata {
 	vaddr_t base;
-	int interrupt;
 	uint8_t nb_ressources;
 	struct rif_conf_data *conf_data;
 };
@@ -278,7 +277,7 @@ static void parse_dt(const void *fdt, int node)
 	cuint = fdt_getprop(fdt, node, "st,protreg", &lenp);
 	if (!cuint) {
 		DMSG("No RIF configuration available");
-		goto skip_rif;
+		return;
 	}
 
 	pwr_d->nb_ressources = (unsigned int)(lenp / sizeof(uint32_t));
@@ -300,14 +299,6 @@ static void parse_dt(const void *fdt, int node)
 	for (i = 0; i < pwr_d->nb_ressources; i++)
 		stm32_rif_parse_cfg(fdt32_to_cpu(cuint[i]), pwr_d->conf_data,
 				    _PWR_NB_RESOURCES);
-
-skip_rif:
-#ifdef CFG_STM32_PWR_IRQ
-	if (info.interrupt == DT_INFO_INVALID_INTERRUPT)
-		panic("No interrupt defined in PWR");
-
-	pwr_d->interrupt = info.interrupt;
-#endif
 }
 
 static void pm_resume(void)
@@ -404,7 +395,7 @@ static TEE_Result stm32mp_pwr_probe(const void *fdt, int node,
 		panic("Failed to apply rif_config");
 
 #ifdef CFG_STM32_PWR_IRQ
-	res = stm32mp25_pwr_irq_probe(fdt, node, pwr_d->interrupt);
+	res = stm32mp25_pwr_irq_probe(fdt, node);
 	if (res) {
 		if (pwr_d->conf_data) {
 			free(pwr_d->conf_data->access_mask);
