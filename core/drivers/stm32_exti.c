@@ -719,7 +719,6 @@ TEE_Result stm32_exti_get_pdata(const void *fdt, int nodeoffset,
 }
 
 /* Callback for "interrupts" and "interrupts-extended" DT node properties */
-/* FIXME: currently handling "wakeup-parent" too */
 static TEE_Result
 stm32_exti_dt_get_chip_cb(struct dt_pargs *pargs, void *priv_data,
 			  struct itr_desc *itr_desc)
@@ -738,10 +737,6 @@ stm32_exti_dt_get_chip_cb(struct dt_pargs *pargs, void *priv_data,
 
 	itr_desc->chip = &exti->chip;
 	itr_desc->itr_num = exti_line;
-
-	/* FIXME: "wakeup-parent" magic value. To be removed */
-	if (exti_line == 0xffff)
-		return TEE_SUCCESS;
 
 	if (exti_line >= stm32_exti_nbevents(exti))
 		return TEE_ERROR_GENERIC;
