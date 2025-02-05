@@ -37,6 +37,8 @@
 		compatible = "st,stm32mp1-pwr-irq-user";
 		wakeup-parent = <&pwr_irq>;
 		st,wakeup-pin-number = <2>;
+		interrupts-extended = <&pwr_irq 1 IRQ_TYPE_EDGE_FALLING>;
+		wakeup-source;
 		status = "okay";
 	};
 
@@ -70,6 +72,8 @@
 		compatible = "st,stm32mp1-pwr-irq-user";
 		wakeup-parent = <&pwr_irq>;
 		st,wakeup-pin-number = <5>;
+		interrupts-extended = <&pwr_irq 4 IRQ_TYPE_EDGE_FALLING>;
+		wakeup-source;
 		st,notif-it-id = <1>;
 		status = "okay";
 	};
@@ -209,6 +213,8 @@
 		status = "okay";
 		wakeup-parent = <&pwr_irq>;
 		st,wakeup-pin-number = <1>;
+		interrupts-extended = <&pwr_irq 0 IRQ_TYPE_EDGE_FALLING>;
+		wakeup-source;
 		st,pmic-it-id = <IT_PONKEY_F IT_PONKEY_R>;
 		st,notif-it-id = <0 2>;
 

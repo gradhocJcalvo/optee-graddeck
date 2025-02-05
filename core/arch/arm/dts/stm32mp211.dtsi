@@ -765,6 +765,8 @@
 			reg = <0x44210000 0x400>;
 			wakeup-parent = <&exti1 0xffff 0>;
 			interrupts = <GIC_SPI 190 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
 			wakeup-gpios = <0>, <0>, <0>, <0>, <0>, <0>;
 			status = "disabled";
 
