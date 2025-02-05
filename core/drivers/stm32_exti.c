@@ -3,7 +3,6 @@
  * Copyright (c) 2021-2023, STMicroelectronics
  */
 
-#include <drivers/stm32_exti.h>
 #include <drivers/stm32_rif.h>
 #include <dt-bindings/interrupt-controller/irq.h>
 #include <io.h>
@@ -151,8 +150,8 @@ stm32_exti_event_is_configurable(const struct stm32_exti_pdata *exti,
 	return exti->trg[i] & mask;
 }
 
-void stm32_exti_set_type(struct stm32_exti_pdata *exti, uint32_t exti_line,
-			 uint32_t type)
+static void stm32_exti_set_type(struct stm32_exti_pdata *exti,
+				uint32_t exti_line, uint32_t type)
 {
 	uint32_t mask = BIT(exti_line % _EXTI_LINES_PER_BANK);
 	uint32_t r_trig = 0;
@@ -188,7 +187,7 @@ void stm32_exti_set_type(struct stm32_exti_pdata *exti, uint32_t exti_line,
 	cpu_spin_unlock_xrestore(&exti->lock, exceptions);
 }
 
-void stm32_exti_mask(struct stm32_exti_pdata *exti, uint32_t exti_line)
+static void stm32_exti_mask(struct stm32_exti_pdata *exti, uint32_t exti_line)
 {
 	uint32_t mask = BIT(exti_line % _EXTI_LINES_PER_BANK);
 	uint32_t exceptions = 0;
@@ -204,7 +203,8 @@ void stm32_exti_mask(struct stm32_exti_pdata *exti, uint32_t exti_line)
 	cpu_spin_unlock_xrestore(&exti->lock, exceptions);
 }
 
-void stm32_exti_unmask(struct stm32_exti_pdata *exti, uint32_t exti_line)
+static void stm32_exti_unmask(struct stm32_exti_pdata *exti,
+			      uint32_t exti_line)
 {
 	uint32_t mask = BIT(exti_line % _EXTI_LINES_PER_BANK);
 	uint32_t exceptions = 0;
@@ -220,7 +220,8 @@ void stm32_exti_unmask(struct stm32_exti_pdata *exti, uint32_t exti_line)
 	cpu_spin_unlock_xrestore(&exti->lock, exceptions);
 }
 
-void stm32_exti_enable_wake(struct stm32_exti_pdata *exti, uint32_t exti_line)
+static void stm32_exti_enable_wake(struct stm32_exti_pdata *exti,
+				   uint32_t exti_line)
 {
 	uint32_t mask = BIT(exti_line % _EXTI_LINES_PER_BANK);
 	uint32_t exceptions = 0;
@@ -235,7 +236,8 @@ void stm32_exti_enable_wake(struct stm32_exti_pdata *exti, uint32_t exti_line)
 	cpu_spin_unlock_xrestore(&exti->lock, exceptions);
 }
 
-void stm32_exti_disable_wake(struct stm32_exti_pdata *exti, uint32_t exti_line)
+static void stm32_exti_disable_wake(struct stm32_exti_pdata *exti,
+				    uint32_t exti_line)
 {
 	uint32_t mask = BIT(exti_line % _EXTI_LINES_PER_BANK);
 	uint32_t exceptions = 0;
@@ -250,7 +252,7 @@ void stm32_exti_disable_wake(struct stm32_exti_pdata *exti, uint32_t exti_line)
 	cpu_spin_unlock_xrestore(&exti->lock, exceptions);
 }
 
-void stm32_exti_clear(struct stm32_exti_pdata *exti, uint32_t exti_line)
+static void stm32_exti_clear(struct stm32_exti_pdata *exti, uint32_t exti_line)
 {
 	uint32_t mask = BIT(exti_line % _EXTI_LINES_PER_BANK);
 	uint32_t exceptions = 0;
@@ -266,7 +268,8 @@ void stm32_exti_clear(struct stm32_exti_pdata *exti, uint32_t exti_line)
 	cpu_spin_unlock_xrestore(&exti->lock, exceptions);
 }
 
-void stm32_exti_set_tz(struct stm32_exti_pdata *exti, uint32_t exti_line)
+static void stm32_exti_set_tz(struct stm32_exti_pdata *exti,
+			      uint32_t exti_line)
 {
 	uint32_t mask = BIT(exti_line % _EXTI_LINES_PER_BANK);
 	uint32_t exceptions = 0;
@@ -277,22 +280,6 @@ void stm32_exti_set_tz(struct stm32_exti_pdata *exti, uint32_t exti_line)
 	exceptions = cpu_spin_lock_xsave(&exti->lock);
 
 	io_mask32(exti->base + _EXTI_SECCFGR(i), mask, mask);
-
-	cpu_spin_unlock_xrestore(&exti->lock, exceptions);
-}
-
-void stm32_exti_set_gpio_port_sel(struct stm32_exti_pdata *exti, uint8_t bank,
-				  uint8_t pin)
-{
-	uint32_t reg = _EXTI_CR(pin / 4);
-	uint32_t shift = (pin % 4) * 8;
-	uint32_t val = bank << shift;
-	uint32_t mask = 0xff << shift;
-	uint32_t exceptions = 0;
-
-	exceptions = cpu_spin_lock_xsave(&exti->lock);
-
-	io_mask32(exti->base + reg, val, mask);
 
 	cpu_spin_unlock_xrestore(&exti->lock, exceptions);
 }
@@ -691,24 +678,6 @@ static enum itr_return stm32_exti_it_handler(struct itr_handler *h)
 		stm32_exti_clear(exti, itr_desc->itr_num);
 
 	return ITRR_HANDLED;
-}
-
-TEE_Result stm32_exti_get_pdata(const void *fdt, int nodeoffset,
-				struct stm32_exti_pdata **exti)
-{
-	struct itr_desc itr_desc = { };
-	TEE_Result res = TEE_ERROR_GENERIC;
-
-	res = dt_driver_device_from_node_idx_prop("wakeup-parent",
-						  fdt, nodeoffset, 0,
-						  DT_DRIVER_INTERRUPT,
-						  &itr_desc);
-	if (res)
-		return res;
-
-	*exti = itr_chip_to_stm32_exti_pdata(itr_desc.chip);
-
-	return TEE_SUCCESS;
 }
 
 /* Callback for "interrupts" and "interrupts-extended" DT node properties */
