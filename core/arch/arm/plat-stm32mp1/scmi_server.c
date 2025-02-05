@@ -660,9 +660,8 @@ int32_t plat_scmi_rd_autonomous(unsigned int channel_id, unsigned int scmi_id,
 	if (!rd)
 		return SCMI_NOT_FOUND;
 
-	if (!nsec_can_access_resource(rd->etzpc_id))
+	if (!rd->rstctrl || !nsec_can_access_resource(rd->etzpc_id))
 		return SCMI_DENIED;
-	assert(rd->rstctrl);
 
 #ifdef CFG_STM32MP15
 	/* Reset cycle on MCU hold boot is not supported */
@@ -699,7 +698,7 @@ int32_t plat_scmi_rd_set_state(unsigned int channel_id, unsigned int scmi_id,
 	if (!rd)
 		return SCMI_NOT_FOUND;
 
-	if (!nsec_can_access_resource(rd->etzpc_id))
+	if (!rd->rstctrl || !nsec_can_access_resource(rd->etzpc_id))
 		return SCMI_DENIED;
 
 #ifdef CFG_STM32MP15
@@ -708,8 +707,6 @@ int32_t plat_scmi_rd_set_state(unsigned int channel_id, unsigned int scmi_id,
 	    stm32_rproc_is_secure(STM32MP1_M4_RPROC_ID))
 		return SCMI_DENIED;
 #endif
-
-	assert(rd->rstctrl);
 
 	if (assert_not_deassert) {
 		FMSG("SCMI reset %u set", scmi_id);
@@ -915,6 +912,8 @@ static TEE_Result stm32mp1_init_scmi_server(void)
 
 			rstctrl = stm32mp_rcc_reset_id_to_rstctrl(rd->reset_id);
 			assert(rstctrl);
+			if (rstctrl_get_exclusive(rstctrl))
+				continue;
 
 			rd->rstctrl = rstctrl;
 		}
