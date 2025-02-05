@@ -31,6 +31,7 @@
 #define _EXTI_C1IMR(n)		(0x080U + (n) * 0x10U)
 #define _EXTI_EnCIDCFGR(n)	(0x180U + (n) * 4U)
 #define _EXTI_CmCIDCFGR(n)	(0x300U + (n) * 4U)
+#define _EXTI_TRG(n)		(0x3ecU - (n) * 4U) /* HWCFGR2 .. HWCFGR4 */
 #define _EXTI_HWCFGR1		0x3f0U
 
 /* SECCFGR register bitfields */
@@ -63,6 +64,7 @@ struct stm32_exti_pdata {
 	vaddr_t base;
 	unsigned int lock;
 	uint32_t hwcfgr1;
+	uint32_t trg[_EXTI_BANK_NR];
 	uint32_t wake_active[_EXTI_BANK_NR];
 	uint32_t mask_cache[_EXTI_BANK_NR];
 	uint32_t imr_cache[_EXTI_BANK_NR];
@@ -124,6 +126,16 @@ static inline uint32_t stm32_exti_nbcpus(const struct stm32_exti_pdata *exti)
 			    _EXTI_HWCFGR1_NBCPUS_SHIFT;
 
 	return bitfield + 1;
+}
+
+static bool __unused
+stm32_exti_event_is_configurable(const struct stm32_exti_pdata *exti,
+				 unsigned int exti_line)
+{
+	unsigned int i = stm32_exti_get_bank(exti_line);
+	uint32_t mask = BIT(exti_line % 32);
+
+	return exti->trg[i] & mask;
 }
 
 void stm32_exti_set_type(struct stm32_exti_pdata *exti, uint32_t exti_line,
@@ -573,6 +585,7 @@ static TEE_Result stm32_exti_probe(const void *fdt, int node,
 	struct dt_node_info dt_info = { };
 	struct io_pa_va base = { };
 	TEE_Result res = TEE_ERROR_GENERIC;
+	unsigned int i = 0;
 
 	exti = calloc(1, sizeof(*exti));
 	if (!exti)
@@ -588,6 +601,9 @@ static TEE_Result stm32_exti_probe(const void *fdt, int node,
 	assert(exti->base);
 
 	exti->hwcfgr1 = io_read32(exti->base + _EXTI_HWCFGR1);
+	for (i = 0; i < _EXTI_BANK_NR; i++)
+		exti->trg[i] = io_read32(exti->base + _EXTI_TRG(i));
+
 	if (IS_ENABLED(CFG_STM32_RIF) && stm32_exti_maxcid(exti)) {
 		stm32_exti_rif_parse_dt(exti, fdt, node);
 		res = stm32_exti_rif_apply(exti);
