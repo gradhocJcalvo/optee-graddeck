@@ -7,7 +7,6 @@
 #include <drivers/clk.h>
 #include <drivers/clk_dt.h>
 #include <drivers/rstctrl.h>
-#include <drivers/stm32_etzpc.h>
 #include <drivers/stm32_rng.h>
 #if defined(CFG_STM32MP15)
 #include <drivers/stm32mp_dt_bindings.h>

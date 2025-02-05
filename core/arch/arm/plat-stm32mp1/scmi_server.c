@@ -14,7 +14,6 @@
 #include <drivers/scmi-msg.h>
 #include <drivers/scmi.h>
 #include <drivers/stm32_cpu_opp.h>
-#include <drivers/stm32_etzpc.h>
 #include <drivers/stm32_remoteproc.h>
 #include <drivers/stm32mp_dt_bindings.h>
 #include <initcall.h>
