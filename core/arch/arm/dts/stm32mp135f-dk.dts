@@ -34,7 +34,7 @@
 	};
 
 	magic_wol: magic_wol {
-		compatible = "st,stm32mp1-pwr-irq-user";
+		compatible = "st,stm32-irq-notifier";
 		interrupts-extended = <&exti 56 IRQ_TYPE_EDGE_FALLING>;
 		wakeup-source;
 		status = "okay";
@@ -67,7 +67,7 @@
 	};
 
 	typec_wakeup: typec_wakeup {
-		compatible = "st,stm32mp1-pwr-irq-user";
+		compatible = "st,stm32-irq-notifier";
 		interrupts-extended = <&exti 59 IRQ_TYPE_EDGE_FALLING>;
 		wakeup-source;
 		st,notif-it-id = <1>;
