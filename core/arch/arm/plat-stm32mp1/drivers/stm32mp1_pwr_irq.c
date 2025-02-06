@@ -25,8 +25,6 @@
 
 #define VERBOSE_PWR FMSG
 
-#define PWR_IRQ_MAX_PROP_LENGTH	U(18)
-
 #define PWR_NB_WAKEUPPINS	U(6)
 
 /* PWR Registers */
@@ -467,69 +465,4 @@ DEFINE_DT_DRIVER(stm32mp1_pwr_irq_dt_driver) = {
 	.name = "stm32mp1-pwr-irq",
 	.match_table = pwr_irq_match_table,
 	.probe = &stm32mp1_pwr_irq_probe,
-};
-
-static enum itr_return pwr_it_user_handler(struct itr_handler *handler)
-{
-	uint32_t *it_id = handler->data;
-
-	VERBOSE_PWR("pwr irq tester handler");
-
-	if (it_id)
-		notif_send_it(*it_id);
-
-	return ITRR_HANDLED;
-}
-
-static TEE_Result stm32mp1_pwr_irq_user_dt_probe(const void *fdt, int node,
-						 const void *compat __unused)
-{
-	uint32_t *optee_it_notif_id = NULL;
-	struct itr_chip *itr_chip = NULL;
-	TEE_Result res = TEE_SUCCESS;
-	const fdt32_t *cuint = NULL;
-	size_t itr_num = 0;
-
-	VERBOSE_PWR("Init pwr irq user");
-
-	res = interrupt_dt_get(fdt, node, &itr_chip, &itr_num);
-	if (res)
-		return res;
-
-	cuint = fdt_getprop(fdt, node, "st,notif-it-id", NULL);
-	if (cuint) {
-		optee_it_notif_id = calloc(1, sizeof(*optee_it_notif_id));
-		if (!optee_it_notif_id)
-			return TEE_ERROR_OUT_OF_MEMORY;
-
-		*optee_it_notif_id = fdt32_to_cpu(*cuint);
-	}
-
-	res = interrupt_create_handler(itr_chip, itr_num, pwr_it_user_handler,
-				       optee_it_notif_id, 0, NULL);
-	if (res != TEE_SUCCESS) {
-		free(optee_it_notif_id);
-		return res;
-	}
-
-	interrupt_enable(itr_chip, itr_num);
-	if (fdt_getprop(fdt, node, "wakeup-source", NULL)) {
-		if (interrupt_can_set_wake(itr_chip))
-			interrupt_set_wake(itr_chip, itr_num, true);
-		else
-			DMSG("PWR-IRQ wakeup source ignored");
-	}
-
-	return TEE_SUCCESS;
-}
-
-static const struct dt_device_match pwr_irq_test_match_table[] = {
-	{ .compatible = "st,stm32mp1-pwr-irq-user" },
-	{ }
-};
-
-DEFINE_DT_DRIVER(stm32mp1_pwr_irq_dt_tester) = {
-	.name = "stm32mp1-pwr-irq-user",
-	.match_table = pwr_irq_test_match_table,
-	.probe = &stm32mp1_pwr_irq_user_dt_probe,
 };
