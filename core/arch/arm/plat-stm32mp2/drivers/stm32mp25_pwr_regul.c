@@ -294,8 +294,6 @@ static TEE_Result pwr_set_voltage(struct regulator *regulator, int level_uv)
 		     regulator_name(regulator), result);
 		/* Continue to restore IOs setting for current voltage */
 		level_uv = regulator_get_voltage(regulator->supply);
-		if (res)
-			return res;
 	}
 
 	if (level_uv < IO_VOLTAGE_THRESHOLD_UV) {
