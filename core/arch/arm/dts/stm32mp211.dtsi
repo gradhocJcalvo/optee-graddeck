@@ -1081,6 +1081,7 @@
 			reg = <0x46000000 0x400>;
 			clocks = <&rcc CK_BUS_RTC>, <&rcc RTC_CK>;
 			clock-names = "pclk", "rtc_ck";
+			wakeup-source;
 			interrupts-extended = <&exti2 22 IRQ_TYPE_EDGE_RISING>;
 		};
 
