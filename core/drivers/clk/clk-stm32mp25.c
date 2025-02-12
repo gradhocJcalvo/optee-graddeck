@@ -2532,6 +2532,10 @@ static const struct clk_ops clk_stm32_oscillator_msi_ops = {
 	.restore_context = clk_stm32_osc_msi_pm_restore,
 };
 
+/* Clock with no ops, only used as parent for flexgen selection */
+static const struct clk_ops clk_stm32_no_ops = {
+};
+
 static TEE_Result clk_stm32_osc_ker_enable(struct clk *clk)
 {
 	if (stm32_rcc_has_access_by_id(RCC_RIF_OSCILLATORS))
@@ -3506,16 +3510,23 @@ static const struct clk_ops ck_timer_ops = {
 		.parents = { NULL },\
 	}
 
-#define STM32_OSC_KER(_name, _flags, _gate_id)\
+#define STM32_OSC_KER(_name)\
+	struct clk _name = {\
+		.ops = &clk_stm32_no_ops,\
+		.name = #_name,\
+		.num_parents = 1,\
+		.parents = { NULL },\
+	}
+
+#define STM32_OSC_KERON(_name, _parent, _gate_id)\
 	struct clk _name = {\
 		.ops = &clk_stm32_osc_ker_ops,\
 		.priv = &(struct clk_stm32_gate_cfg){\
 			.gate_id = (_gate_id),\
 		},\
 		.name = #_name,\
-		.flags = (_flags),\
 		.num_parents = 1,\
-		.parents = { NULL },\
+		.parents = { (_parent) },\
 	}
 
 #define STM32_HSE_DIV2(_name, _parent, _flags, _gate_id)\
@@ -3652,9 +3663,15 @@ static STM32_OSC_MSI(ck_msi, 0, GATE_MSI);
 static STM32_OSC(ck_lsi, 0, GATE_LSI);
 static STM32_OSC(ck_lse, 0, GATE_LSE);
 
-static STM32_OSC_KER(ck_hsi_ker, 0, GATE_HSI_KER);
-static STM32_OSC_KER(ck_hse_ker, 0, GATE_HSE_KER);
-static STM32_OSC_KER(ck_msi_ker, 0, GATE_MSI_KER);
+/* OSC KER is an alternate source of flexgen (dynamically gated) */
+static STM32_OSC_KER(ck_hsi_ker);
+static STM32_OSC_KER(ck_hse_ker);
+static STM32_OSC_KER(ck_msi_ker);
+
+/* OSC_KERON is OSC KER gated by KERON for low power */
+static STM32_OSC_KERON(ck_hsi_keron, &ck_hsi_ker, GATE_HSI_KER);
+static STM32_OSC_KERON(ck_hse_keron, &ck_hse_ker, GATE_HSE_KER);
+static STM32_OSC_KERON(ck_msi_keron, &ck_msi_ker, GATE_MSI_KER);
 
 static STM32_HSE_DIV2(ck_hse_div2, &ck_hse, 0, GATE_HSEDIV2);
 static STM32_HSE_RTC(ck_hse_rtc, &ck_hse, 0, DIV_RTC);
@@ -4108,6 +4125,9 @@ enum {
 	TXBYTECLK,
 	CK_OBSER0,
 	CK_OBSER1,
+	CK_HSI_KER,
+	CK_HSE_KER,
+	CK_MSI_KER,
 	STM32MP25_ALL_CLK_NB
 };
 
@@ -4125,9 +4145,10 @@ static struct clk *stm32mp25_clk_provided[STM32MP25_ALL_CLK_NB] = {
 	[LSI_CK]		= &ck_lsi,
 	[LSE_CK]		= &ck_lse,
 
-	[HSI_KER_CK]		= &ck_hsi_ker,
-	[HSE_KER_CK]		= &ck_hse_ker,
-	[MSI_KER_CK]		= &ck_msi_ker,
+	/* Force oscillator for low-power mode with KERON */
+	[HSI_KER_CK]		= &ck_hsi_keron,
+	[HSE_KER_CK]		= &ck_hse_keron,
+	[MSI_KER_CK]		= &ck_msi_keron,
 
 	[HSE_DIV2_CK]		= &ck_hse_div2,
 
@@ -4477,6 +4498,7 @@ static struct clk *stm32mp25_clk_provided[STM32MP25_ALL_CLK_NB] = {
 	[CK_ETH2_TX]		= &ck_ker_eth2tx,
 	[CK_ETH2_RX]		= &ck_ker_eth2rx,
 
+	/* Internal clocks */
 	[CK_HSE_RTC]		= &ck_hse_rtc,
 	[CK_OBSER0]		= &ck_obser0,
 	[CK_OBSER1]		= &ck_obser1,
@@ -4484,6 +4506,9 @@ static struct clk *stm32mp25_clk_provided[STM32MP25_ALL_CLK_NB] = {
 	[I2SCKIN]		= &i2sckin,
 	[SPDIFSYMB]		= &spdifsymb,
 	[TXBYTECLK]		= &txbyteclk,
+	[CK_HSI_KER]		= &ck_hsi_ker,
+	[CK_HSE_KER]		= &ck_hse_ker,
+	[CK_MSI_KER]		= &ck_msi_ker,
 };
 
 static void clk_stm32_set_flexgen_as_critical(void)
