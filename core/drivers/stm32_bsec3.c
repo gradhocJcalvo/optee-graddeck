@@ -653,6 +653,15 @@ void stm32_bsec_mp21_dummy_adac(void)
 }
 
 /*
+ * DBGMCU_APB_AP is open under reset, closed immediately after SYSTEM_RST is
+ * released, until AP_UNLOCKED is configured.
+ */
+void stm32_bsec_mp21_ap0_unlock(void)
+{
+	io_write32(bsec_base() + BSEC_AP_UNLOCK, BSEC_AP_UNLOCK_DUMMY_ADAC);
+}
+
+/*
  * bsec_get_version: return BSEC version.
  */
 static uint32_t bsec_get_version(void)

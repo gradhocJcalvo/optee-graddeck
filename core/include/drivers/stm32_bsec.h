@@ -204,6 +204,11 @@ bool stm32_bsec_self_hosted_debug_is_enabled(void);
 void stm32_bsec_mp21_dummy_adac(void);
 
 /*
+ * Program BSEC to open DBGMCU_APB_AP (AP0)
+ */
+void stm32_bsec_mp21_ap0_unlock(void);
+
+/*
  * Find and get OTP location from its name.
  * @name: sub-node name to look up.
  * @otp_id: pointer to output OTP number or NULL.
