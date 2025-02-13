@@ -70,44 +70,6 @@ TEE_Result counter_get_value(struct counter_device *counter, unsigned int *ticks
 	return counter->ops->get_value(counter, ticks);
 }
 
-TEE_Result counter_set_alarm(struct counter_device *counter)
-{
-	struct alarm_cfg *alarm = NULL;
-	TEE_Result res = TEE_SUCCESS;
-
-	assert(counter && counter->ops);
-
-	alarm = &counter->alarm;
-
-	if (alarm->is_enabled || !alarm->callback || !counter->ops->set_alarm)
-		return TEE_ERROR_NOT_SUPPORTED;
-
-	if (alarm->ticks > counter->max_ticks)
-		return TEE_ERROR_NOT_SUPPORTED;
-
-	res = counter->ops->set_alarm(counter);
-	if (!res)
-		counter->alarm.is_enabled = true;
-
-	return res;
-}
-
-TEE_Result counter_cancel_alarm(struct counter_device *counter)
-{
-	TEE_Result res = TEE_SUCCESS;
-
-	assert(counter);
-
-	if (!counter->ops->cancel_alarm)
-		return TEE_ERROR_NOT_SUPPORTED;
-
-	res = counter->ops->cancel_alarm(counter);
-	if (!res)
-		counter->alarm.is_enabled = false;
-
-	return res;
-}
-
 TEE_Result counter_set_threshold(struct counter_device *counter,
 				 unsigned int ticks)
 {

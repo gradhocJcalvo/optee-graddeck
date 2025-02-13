@@ -12,21 +12,6 @@
 #include <sys/queue.h>
 #include <tee_api_types.h>
 
-/**
- * @brief Alarm structure.
- *
- * @param callback Callback called on alarm (cannot be NULL).
- * @param ticks Number of ticks that triggers the alarm (absolute value).
- * @param priv Private data returned in callback.
- * @param is_enabled True if alarm is enabled, false otherwise.
- */
-struct alarm_cfg {
-	void (*callback)(unsigned int ticks, void *priv);
-	unsigned int ticks;
-	void *priv;
-	bool is_enabled;
-};
-
 enum counter_event_type {
 	/* Count value increased past ceiling */
 	COUNTER_EVENT_OVERFLOW,
@@ -68,8 +53,6 @@ struct counter_param {
  * @start: function to start the counter
  * @stop: function to stop the counter
  * @get_value: function to get the counter value
- * @set_alarm: (deprecated)
- * @cancel_alarm: (deprecated)
  * @set_threshold: function to set the counter threshold
  * @set_ceiling: function to set the counter ceiling
  * @enable_event:function to enable an event on counter value
@@ -81,8 +64,6 @@ struct counter_ops {
 	TEE_Result (*start)(struct counter_device *counter, void *config);
 	TEE_Result (*stop)(struct counter_device *counter);
 	TEE_Result (*get_value)(struct counter_device *counter, unsigned int *ticks);
-	TEE_Result (*set_alarm)(struct counter_device *counter);
-	TEE_Result (*cancel_alarm)(struct counter_device *counter);
 	TEE_Result (*set_threshold)(struct counter_device *counter,
 				    unsigned int ticks);
 	TEE_Result (*set_ceiling)(struct counter_device *counter,
@@ -105,7 +86,6 @@ struct counter_ops {
  * @param dev_list list on counter device.
  * @param is_used True if counter is used (exclusive consumer).
  * @param ops Operation table of the counter.
- * @param alarm Alarm configuration of the counter.
  * @param events List of event of the counter.
  * @param max_ticks Tick max value supported by the counter.
  * @param threshold Value reached on threshold event (COUNTER_EVENT_THRESHOLD).
@@ -118,7 +98,6 @@ struct counter_device {
 	LIST_ENTRY(counter_device) dev_list;
 	bool is_used;
 	const struct counter_ops *ops;
-	struct alarm_cfg alarm;
 	struct counter_event events[COUNTER_NB_EVENT];
 	unsigned int max_ticks;
 	unsigned int threshold;
@@ -140,16 +119,6 @@ TEE_Result counter_stop(struct counter_device *counter);
  * @brief Get current counter value.
  */
 TEE_Result counter_get_value(struct counter_device *counter, unsigned int *ticks);
-
-/**
- * @brief Set an alarm.
- */
-TEE_Result counter_set_alarm(struct counter_device *counter);
-
-/**
- * @brief Cancel an alarm.
- */
-TEE_Result counter_cancel_alarm(struct counter_device *counter);
 
 /**
  * @brief Set counter threshold.
