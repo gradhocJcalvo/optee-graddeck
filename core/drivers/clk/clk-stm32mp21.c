@@ -913,9 +913,17 @@ static void stm32_enable_oscillator_lsi(struct clk_stm32_priv *priv __unused,
 		panic("timeout to enable lsi clock");
 }
 
-static void stm32_enable_oscillator_msi(void)
+static void stm32_enable_oscillator_msi(struct clk_stm32_priv *priv __unused,
+					struct stm32_clk_platdata *pdata)
 {
 	struct clk_oscillator_data *osc_data = clk_oscillator_get_data(OSC_MSI);
+	struct stm32_osci_dt_cfg *osci = &pdata->osci[OSC_MSI];
+
+	if (!stm32_rcc_has_access_by_id(RCC_RIF_OSCILLATORS))
+		return;
+
+	if (osci->freq == 0U)
+		return;
 
 	/* Enable clock and wait ready bit */
 	if (stm32_gate_rdy_enable(osc_data->gate_id))
@@ -956,7 +964,7 @@ static void stm32_clk_oscillators_enable(struct clk_stm32_priv *priv,
 	stm32_enable_oscillator_hse(priv, pdata);
 	stm32_enable_oscillator_lse(priv, pdata);
 	stm32_enable_oscillator_lsi(priv, pdata);
-	stm32_enable_oscillator_msi();
+	stm32_enable_oscillator_msi(priv, pdata);
 }
 
 enum stm32_pll_id {
