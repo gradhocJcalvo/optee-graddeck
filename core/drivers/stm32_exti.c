@@ -58,6 +58,7 @@
 
 #define _EXTI_MAX_CR		4U
 #define _EXTI_BANK_NR		3U
+#define _EXTI_LINES_PER_BANK	32U
 
 struct stm32_exti_pdata {
 	struct itr_chip chip;
@@ -92,11 +93,11 @@ static uint32_t stm32_exti_get_bank(uint32_t exti_line)
 {
 	uint32_t bank = 0;
 
-	if (exti_line <= 31)
+	if (exti_line < _EXTI_LINES_PER_BANK)
 		bank = 0;
-	else if (exti_line <= 63)
+	else if (exti_line < 2 * _EXTI_LINES_PER_BANK)
 		bank = 1;
-	else if (exti_line <= 95)
+	else if (exti_line < 3 * _EXTI_LINES_PER_BANK)
 		bank = 2;
 	else
 		panic();
@@ -133,7 +134,7 @@ stm32_exti_event_is_configurable(const struct stm32_exti_pdata *exti,
 				 unsigned int exti_line)
 {
 	unsigned int i = stm32_exti_get_bank(exti_line);
-	uint32_t mask = BIT(exti_line % 32);
+	uint32_t mask = BIT(exti_line % _EXTI_LINES_PER_BANK);
 
 	return exti->trg[i] & mask;
 }
@@ -141,7 +142,7 @@ stm32_exti_event_is_configurable(const struct stm32_exti_pdata *exti,
 void stm32_exti_set_type(struct stm32_exti_pdata *exti, uint32_t exti_line,
 			 uint32_t type)
 {
-	uint32_t mask = BIT(exti_line % 32);
+	uint32_t mask = BIT(exti_line % _EXTI_LINES_PER_BANK);
 	uint32_t r_trig = 0;
 	uint32_t f_trig = 0;
 	uint32_t exceptions = 0;
@@ -177,7 +178,7 @@ void stm32_exti_set_type(struct stm32_exti_pdata *exti, uint32_t exti_line,
 
 void stm32_exti_mask(struct stm32_exti_pdata *exti, uint32_t exti_line)
 {
-	uint32_t mask = BIT(exti_line % 32);
+	uint32_t mask = BIT(exti_line % _EXTI_LINES_PER_BANK);
 	uint32_t exceptions = 0;
 	unsigned int i = 0;
 
@@ -193,7 +194,7 @@ void stm32_exti_mask(struct stm32_exti_pdata *exti, uint32_t exti_line)
 
 void stm32_exti_unmask(struct stm32_exti_pdata *exti, uint32_t exti_line)
 {
-	uint32_t mask = BIT(exti_line % 32);
+	uint32_t mask = BIT(exti_line % _EXTI_LINES_PER_BANK);
 	uint32_t exceptions = 0;
 	unsigned int i = 0;
 
@@ -216,7 +217,7 @@ uint32_t stm32_exti_read_imr(struct stm32_exti_pdata *exti, unsigned int bank)
 
 void stm32_exti_enable_wake(struct stm32_exti_pdata *exti, uint32_t exti_line)
 {
-	uint32_t mask = BIT(exti_line % 32);
+	uint32_t mask = BIT(exti_line % _EXTI_LINES_PER_BANK);
 	uint32_t exceptions = 0;
 	unsigned int i = 0;
 
@@ -231,7 +232,7 @@ void stm32_exti_enable_wake(struct stm32_exti_pdata *exti, uint32_t exti_line)
 
 void stm32_exti_disable_wake(struct stm32_exti_pdata *exti, uint32_t exti_line)
 {
-	uint32_t mask = BIT(exti_line % 32);
+	uint32_t mask = BIT(exti_line % _EXTI_LINES_PER_BANK);
 	uint32_t exceptions = 0;
 	unsigned int i = 0;
 
@@ -246,7 +247,7 @@ void stm32_exti_disable_wake(struct stm32_exti_pdata *exti, uint32_t exti_line)
 
 void stm32_exti_clear(struct stm32_exti_pdata *exti, uint32_t exti_line)
 {
-	uint32_t mask = BIT(exti_line % 32);
+	uint32_t mask = BIT(exti_line % _EXTI_LINES_PER_BANK);
 	uint32_t exceptions = 0;
 	unsigned int i = 0;
 
@@ -262,7 +263,7 @@ void stm32_exti_clear(struct stm32_exti_pdata *exti, uint32_t exti_line)
 
 void stm32_exti_set_tz(struct stm32_exti_pdata *exti, uint32_t exti_line)
 {
-	uint32_t mask = BIT(exti_line % 32);
+	uint32_t mask = BIT(exti_line % _EXTI_LINES_PER_BANK);
 	uint32_t exceptions = 0;
 	unsigned int i = 0;
 
@@ -370,7 +371,7 @@ static TEE_Result stm32_exti_rif_apply(const struct stm32_exti_pdata *exti)
 	if (is_tdcid) {
 		for (event = 0; event < stm32_exti_nbevents(exti); event++) {
 			i = stm32_exti_get_bank(event);
-			bit_offset = event % 32;
+			bit_offset = event % _EXTI_LINES_PER_BANK;
 
 			if (!(BIT(bit_offset) & exti->access_mask[i]))
 				continue;
@@ -403,7 +404,7 @@ static TEE_Result stm32_exti_rif_apply(const struct stm32_exti_pdata *exti)
 	/* If TDCID, configure EnCIDCFGR and CmCIDCFGR */
 	for (event = 0; event < stm32_exti_nbevents(exti); event++) {
 		i = stm32_exti_get_bank(event);
-		bit_offset = event % 32;
+		bit_offset = event % _EXTI_LINES_PER_BANK;
 
 		if (!(BIT(bit_offset) & exti->access_mask[i]))
 			continue;
@@ -449,7 +450,7 @@ static void stm32_exti_rif_save(struct stm32_exti_pdata *exti)
 
 	for (event = 0; event < stm32_exti_nbevents(exti); event++) {
 		i = stm32_exti_get_bank(event);
-		bit_offset = event % 32;
+		bit_offset = event % _EXTI_LINES_PER_BANK;
 
 		if (!(BIT(bit_offset) & exti->access_mask[i]))
 			continue;
