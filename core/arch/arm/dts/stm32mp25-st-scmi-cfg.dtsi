@@ -1651,6 +1651,11 @@
 						reg = <VOLTD_SCMI_UCPD>;
 						voltd-supply = <&vdd33ucpd>;
 					};
+
+					regulator@7 {
+						reg = <VOLTD_SCMI_ADC>;
+						voltd-supply = <&vdda18adc>;
+					};
 				};
 			};
 		};
