@@ -532,7 +532,7 @@ static struct pwr_regu pwr_regulators[PWR_REGU_COUNT] = {
 		.regulator = pwr_regu_device + (_id),	\
 	}
 
-/* (FIXME: not needed) Preallocated regulator devices */
+/* Preallocated regulator devices */
 static struct regulator pwr_regu_device[PWR_REGU_COUNT];
 
 /* Not const to allow probe to reassign ops if device is a fixed_iod */
