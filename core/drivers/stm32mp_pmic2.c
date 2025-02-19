@@ -682,9 +682,100 @@ static TEE_Result parse_regulator_fdt_nodes(const void *fdt, int node,
 }
 
 #ifdef CFG_STM32_PWR_IRQ
+
+/* We expect a single instance of STPMIC2, if any */
+static struct stpmic2 *stpmic2;
+
+/* When async notif is enabled, bottom half thread must enable the interrupt */
+static bool start_stpmic2_interrupt;
+
+static void pmic_thread_irq_handler(void)
+{
+	assert(stpmic2);
+
+	if (stpmic2_handle_irq(stpmic2))
+		panic("STPMIC2 interrupts");
+}
+
+static void start_stop_stpmic2_interrupt(bool start_not_stop)
+{
+	struct pmic_it_handle_s *prv = NULL;
+
+	assert(stpmic2);
+
+	SLIST_FOREACH(prv, &stpmic2->it_list, link) {
+		if (stpmic2_set_irq_mask(stpmic2, prv->pmic_it,
+					 !start_not_stop)) {
+			EMSG("Failed to %sable STPMIC2 interrupt %u",
+			     start_not_stop ? "en" : "dis", prv->pmic_it);
+			panic();
+		}
+	}
+
+	/* Unmask all over-current interrupts */
+	if (stpmic2_register_write(stpmic2, INT_MASK_R3, 0x00))
+		panic();
+
+	if (stpmic2_register_write(stpmic2, INT_MASK_R4, 0x00))
+		panic();
+}
+
+static void yielding_stm32mp2_stpmic2_notif(struct notif_driver *ndrv __unused,
+					    enum notif_event ev)
+{
+	switch (ev) {
+	case NOTIF_EVENT_DO_BOTTOM_HALF:
+		if (start_stpmic2_interrupt) {
+			IMSG("STPMIC2 notif started");
+			start_stpmic2_interrupt = false;
+			start_stop_stpmic2_interrupt(true /*start_not_stop*/);
+		}
+
+		pmic_thread_irq_handler();
+		break;
+	case NOTIF_EVENT_STOPPED:
+		IMSG("STPMIC2 notif stopped");
+		start_stpmic2_interrupt = false;
+		start_stop_stpmic2_interrupt(false /*!start_not_stop*/);
+		break;
+	default:
+		EMSG("Unknown event %d", ev);
+		panic();
+	}
+}
+
+static bool atomic_stm32mp2_stpmic2_notif(struct notif_driver *ndrv __unused,
+					  enum notif_event ev __maybe_unused)
+{
+	assert(ev == NOTIF_EVENT_STARTED);
+
+	/* Ask for the bottom half to enable PMIC interrupts */
+	start_stpmic2_interrupt = true;
+
+	return true;
+}
+DECLARE_KEEP_PAGER(atomic_stm32mp2_stpmic2_notif);
+
+/* Structure below is not const to prevent it spreads in the unpaged sections */
+static struct notif_driver stm32mp2_stpmic2_notif = {
+	.atomic_cb = atomic_stm32mp2_stpmic2_notif,
+	.yielding_cb = yielding_stm32mp2_stpmic2_notif,
+};
+
+static enum itr_return pmic_it_handler(struct itr_handler *handler __unused)
+{
+	if (notif_async_is_started())
+		notif_send_async(NOTIF_VALUE_DO_BOTTOM_HALF);
+
+	return ITRR_HANDLED;
+}
+DECLARE_KEEP_PAGER(pmic_it_handler);
+
 enum itr_return stpmic2_irq_callback(struct stpmic2 *pmic, uint8_t it_id)
 {
 	struct pmic_it_handle_s *prv = NULL;
+
+	assert(pmic == stpmic2);
 
 	FMSG("Stpmic2 it id %d", (int)it_id);
 
@@ -726,6 +817,9 @@ static TEE_Result initialize_pmic2_irq(const void *fdt, int node,
 
 	SLIST_INIT(&pmic->it_list);
 
+	if (IS_ENABLED(CFG_CORE_ASYNC_NOTIF))
+		notif_register_driver(&stm32mp2_stpmic2_notif);
+
 	cuint = fdt_getprop(fdt, node, "wakeup-parent", &len);
 	if (!cuint || len != sizeof(uint32_t))
 		panic("Missing wakeup-parent");
@@ -744,8 +838,7 @@ static TEE_Result initialize_pmic2_irq(const void *fdt, int node,
 #if defined(CFG_STM32MP25) || defined(CFG_STM32MP23) || defined(CFG_STM32MP21)
 		res = stm32mp25_pwr_itr_alloc_add(fdt, wakeup_parent_node, it,
 						  stpmic2_irq_handler,
-						  PWR_WKUP_FLAG_FALLING |
-						  PWR_WKUP_FLAG_THREADED,
+						  PWR_WKUP_FLAG_FALLING,
 						  pmic, &hdl);
 		if (res)
 			return res;
@@ -754,8 +847,7 @@ static TEE_Result initialize_pmic2_irq(const void *fdt, int node,
 #else
 		res = stm32mp1_pwr_itr_alloc_add(fdt, wakeup_parent_node, it,
 						 stpmic2_irq_handler,
-						 PWR_WKUP_FLAG_FALLING |
-						 PWR_WKUP_FLAG_THREADED,
+						 PWR_WKUP_FLAG_FALLING,
 						 pmic, &hdl);
 		if (res)
 			return res;
@@ -902,6 +994,8 @@ static TEE_Result stm32_pmic2_probe(const void *fdt, int node,
 		free(pmic);
 		return res;
 	}
+
+	stpmic2 = pmic;
 #endif
 
 	res = parse_regulator_fdt_nodes(fdt, node, pmic);

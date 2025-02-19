@@ -70,11 +70,9 @@
  * Flags for PWR wakeup event management
  * PWR_WKUP_FLAG_RISING - Detect event on signal rising edge
  * PWR_WKUP_FLAG_FALLING - Detect event on signal falling edge
- * PWR_WKUP_FLAG_THREADED - Notify event in the threaded context
  */
 #define PWR_WKUP_FLAG_RISING	0
 #define PWR_WKUP_FLAG_FALLING	BIT(0)
-#define PWR_WKUP_FLAG_THREADED	BIT(1)
 
 enum pwr_regulator {
 	PWR_REG11 = 0,

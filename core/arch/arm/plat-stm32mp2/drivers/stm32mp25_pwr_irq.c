@@ -53,8 +53,6 @@ struct pwr_wkup_data {
 	struct itr_handler *hdl[PWR_NB_WAKEUPPINS];
 	struct itr_handler *parent_hdl;
 	struct stm32_exti_pdata *exti;
-	bool threaded[PWR_NB_WAKEUPPINS];
-	bool pending[PWR_NB_WAKEUPPINS];
 	unsigned int spinlock;
 };
 
@@ -104,48 +102,9 @@ static enum itr_return pwr_it_call_handler(struct pwr_wkup_data *priv,
 	return ITRR_HANDLED;
 }
 
-static enum itr_return pwr_it_threaded_handler(void)
-{
-	struct pwr_wkup_data *priv = pwr_wkup_d;
-	uint32_t i = 0;
-
-	VERBOSE_PWR("threaded_handler");
-
-	for (i = 0; i < PWR_NB_WAKEUPPINS; i++) {
-		if (priv->pending[i]) {
-			VERBOSE_PWR("handle pending wkup irq:%"PRIu32, i);
-			priv->pending[i] = false;
-			pwr_it_call_handler(priv, i);
-		}
-	}
-
-	return ITRR_HANDLED;
-}
-
-static void yielding_stm32_pwr_notif(struct notif_driver *ndrv __unused,
-				     enum notif_event ev)
-{
-	switch (ev) {
-	case NOTIF_EVENT_DO_BOTTOM_HALF:
-		VERBOSE_PWR("PWR Bottom half");
-		pwr_it_threaded_handler();
-		break;
-	case NOTIF_EVENT_STOPPED:
-		VERBOSE_PWR("PWR notif stopped");
-		break;
-	default:
-		EMSG("Unknown event %d", ev);
-		panic();
-	}
-}
-
-struct notif_driver stm32_pwr_notif = {
-	.yielding_cb = yielding_stm32_pwr_notif,
-};
-
 static enum itr_return pwr_it_handler(struct itr_handler *handler)
 {
-	struct pwr_wkup_data *priv = (struct pwr_wkup_data *)handler->data;
+	struct pwr_wkup_data *priv = handler->data;
 	uint32_t i = 0;
 
 	VERBOSE_PWR("it_handler");
@@ -162,12 +121,7 @@ static enum itr_return pwr_it_handler(struct itr_handler *handler)
 			/* Ack IRQ */
 			io_setbits32(pwr_wkupcr_base(i), WKUPC);
 
-			if (priv->threaded[i] && notif_async_is_started()) {
-				priv->pending[i] = true;
-				notif_send_async(NOTIF_VALUE_DO_BOTTOM_HALF);
-			} else {
-				pwr_it_call_handler(priv, i);
-			}
+			pwr_it_call_handler(priv, i);
 		}
 	}
 
@@ -175,6 +129,7 @@ static enum itr_return pwr_it_handler(struct itr_handler *handler)
 
 	return ITRR_HANDLED;
 }
+DECLARE_KEEP_PAGER(pwr_it_handler);
 
 static TEE_Result
 stm32_pwr_irq_set_pull_config(size_t it, enum wkup_pull_setting config)
@@ -524,9 +479,6 @@ static TEE_Result stm32mp25_pwr_itr_add(const void *fdt, int wp_node,
 	if (!itr_free)
 		return TEE_ERROR_GENERIC;
 
-	if (hdl->flags & PWR_WKUP_FLAG_THREADED)
-		priv->threaded[it] = true;
-
 	res = gpio_dt_get_by_index(fdt, wp_node, it, "wakeup", &gpio);
 	if (res) {
 		priv->hdl[it] = NULL;
@@ -623,9 +575,6 @@ TEE_Result stm32mp25_pwr_irq_probe(const void *fdt, int node)
 		panic("Could not get wake-up pin IRQ");
 
 	interrupt_enable(priv->parent_hdl->chip, priv->parent_hdl->it);
-
-	if (IS_ENABLED(CFG_CORE_ASYNC_NOTIF))
-		notif_register_driver(&stm32_pwr_notif);
 
 	res = dt_driver_register_provider(fdt, node, NULL,
 					  NULL, DT_DRIVER_NOTYPE);

@@ -77,6 +77,9 @@ static SLIST_HEAD(pmic_it_handle_head, pmic_it_handle_s) pmic_it_handle_list =
 /* CPU voltage supplier if found */
 static char cpu_supply_name[PMIC_REGU_SUPPLY_NAME_LEN];
 
+/* Flag set when bottom half thread is to enable PMIC interrupts */
+static bool start_stpmic1_interrupt;
+
 static bool pmic_is_secure(void)
 {
 	assert(pmic_status != -1);
@@ -755,7 +758,7 @@ static TEE_Result initialize_pmic(const void *fdt, int pmic_node)
 	return TEE_SUCCESS;
 }
 
-static enum itr_return stpmic1_irq_handler(struct itr_handler *handler __unused)
+static void pmic_thread_irq_handler(void)
 {
 	uint8_t read_val = 0U;
 	unsigned int i = 0U;
@@ -804,9 +807,82 @@ static enum itr_return stpmic1_irq_handler(struct itr_handler *handler __unused)
 		 (latch4 != 0));
 
 	stm32mp_put_pmic();
+}
+
+static void start_stop_stpmic1_interrupt(bool start_not_stop)
+{
+	struct pmic_it_handle_s *prv = NULL;
+	uint8_t val = 0;
+
+	stm32mp_get_pmic();
+
+	/* Enable requested interrupt */
+	SLIST_FOREACH(prv, &pmic_it_handle_list, link) {
+		if (stpmic1_register_read(prv->pmic_reg, &val))
+			panic();
+
+		if (start_not_stop)
+			val |= BIT(prv->pmic_bit);
+		else
+			val &= ~BIT(prv->pmic_bit);
+
+		if (stpmic1_register_write(prv->pmic_reg, val))
+			panic();
+	}
+
+	stm32mp_put_pmic();
+}
+
+static void yielding_stm32mp1_stpmic1_notif(struct notif_driver *ndrv __unused,
+					    enum notif_event ev)
+{
+	switch (ev) {
+	case NOTIF_EVENT_DO_BOTTOM_HALF:
+		if (start_stpmic1_interrupt) {
+			IMSG("STPMIC1 notif started");
+			start_stpmic1_interrupt = false;
+			start_stop_stpmic1_interrupt(true /*start_not_stop*/);
+		}
+
+		pmic_thread_irq_handler();
+		break;
+	case NOTIF_EVENT_STOPPED:
+		IMSG("STPMIC1 notif stopped");
+		start_stpmic1_interrupt = false;
+		start_stop_stpmic1_interrupt(false /*!start_not_stop*/);
+		break;
+	default:
+		EMSG("Unknown event %d", ev);
+		panic();
+	}
+}
+
+static bool atomic_stm32mp1_stpmic1_notif(struct notif_driver *ndrv __unused,
+					  enum notif_event ev __maybe_unused)
+{
+	assert(ev == NOTIF_EVENT_STARTED);
+
+	/* Ask for the bottom half to enable PMIC interrupts */
+	start_stpmic1_interrupt = true;
+
+	return true;
+}
+DECLARE_KEEP_PAGER(atomic_stm32mp1_stpmic1_notif);
+
+/* Structure below is not const to prevent it spreads in the unpaged sections */
+static struct notif_driver stm32mp1_stpmic1_notif = {
+	.atomic_cb = atomic_stm32mp1_stpmic1_notif,
+	.yielding_cb = yielding_stm32mp1_stpmic1_notif,
+};
+
+static enum itr_return pmic_it_handler(struct itr_handler *handler __unused)
+{
+	if (notif_async_is_started())
+		notif_send_async(NOTIF_VALUE_DO_BOTTOM_HALF);
 
 	return ITRR_HANDLED;
 }
+DECLARE_KEEP_PAGER(pmic_it_handler);
 
 static TEE_Result stm32_pmic_init_it(const void *fdt, int node)
 {
@@ -819,6 +895,9 @@ static TEE_Result stm32_pmic_init_it(const void *fdt, int node)
 	uint32_t phandle = 0;
 	int wakeup_parent_node = 0;
 	int len = 0;
+
+	if (IS_ENABLED(CFG_CORE_ASYNC_NOTIF))
+		notif_register_driver(&stm32mp1_stpmic1_notif);
 
 	cuint = fdt_getprop(fdt, node, "wakeup-parent", &len);
 	if (!cuint || len != sizeof(uint32_t))
@@ -893,9 +972,8 @@ static TEE_Result stm32_pmic_init_it(const void *fdt, int node)
 	}
 
 	res = stm32mp1_pwr_itr_alloc_add(fdt, wakeup_parent_node, pwr_it,
-					 stpmic1_irq_handler,
-					 PWR_WKUP_FLAG_FALLING |
-					 PWR_WKUP_FLAG_THREADED,
+					 pmic_it_handler,
+					 PWR_WKUP_FLAG_FALLING,
 					 NULL, &hdl);
 	if (res)
 		panic("pmic: Could not allocate itr");
