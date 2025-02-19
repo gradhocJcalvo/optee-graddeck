@@ -43,6 +43,15 @@ patternProperties:
       vdd-supply:
         description: Input supply phandle(s) for vdd and vddio input
 
+      st,iocomp:
+        $ref: "/schemas/types.yaml#/definitions/uint32-array"
+        description:
+          The fixed compensation code in the following order <PMOS NMOS>.
+          If the property is not present in the node, the automatic compensation
+          is enabled.
+        minItems: 2
+        maxItems: 2
+
     patternProperties:
       ".*-supply$":
         description: Input supply phandle(s) for this node
