@@ -71,6 +71,8 @@
 
 #define IO_VOLTAGE_THRESHOLD_UV	2700000
 
+#define IOCOMP_CODE_MAX		U(2)
+
 /*
  * struct pwr_regu - PWR regulator instance
  *
@@ -106,6 +108,9 @@ struct pwr_regu {
 	 * accessing to the register
 	 */
 	uint8_t rifsc_filtering_id;
+	/* IO compensation codes */
+	bool iocomp_fixed;
+	uint32_t iocomp_code[IOCOMP_CODE_MAX];
 };
 
 static TEE_Result pwr_enable_reg(struct pwr_regu *pwr_regu)
@@ -192,16 +197,16 @@ static TEE_Result pwr_set_state(struct regulator *regulator, bool enable)
 		if (res)
 			return res;
 
-		if (pwr_regu->is_an_iod) {
-			res = stm32mp25_syscfg_enable_io_compensation(iod_idx);
+		if (pwr_regu->is_an_iod && !pwr_regu->iocomp_fixed) {
+			res = stm32mp25_syscfg_enable_iocomp(iod_idx);
 			if (res) {
 				pwr_disable_reg(pwr_regu);
 				return res;
 			}
 		}
 	} else {
-		if (pwr_regu->is_an_iod) {
-			res = stm32mp25_syscfg_disable_io_compensation(iod_idx);
+		if (pwr_regu->is_an_iod && !pwr_regu->iocomp_fixed) {
+			res = stm32mp25_syscfg_disable_iocomp(iod_idx);
 			if (res)
 				return res;
 		}
@@ -361,14 +366,23 @@ static TEE_Result pwr_regu_pm(enum pm_op op, unsigned int pm_hint,
 			if (res)
 				return res;
 
-			res = stm32mp25_syscfg_disable_io_compensation(iod_idx);
-			if (res)
-				return res;
+			if (!pwr_regu->iocomp_fixed) {
+				res = stm32mp25_syscfg_disable_iocomp(iod_idx);
+				if (res)
+					return res;
+			}
 		}
 	} else {
 		FMSG("%s: resume", regulator_name(regulator));
 
 		if (pwr_regu->is_an_iod) {
+			if (pwr_regu->iocomp_fixed) {
+				stm32mp25_syscfg_fixed_iocomp(
+					pwr_regu->comp_idx,
+					pwr_regu->iocomp_code[0],
+					pwr_regu->iocomp_code[1]);
+			}
+
 			res = pwr_set_voltage(regulator, pwr_regu->suspend_uv);
 			if (res)
 				return res;
@@ -393,6 +407,12 @@ static TEE_Result pwr_supplied_init(struct regulator *regulator,
 	if (pwr_regu->is_an_iod) {
 		TEE_Result res = TEE_ERROR_GENERIC;
 		int level_uv = 0;
+
+		if (pwr_regu->iocomp_fixed) {
+			stm32mp25_syscfg_fixed_iocomp(pwr_regu->comp_idx,
+						      pwr_regu->iocomp_code[0],
+						      pwr_regu->iocomp_code[1]);
+		}
 
 		res = pwr_get_voltage(regulator, &level_uv);
 		if (res)
@@ -560,6 +580,7 @@ static TEE_Result pwr_regulator_probe(const void *fdt, int node,
 	TEE_Result res = TEE_ERROR_GENERIC;
 	const struct regu_dt_desc *desc = NULL;
 	const char *regu_name = NULL;
+	struct pwr_regu *pwr_regu = NULL;
 	size_t i = 0;
 
 	regu_name = fdt_get_name(fdt, node, NULL);
@@ -576,6 +597,20 @@ static TEE_Result pwr_regulator_probe(const void *fdt, int node,
 	if (!desc) {
 		EMSG("No regulator found for node %s", regu_name);
 		return TEE_ERROR_GENERIC;
+	}
+
+	pwr_regu = desc->priv;
+	if (pwr_regu->is_an_iod) {
+		int ret;
+
+		ret = fdt_read_uint32_array(fdt, node, "st,iocomp",
+					    pwr_regu->iocomp_code,
+					    IOCOMP_CODE_MAX);
+		if (ret && ret != -FDT_ERR_NOTFOUND)
+			return TEE_ERROR_BAD_PARAMETERS;
+
+		if (!ret)
+			pwr_regu->iocomp_fixed = true;
 	}
 
 	res = regulator_dt_register(fdt, node, node, desc);
