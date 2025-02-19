@@ -8,10 +8,12 @@
 #include <drivers/stm32_exti.h>
 #include <drivers/stm32_gpio.h>
 #include <drivers/stm32mp25_pwr.h>
+#include <dt-bindings/interrupt-controller/irq.h>
 #include <initcall.h>
 #include <io.h>
 #include <kernel/dt.h>
 #include <kernel/dt_driver.h>
+#include <kernel/interrupt.h>
 #include <kernel/notif.h>
 #include <kernel/panic.h>
 #include <kernel/spinlock.h>
@@ -24,6 +26,8 @@
 #define VERBOSE_PWR FMSG
 
 #define PWR_IRQ_MAX_PROP_LENGTH	U(18)
+
+#define PWR_NB_WAKEUPPINS	U(6)
 
 /* PWR Registers */
 #define PWR_WKUPCR1		0x60
@@ -49,8 +53,7 @@ enum wkup_pull_setting {
 };
 
 struct pwr_wkup_data {
-	struct stm32_pinctrl_list *pinctrl_list;
-	struct itr_handler *hdl[PWR_NB_WAKEUPPINS];
+	struct itr_chip *pwr_irq_chip;
 	struct itr_handler *parent_hdl;
 	struct stm32_exti_pdata *exti;
 	unsigned int spinlock;
@@ -81,53 +84,34 @@ static const struct stm32_pwr_pin_map pin_map[PWR_NB_WAKEUPPINS] = {
 	{ .bank = GPIO_BANK('G'), .pin = 3, },
 };
 
-static enum itr_return pwr_it_call_handler(struct pwr_wkup_data *priv,
-					   uint32_t pin)
-{
-	uint32_t wkupcr = io_read32(pwr_wkupcr_base(pin));
-
-	if (wkupcr & WKUPENCPU1) {
-		VERBOSE_PWR("call wkup handler irq:%"PRIu32, pin);
-
-		if (priv->hdl[pin]) {
-			struct itr_handler *h = priv->hdl[pin];
-
-			if (h->handler(h) != ITRR_HANDLED) {
-				EMSG("Disabling unhandled IT %"PRIu32, pin);
-				stm32mp25_pwr_itr_disable(pin);
-			}
-		}
-	}
-
-	return ITRR_HANDLED;
-}
-
 static enum itr_return pwr_it_handler(struct itr_handler *handler)
 {
 	struct pwr_wkup_data *priv = handler->data;
-	uint32_t i = 0;
-
-	VERBOSE_PWR("it_handler");
+	bool handled = false;
+	unsigned int i = 0;
 
 	interrupt_mask(priv->parent_hdl->chip, priv->parent_hdl->it);
 
 	for (i = 0; i < PWR_NB_WAKEUPPINS; i++) {
-		uint32_t wkupcr = 0;
+		vaddr_t wkupcr_va = pwr_wkupcr_base(i);
 
-		wkupcr = io_read32(pwr_wkupcr_base(i));
-		if (wkupcr & WKUPF) {
-			VERBOSE_PWR("handle wkup irq:%"PRIu32, i);
+		if (io_read32(wkupcr_va) & WKUPF) {
+			VERBOSE_PWR("handle wkup irq:%u", i);
+			handled = true;
 
-			/* Ack IRQ */
-			io_setbits32(pwr_wkupcr_base(i), WKUPC);
+			/* Ack the interrupt */
+			io_setbits32(wkupcr_va, WKUPC);
 
-			pwr_it_call_handler(priv, i);
+			interrupt_call_handlers(priv->pwr_irq_chip, i);
 		}
 	}
 
 	interrupt_unmask(priv->parent_hdl->chip, priv->parent_hdl->it);
 
-	return ITRR_HANDLED;
+	if (handled)
+		return ITRR_HANDLED;
+
+	return ITRR_NONE;
 }
 DECLARE_KEEP_PAGER(pwr_it_handler);
 
@@ -213,26 +197,6 @@ static TEE_Result stm32_pwr_irq_set_trig(size_t it, unsigned int flags)
 	cpu_spin_unlock_xrestore(&priv->spinlock, exceptions);
 
 	return TEE_SUCCESS;
-}
-
-void stm32mp25_pwr_itr_enable(size_t it)
-{
-	struct pwr_wkup_data *priv = pwr_wkup_d;
-	uint32_t exceptions = 0;
-
-	exceptions = cpu_spin_lock_xsave(&priv->spinlock);
-	stm32mp25_pwr_itr_enable_nolock(it);
-	cpu_spin_unlock_xrestore(&priv->spinlock, exceptions);
-}
-
-void stm32mp25_pwr_itr_disable(size_t it)
-{
-	struct pwr_wkup_data *priv = pwr_wkup_d;
-	uint32_t exceptions = 0;
-
-	exceptions = cpu_spin_lock_xsave(&priv->spinlock);
-	stm32mp25_pwr_itr_disable_nolock(it);
-	cpu_spin_unlock_xrestore(&priv->spinlock, exceptions);
 }
 
 /* Register and configure an interrupt */
@@ -376,7 +340,6 @@ static struct itr_chip stm32mp2_pwr_itr_chip = {
 	.name = "stm32mp2-pwr-irq",
 };
 
-__unused
 static TEE_Result stm32mp2_pwr_itr_dt_get(struct dt_pargs *args,
 					  void *priv_data,
 					  struct itr_desc *itr_desc_p)
@@ -449,100 +412,6 @@ static TEE_Result stm32mp2_pwr_itr_dt_get(struct dt_pargs *args,
 	return TEE_SUCCESS;
 }
 
-static TEE_Result stm32mp25_pwr_itr_add(const void *fdt, int wp_node,
-					struct itr_handler *hdl)
-{
-	TEE_Result res = TEE_ERROR_GENERIC;
-	struct pwr_wkup_data *priv = pwr_wkup_d;
-	int it = hdl->it;
-	struct gpio *gpio = NULL;
-	uint32_t exceptions = 0;
-	bool itr_free = false;
-	unsigned int bank = 0;
-	unsigned int pin = 0;
-
-	VERBOSE_PWR("Pwr IRQ add");
-
-	if (!priv) {
-		DMSG("Pwr IRQs not yet initialized");
-		return TEE_ERROR_DEFER_DRIVER_INIT;
-	}
-
-	assert(it >= PWR_WKUP_PIN1 && it < PWR_NB_WAKEUPPINS);
-
-	/* Use PWR lock to ensure consistent interrupt registering */
-	exceptions = cpu_spin_lock_xsave(&priv->spinlock);
-	itr_free = !priv->hdl[it];
-	if (itr_free)
-		priv->hdl[it] = hdl;
-	cpu_spin_unlock_xrestore(&priv->spinlock, exceptions);
-	if (!itr_free)
-		return TEE_ERROR_GENERIC;
-
-	res = gpio_dt_get_by_index(fdt, wp_node, it, "wakeup", &gpio);
-	if (res) {
-		priv->hdl[it] = NULL;
-		return res;
-	}
-	bank = stm32_gpio_chip_bank_id(gpio->chip);
-	pin = gpio->pin;
-	if (bank != pin_map[it].bank || pin != pin_map[it].pin) {
-		EMSG("Invalid PWR WKUP%d on GPIO%c%"PRIu8" expected GPIO%c%"PRIu8,
-		     it + 1, GPIO_PORT(bank), pin, GPIO_PORT(pin_map[it].bank),
-		     pin_map[it].pin);
-		panic();
-	}
-
-	stm32mp25_pwr_itr_disable(it);
-
-	VERBOSE_PWR("Wake-up pin on pin=%"PRIu8, gpio->pin);
-
-	/* use the same pull up configuration than for the gpio */
-	if (gpio->dt_flags & GPIO_PULL_UP)
-		res = stm32_pwr_irq_set_pull_config(it, WKUP_PULL_UP);
-	else if (gpio->dt_flags & GPIO_PULL_DOWN)
-		res = stm32_pwr_irq_set_pull_config(it, WKUP_PULL_DOWN);
-	else
-		res = stm32_pwr_irq_set_pull_config(it, WKUP_NO_PULL);
-	if (res)
-		return res;
-
-	stm32_pwr_irq_set_trig(it, hdl->flags);
-
-	if (IS_ENABLED(CFG_STM32_EXTI))
-		stm32_exti_set_tz(priv->exti, PWR_EXTI_WKUP1 + it);
-
-	return TEE_SUCCESS;
-}
-
-TEE_Result
-stm32mp25_pwr_itr_alloc_add(const void *fdt, int wp_node, size_t it,
-			    itr_handler_t handler, uint32_t flags, void *data,
-			    struct itr_handler **phdl)
-{
-	TEE_Result res = TEE_SUCCESS;
-	struct itr_handler *hdl = NULL;
-
-	hdl = calloc(1, sizeof(*hdl));
-	if (!hdl)
-		return TEE_ERROR_OUT_OF_MEMORY;
-
-	hdl->it = it;
-	hdl->handler = handler;
-	hdl->flags = flags;
-	hdl->data = data;
-
-	res = stm32mp25_pwr_itr_add(fdt, wp_node, hdl);
-	if (res) {
-		free(hdl);
-		return res;
-	}
-
-	*phdl = hdl;
-
-	return res;
-}
-
 TEE_Result stm32mp25_pwr_irq_probe(const void *fdt, int node)
 {
 	TEE_Result res = TEE_ERROR_GENERIC;
@@ -557,6 +426,11 @@ TEE_Result stm32mp25_pwr_irq_probe(const void *fdt, int node)
 		return TEE_ERROR_OUT_OF_MEMORY;
 
 	priv = pwr_wkup_d;
+	priv->pwr_irq_chip = &stm32mp2_pwr_itr_chip;
+
+	res = itr_chip_init(&stm32mp2_pwr_itr_chip);
+	if (res)
+		panic();
 
 	if (IS_ENABLED(CFG_STM32_EXTI)) {
 		res = stm32_exti_get_pdata(fdt, node, &priv->exti);
@@ -574,16 +448,17 @@ TEE_Result stm32mp25_pwr_irq_probe(const void *fdt, int node)
 	if (res)
 		panic("Could not get wake-up pin IRQ");
 
-	interrupt_enable(priv->parent_hdl->chip, priv->parent_hdl->it);
-
-	res = dt_driver_register_provider(fdt, node, NULL,
-					  NULL, DT_DRIVER_NOTYPE);
+	res = interrupt_register_provider(fdt, node, stm32mp2_pwr_itr_dt_get,
+					  pwr_wkup_d);
 	if (res)
 		panic("Can't register provider");
+
+	interrupt_enable(itr_chip, itr_num);
 
 	VERBOSE_PWR("Init pwr irq done");
 
 	return TEE_SUCCESS;
+
 err:
 	free(pwr_wkup_d);
 	pwr_wkup_d = NULL;
@@ -597,59 +472,50 @@ static enum itr_return pwr_it_user_handler(struct itr_handler *handler)
 
 	VERBOSE_PWR("pwr irq tester handler");
 
-	if (it_id)
-		notif_send_it(*it_id);
+	if (!it_id)
+		return ITRR_NONE;
+
+	notif_send_it(*it_id);
 
 	return ITRR_HANDLED;
 }
 
-static TEE_Result
-stm32mp25_pwr_irq_user_dt_probe(const void *fdt, int node,
-				const void *compat_data __unused)
+static TEE_Result stm32mp25_pwr_irq_user_dt_probe(const void *fdt, int node,
+						  const void *compat __unused)
 {
+	uint32_t *optee_it_notif_id = NULL;
+	struct itr_chip *itr_chip = NULL;
 	TEE_Result res = TEE_SUCCESS;
-	struct itr_handler *hdl = NULL;
 	const fdt32_t *cuint = NULL;
-	int wakeup_parent_node = 0;
-	size_t it = 0;
-	uint32_t *it_id = NULL;
-	int len = 0;
-	uint32_t phandle = 0;
+	size_t itr_num = 0;
 
-	cuint = fdt_getprop(fdt, node, "wakeup-parent", &len);
-	if (!cuint || len != sizeof(uint32_t))
-		panic("Missing wakeup-parent");
-
-	phandle = fdt32_to_cpu(*cuint);
-	if (!dt_driver_get_provider_by_phandle(phandle, DT_DRIVER_NOTYPE))
-		return TEE_ERROR_DEFER_DRIVER_INIT;
-
-	wakeup_parent_node = fdt_node_offset_by_phandle(fdt, phandle);
-
-	cuint = fdt_getprop(fdt, node, "st,wakeup-pin-number", NULL);
-	if (!cuint)
-		panic("Missing wake-up pin number");
-
-	it = fdt32_to_cpu(*cuint) - 1U;
+	res = interrupt_dt_get(fdt, node, &itr_chip, &itr_num);
+	if (res)
+		return res;
 
 	cuint = fdt_getprop(fdt, node, "st,notif-it-id", NULL);
 	if (cuint) {
-		it_id = calloc(1, sizeof(*it_id));
-		if (!it_id)
+		optee_it_notif_id = calloc(1, sizeof(*optee_it_notif_id));
+		if (!optee_it_notif_id)
 			return TEE_ERROR_OUT_OF_MEMORY;
 
-		*it_id = fdt32_to_cpu(*cuint);
+		*optee_it_notif_id = fdt32_to_cpu(*cuint);
 	}
 
-	res = stm32mp25_pwr_itr_alloc_add(fdt, wakeup_parent_node, it,
-					  pwr_it_user_handler,
-					  PWR_WKUP_FLAG_FALLING, it_id, &hdl);
+	res = interrupt_create_handler(itr_chip, itr_num, pwr_it_user_handler,
+				       optee_it_notif_id, 0, NULL);
 	if (res) {
-		free(it_id);
+		free(optee_it_notif_id);
 		return res;
 	}
 
-	stm32mp25_pwr_itr_enable(hdl->it);
+	interrupt_enable(itr_chip, itr_num);
+	if (fdt_getprop(fdt, node, "wakeup-source", NULL)) {
+		if (interrupt_can_set_wake(itr_chip))
+			interrupt_set_wake(itr_chip, itr_num, true);
+		else
+			DMSG("PWR-IRQ wakeup source ignored");
+	}
 
 	return TEE_SUCCESS;
 }

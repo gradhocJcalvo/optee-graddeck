@@ -791,75 +791,32 @@ enum itr_return stpmic2_irq_callback(struct stpmic2 *pmic, uint8_t it_id)
 	return ITRR_NONE;
 }
 
-static enum itr_return stpmic2_irq_handler(struct itr_handler *handler)
-{
-	struct stpmic2 *pmic = handler->data;
-
-	FMSG("Stpmic2 irq");
-
-	stpmic2_handle_irq(pmic);
-
-	return ITRR_HANDLED;
-}
-
 static TEE_Result initialize_pmic2_irq(const void *fdt, int node,
 				       struct stpmic2 *pmic)
 {
-	struct itr_handler *hdl = NULL;
-	const fdt32_t *cuint = NULL;
-	uint32_t phandle = 0;
-	int wakeup_parent_node = 0;
-	int len = 0;
+	TEE_Result res = TEE_ERROR_GENERIC;
 	const uint32_t *notif_ids = NULL;
+	struct itr_chip *itr_chip = NULL;
+	size_t itr_num = 0;
 	int nb_notif = 0;
 
 	FMSG("Init stpmic2 irq");
+
+	res = interrupt_dt_get(fdt, node, &itr_chip, &itr_num);
+	if (res)
+		return res;
+
+	res = interrupt_create_handler(itr_chip, itr_num, pmic_it_handler,
+				       NULL, 0, NULL);
+	if (res)
+		panic("pmic: Could not create interrupt handler");
 
 	SLIST_INIT(&pmic->it_list);
 
 	if (IS_ENABLED(CFG_CORE_ASYNC_NOTIF))
 		notif_register_driver(&stm32mp2_stpmic2_notif);
 
-	cuint = fdt_getprop(fdt, node, "wakeup-parent", &len);
-	if (!cuint || len != sizeof(uint32_t))
-		panic("Missing wakeup-parent");
-
-	phandle = fdt32_to_cpu(*cuint);
-
-	wakeup_parent_node = fdt_node_offset_by_phandle(fdt, phandle);
-
-	cuint = fdt_getprop(fdt, node, "st,wakeup-pin-number", NULL);
-	if (cuint) {
-		TEE_Result res = TEE_ERROR_GENERIC;
-		size_t it = 0;
-
-		it = fdt32_to_cpu(*cuint) - 1;
-
-#if defined(CFG_STM32MP25) || defined(CFG_STM32MP23) || defined(CFG_STM32MP21)
-		res = stm32mp25_pwr_itr_alloc_add(fdt, wakeup_parent_node, it,
-						  stpmic2_irq_handler,
-						  PWR_WKUP_FLAG_FALLING,
-						  pmic, &hdl);
-		if (res)
-			return res;
-
-		stm32mp25_pwr_itr_enable(hdl->it);
-#else
-		res = stm32mp1_pwr_itr_alloc_add(fdt, wakeup_parent_node, it,
-						 stpmic2_irq_handler,
-						 PWR_WKUP_FLAG_FALLING,
-						 pmic, &hdl);
-		if (res)
-			return res;
-
-		stm32mp1_pwr_itr_enable(hdl->it);
-
-#endif
-	}
-
 	notif_ids = fdt_getprop(fdt, node, "st,notif-it-id", &nb_notif);
-	if (!notif_ids)
-		return TEE_ERROR_ITEM_NOT_FOUND;
 
 	if (nb_notif > 0) {
 		struct pmic_it_handle_s *prv = NULL;
@@ -868,8 +825,11 @@ static TEE_Result initialize_pmic2_irq(const void *fdt, int node,
 		int nb_it = 0;
 
 		pmic_its = fdt_getprop(fdt, node, "st,pmic-it-id", &nb_it);
-		if (!pmic_its)
-			return TEE_ERROR_ITEM_NOT_FOUND;
+		if (!pmic_its) {
+			EMSG("Missing property st,pmic-it-id on node %s",
+			     fdt_get_name(fdt, node, NULL));
+			panic();
+		}
 
 		if (nb_it != nb_notif)
 			panic("st,notif-it-id incorrect description");
@@ -890,21 +850,18 @@ static TEE_Result initialize_pmic2_irq(const void *fdt, int node,
 
 			SLIST_INSERT_HEAD(&pmic->it_list, prv, link);
 
-			/* Enable requested interrupt */
-			if (stpmic2_set_irq_mask(pmic, pmic_it, false))
-				return TEE_ERROR_GENERIC;
-
 			FMSG("STPMIC2 forwards pmic_it:%u as notif:%u",
 			     prv->pmic_it, prv->notif_id);
 		}
 	}
 
-	/* Unmask all over-current interrupts */
-	if (stpmic2_register_write(pmic, INT_MASK_R3, 0x00))
-		return TEE_ERROR_GENERIC;
-
-	if (stpmic2_register_write(pmic, INT_MASK_R4, 0x00))
-		return TEE_ERROR_GENERIC;
+	interrupt_enable(itr_chip, itr_num);
+	if (fdt_getprop(fdt, node, "wakeup-source", NULL)) {
+		if (interrupt_can_set_wake(itr_chip))
+			interrupt_set_wake(itr_chip, itr_num, true);
+		else
+			DMSG("PMIC wakeup source ignored");
+	}
 
 	return TEE_SUCCESS;
 }

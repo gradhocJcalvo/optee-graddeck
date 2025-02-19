@@ -888,35 +888,16 @@ static TEE_Result stm32_pmic_init_it(const void *fdt, int node)
 {
 	TEE_Result res = TEE_ERROR_GENERIC;
 	const uint32_t *notif_ids = NULL;
+	struct itr_chip *itr_chip = NULL;
+	size_t itr_num = 0;
 	int nb_notif = 0;
-	size_t pwr_it = 0;
-	struct itr_handler *hdl = NULL;
-	const fdt32_t *cuint = NULL;
-	uint32_t phandle = 0;
-	int wakeup_parent_node = 0;
-	int len = 0;
 
 	if (IS_ENABLED(CFG_CORE_ASYNC_NOTIF))
 		notif_register_driver(&stm32mp1_stpmic1_notif);
 
-	cuint = fdt_getprop(fdt, node, "wakeup-parent", &len);
-	if (!cuint || len != sizeof(uint32_t))
-		panic("Missing wakeup-parent");
-
-	phandle = fdt32_to_cpu(*cuint);
-	if (!dt_driver_get_provider_by_phandle(phandle,
-					       DT_DRIVER_NOTYPE))
-		return TEE_ERROR_DEFER_DRIVER_INIT;
-
-	wakeup_parent_node = fdt_node_offset_by_phandle(fdt, phandle);
-
-	cuint = fdt_getprop(fdt, node, "st,wakeup-pin-number", NULL);
-	if (!cuint) {
-		DMSG("Missing wake-up pin description");
-		return TEE_SUCCESS;
-	}
-
-	pwr_it = fdt32_to_cpu(*cuint) - 1U;
+	res = interrupt_dt_get(fdt, node, &itr_chip, &itr_num);
+	if (res)
+		return res;
 
 	notif_ids = fdt_getprop(fdt, node, "st,notif-it-id", &nb_notif);
 	if (!notif_ids)
@@ -936,7 +917,6 @@ static TEE_Result stm32_pmic_init_it(const void *fdt, int node)
 			panic("st,notif-it-id incorrect description");
 
 		for (i = 0; i < (nb_notif / sizeof(uint32_t)); i++) {
-			uint8_t val = 0;
 			uint8_t pmic_it = 0;
 
 			prv = calloc(1, sizeof(*prv));
@@ -953,34 +933,25 @@ static TEE_Result stm32_pmic_init_it(const void *fdt, int node)
 
 			SLIST_INSERT_HEAD(&pmic_it_handle_list, prv, link);
 
-			stm32mp_get_pmic();
-
-			/* Enable requested interrupt */
-			if (stpmic1_register_read(prv->pmic_reg, &val))
-				panic();
-
-			val |= BIT(prv->pmic_bit);
-
-			if (stpmic1_register_write(prv->pmic_reg, val))
-				panic();
-
-			stm32mp_put_pmic();
-
 			FMSG("STPMIC1 forwards irq reg:%u bit:%u as notif:%u",
 			     prv->pmic_reg, prv->pmic_bit, prv->notif_id);
 		}
 	}
 
-	res = stm32mp1_pwr_itr_alloc_add(fdt, wakeup_parent_node, pwr_it,
-					 pmic_it_handler,
-					 PWR_WKUP_FLAG_FALLING,
-					 NULL, &hdl);
+	res = interrupt_create_handler(itr_chip, itr_num, pmic_it_handler,
+				       NULL, 0, NULL);
 	if (res)
-		panic("pmic: Could not allocate itr");
+		panic("pmic: Could not create interrupt handler");
 
-	stm32mp1_pwr_itr_enable(hdl->it);
+	interrupt_enable(itr_chip, itr_num);
+	if (fdt_getprop(fdt, node, "wakeup-source", NULL)) {
+		if (interrupt_can_set_wake(itr_chip))
+			interrupt_set_wake(itr_chip, itr_num, true);
+		else
+			DMSG("PMIC wakeup source ignored");
+	}
 
-	return res;
+	return TEE_SUCCESS;
 }
 
 static TEE_Result stm32_pmic_probe(const void *fdt, int node,
