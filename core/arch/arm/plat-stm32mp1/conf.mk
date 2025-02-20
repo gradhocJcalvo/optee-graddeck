@@ -161,6 +161,9 @@ $(call force,CFG_STM32_SAES,n)
 CFG_WITH_SOFTWARE_PRNG ?= y
 endif
 
+# Force this mode to keep performance on RSA key operations
+CFG_CORE_UNSAFE_MODEXP ?= y
+
 # Default do not access external DT passed to non-secure boot stage
 CFG_EXTERNAL_DT ?= n
 
