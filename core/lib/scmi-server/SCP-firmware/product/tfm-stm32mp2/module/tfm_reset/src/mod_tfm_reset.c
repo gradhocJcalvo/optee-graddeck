@@ -96,7 +96,6 @@ static int reset_set_state(fwk_id_t dev_id, enum mod_reset_domain_mode mode,
             MOD_NAME "SCMI reset %u: cycle(%s%d)",
             fwk_id_get_element_idx(dev_id),
             ctx->rstctrl->dev->name, ctx->rstctrl->id);
-;
 
         if (reset_control_reset(ctx->rstctrl)) {
             status = FWK_E_TIMEOUT;
