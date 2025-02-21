@@ -6,16 +6,11 @@
 #include <config.h>
 #include <drivers/regulator.h>
 #include <drivers/stm32_i2c.h>
-#if defined(CFG_STM32MP25) || defined(CFG_STM32MP23) || defined(CFG_STM32MP21)
-#include <drivers/stm32mp25_pwr.h>
-#else
-#include <drivers/stm32mp1_pwr.h>
-#endif
 #include <drivers/stpmic2.h>
 #include <keep.h>
 #include <kernel/boot.h>
-#include <kernel/delay.h>
 #include <kernel/dt.h>
+#include <kernel/interrupt.h>
 #include <kernel/notif.h>
 #include <kernel/panic.h>
 #include <kernel/pm.h>
