@@ -8,15 +8,14 @@
 #include <drivers/regulator.h>
 #include <drivers/stm32_i2c.h>
 #include <drivers/stm32mp1_stpmic1.h>
-#include <drivers/stm32mp1_pwr.h>
 #include <drivers/stpmic1.h>
 #include <drivers/stpmic1_regulator.h>
 #include <dt-bindings/mfd/st,stpmic1.h>
 #include <io.h>
 #include <keep.h>
 #include <kernel/boot.h>
-#include <kernel/delay.h>
 #include <kernel/dt.h>
+#include <kernel/interrupt.h>
 #include <kernel/notif.h>
 #include <kernel/panic.h>
 #include <kernel/pm.h>
