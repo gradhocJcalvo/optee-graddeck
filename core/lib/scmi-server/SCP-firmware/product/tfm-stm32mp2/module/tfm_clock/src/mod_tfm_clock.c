@@ -415,6 +415,10 @@ static int tfm_clock_element_init(fwk_id_t element_id, unsigned int dev_count,
     const struct mod_tfm_clock_config *config = data;
     int res;
 
+    if (ctx == NULL) {
+        return FWK_E_PARAM;
+    }
+
     ctx->clk = (struct clk *)config->clk;
     if (ctx->clk) {
         ctx->enabled = config->default_enabled;
