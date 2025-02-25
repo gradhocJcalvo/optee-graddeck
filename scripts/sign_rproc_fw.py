@@ -428,7 +428,7 @@ def get_args(logger):
                              'multiple times to add multiple TLVs.',
                         default=[], dest='plat_tlv')
     parser.add_argument('--enc_key', required=False,
-                        help='AES-256 encryption key (32 bytes)',
+                        help='AES-256 encryption key (32 bytes) in binary format',
                         dest='enc_key')
 
     parsed = parser.parse_args()
@@ -506,15 +506,13 @@ def main():
     if args.enc_key:
         # Read the AES key from the file
         try:
-            with open(args.enc_key, 'r') as key_file:
-                key_hex = key_file.read().strip()
-                enc_key = bytes.fromhex(key_hex)
-                utils._check_byteslike("key", enc_key)
+            with open(args.enc_key, 'rb') as key_file:
+                enc_key = key_file.read()
         except Exception as e:
             print(f"Error reading AES key file: {e}")
             sys.exit(1)
         if len(enc_key) not in (16, 24, 32):
-            print("Error: AES key must be 128, 192, or 256 bits")
+            print("Error: AES key size must be 128, 192, or 256 bits")
             sys.exit(1)
         enc_type = ENUM_ENCRYPT_TYPE['AES_CBC']
         tlv.add('ENCTYPE', enc_type.to_bytes(1, 'little'))
