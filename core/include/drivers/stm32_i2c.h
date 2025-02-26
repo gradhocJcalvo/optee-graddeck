@@ -15,6 +15,7 @@
 #include <mm/core_memprot.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <sys/queue.h>
 #include <util.h>
 #include <types_ext.h>
 
@@ -101,7 +102,26 @@ struct i2c_cfg {
 };
 
 /*
- * I2C bus device
+ * struct stm32_itr_dep - Interrupts requesting atomic access
+ *
+ * @chip: Interrupt chip reference
+ * @num: Target tnterrupt number in @chip context
+ * @link: Link in registered consumer list
+ *
+ * Consumer requesting interrupt accesses to the I2C bus
+ * while exucting in interrupt context, to handle external
+ * device events before a thread context like the bottom
+ * half is ready.
+ */
+struct stm32_itr_dep {
+	struct itr_chip *chip;
+	size_t num;
+	SLIST_ENTRY(stm32_itr_dep) link;
+};
+
+/*
+ * struct i2c_handle_s - I2C bus device
+ *
  * @base: I2C SoC registers base address
  * @reg_size: I2C SoC registers address map size
  * @clock: clock ID
@@ -114,6 +134,9 @@ struct i2c_cfg {
  * @pinctrl_sleep: Pin control configuration for the I2C bus in standby state
  * @mu: Protection on concurrent access to the I2C bus considering PM context
  * @i2c_secure: Indicates that the I2C is secure
+ * @consumer_itr_lock: 1 when an interrupt handler accesses the I2C bus
+ * @consumer_itr_head: List head of interrupts registered for interrupt accesses
+ * @consumer_itr_masked: True if consumer interrupts were masked
  */
 struct i2c_handle_s {
 	struct io_pa_va base;
@@ -128,10 +151,14 @@ struct i2c_handle_s {
 	struct pinctrl_state *pinctrl_sleep;
 	struct mutex_pm_aware mu;
 	bool i2c_secure;
+	int consumer_itr_lock;
+	SLIST_HEAD(, stm32_itr_dep) consumer_itr_head;
+	bool consumer_itr_masked;
 };
 
 /*
  * struct stm32_i2c_dev - Bus consumer device over an STM32 I2C bus
+ *
  * @i2c_dev: I2C consumer instance
  * @i2c_ctrl: I2C bus control operation
  * @handle: Handle on a single STM32 I2C bus interface
@@ -279,4 +306,18 @@ static inline bool i2c_is_secure(struct i2c_handle_s *hi2c)
 	return hi2c->i2c_secure;
 }
 
+/*
+ * Register interrupt for possible I2C bus accesses in interrupt context
+ *
+ * @hi2c: STM32 I2C handle of the bus
+ * @itr_chip: Interrupt chip for the interrupt context access
+ * @itr_num: Interrupt number in @itr_chip for the access
+ *
+ * Register an interrupt (chip and number) for which I2C accesses
+ * must be handled from the interrupt when non-secure world has not
+ * registered for thread execution as the bottom half.
+ */
+void stm32_i2c_interrupt_access_lockdeps(struct i2c_handle_s *hi2c,
+					 struct itr_chip *itr_chip,
+					 size_t itr_num);
 #endif /* __DRIVERS_STM32_I2C_H*/
