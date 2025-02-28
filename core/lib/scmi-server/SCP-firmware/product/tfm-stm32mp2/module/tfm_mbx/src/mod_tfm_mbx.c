@@ -22,6 +22,8 @@
 #include <mod_tfm_smt.h>
 #include <mod_msg_smt.h>
 
+#include "scp_mbox.h"
+
 /* MBX device context */
 struct mbx_device_ctx {
     /* Channel configuration data */
@@ -112,6 +114,9 @@ static int raise_smt_interrupt(fwk_id_t channel_id)
 {
     size_t idx = fwk_id_get_element_idx(channel_id);
     struct mbx_device_ctx *channel_ctx = &mbx_ctx.device_ctx_table[idx];
+
+    if (scp_mbox_raise(channel_ctx->config->chan_mbx))
+        fwk_unexpected();
 
     /* There should be a message in the mailbox */
     return FWK_SUCCESS;

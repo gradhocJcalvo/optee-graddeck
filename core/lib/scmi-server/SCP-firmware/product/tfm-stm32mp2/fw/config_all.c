@@ -530,6 +530,7 @@ static void set_scmi_comm_resources(struct scpfw_config *cfg)
                         .driver_id = (fwk_id_t)FWK_ID_ELEMENT_INIT(FWK_MODULE_IDX_TFM_SMT, tfm_smt_index),
                         .driver_api_id = (fwk_id_t)FWK_ID_API_INIT(FWK_MODULE_IDX_TFM_SMT,
                                                                    MOD_TFM_SMT_API_IDX_DRIVER_INPUT),
+                        .chan_mbx = channel_cfg->chan_mbx,
                     };
                 tfm_smt_index++;
                 break;
