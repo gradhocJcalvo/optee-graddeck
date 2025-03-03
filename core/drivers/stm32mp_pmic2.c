@@ -681,10 +681,7 @@ static TEE_Result parse_regulator_fdt_nodes(const void *fdt, int node,
 /* We expect a single instance of STPMIC2, if any */
 static struct stpmic2 *stpmic2;
 
-/* When async notif is enabled, bottom half thread must enable the interrupt */
-static bool start_stpmic2_interrupt;
-
-static void pmic_thread_irq_handler(void)
+static void pmic_event_handler(void)
 {
 	assert(stpmic2);
 
@@ -692,26 +689,23 @@ static void pmic_thread_irq_handler(void)
 		panic("STPMIC2 interrupts");
 }
 
-static void start_stop_stpmic2_interrupt(bool start_not_stop)
+static void enable_stpmic2_interrupt(struct stpmic2 *pmic)
 {
 	struct pmic_it_handle_s *prv = NULL;
 
-	assert(stpmic2);
-
-	SLIST_FOREACH(prv, &stpmic2->it_list, link) {
-		if (stpmic2_set_irq_mask(stpmic2, prv->pmic_it,
-					 !start_not_stop)) {
-			EMSG("Failed to %sable STPMIC2 interrupt %u",
-			     start_not_stop ? "en" : "dis", prv->pmic_it);
+	SLIST_FOREACH(prv, &pmic->it_list, link) {
+		if (stpmic2_set_irq_mask(pmic, prv->pmic_it, false)) {
+			EMSG("Failed to enable STPMIC2 interrupt %u",
+			     prv->pmic_it);
 			panic();
 		}
 	}
 
 	/* Unmask all over-current interrupts */
-	if (stpmic2_register_write(stpmic2, INT_MASK_R3, 0x00))
+	if (stpmic2_register_write(pmic, INT_MASK_R3, 0x00))
 		panic();
 
-	if (stpmic2_register_write(stpmic2, INT_MASK_R4, 0x00))
+	if (stpmic2_register_write(pmic, INT_MASK_R4, 0x00))
 		panic();
 }
 
@@ -720,18 +714,14 @@ static void yielding_stm32mp2_stpmic2_notif(struct notif_driver *ndrv __unused,
 {
 	switch (ev) {
 	case NOTIF_EVENT_DO_BOTTOM_HALF:
-		if (start_stpmic2_interrupt) {
-			IMSG("STPMIC2 notif started");
-			start_stpmic2_interrupt = false;
-			start_stop_stpmic2_interrupt(true /*start_not_stop*/);
-		}
-
-		pmic_thread_irq_handler();
+		pmic_event_handler();
 		break;
 	case NOTIF_EVENT_STOPPED:
-		IMSG("STPMIC2 notif stopped");
-		start_stpmic2_interrupt = false;
-		start_stop_stpmic2_interrupt(false /*!start_not_stop*/);
+		/*
+		 * Treat events pending by the time NOTIF_EVENT_SOPPED
+		 * is handled by OP-TEE notif framework.
+		 */
+		pmic_event_handler();
 		break;
 	default:
 		EMSG("Unknown event %d", ev);
@@ -743,9 +733,6 @@ static bool atomic_stm32mp2_stpmic2_notif(struct notif_driver *ndrv __unused,
 					  enum notif_event ev __maybe_unused)
 {
 	assert(ev == NOTIF_EVENT_STARTED);
-
-	/* Ask for the bottom half to enable PMIC interrupts */
-	start_stpmic2_interrupt = true;
 
 	return true;
 }
@@ -761,6 +748,8 @@ static enum itr_return pmic_it_handler(struct itr_handler *handler __unused)
 {
 	if (notif_async_is_started())
 		notif_send_async(NOTIF_VALUE_DO_BOTTOM_HALF);
+	else
+		pmic_event_handler();
 
 	return ITRR_HANDLED;
 }
@@ -849,6 +838,13 @@ static TEE_Result initialize_pmic2_irq(const void *fdt, int node,
 			     prv->pmic_it, prv->notif_id);
 		}
 	}
+
+	stm32_i2c_interrupt_access_lockdeps(pmic->pmic_i2c_handle, itr_chip,
+					    itr_num);
+
+	stpmic2 = pmic;
+
+	enable_stpmic2_interrupt(pmic);
 
 	interrupt_enable(itr_chip, itr_num);
 	if (fdt_getprop(fdt, node, "wakeup-source", NULL)) {
@@ -946,8 +942,6 @@ static TEE_Result stm32_pmic2_probe(const void *fdt, int node,
 		free(pmic);
 		return res;
 	}
-
-	stpmic2 = pmic;
 #endif
 
 	res = parse_regulator_fdt_nodes(fdt, node, pmic);
