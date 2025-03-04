@@ -31,6 +31,10 @@
 	{ 0x80a4c275, 0x0a47, 0x4905, \
 		{ 0x82, 0x85, 0x14, 0x86, 0xa9, 0x77, 0x1a, 0x08} }
 
+#define PTA_RSA_DER_SIZE 294
+#define PTA_RSA_MOD_SIZE 256
+#define PTA_RSA_E_SIZE   3
+
 /*
  * AES test key for decryption.
  */
@@ -40,6 +44,15 @@ static uint8_t aes_test_key[TEE_AES_MAX_KEY_SIZE] = {
 	0x1F, 0xE0, 0x55, 0x93, 0x49, 0xA6, 0x9A, 0x4C,
 	0x4F, 0xF6, 0x36, 0x23, 0x33, 0x3E, 0xFB, 0x3D
 };
+
+static const uint8_t der_rsa256_pkey_header[] = {
+	0x30, 0x82, 0x01, 0x22, 0x30, 0x0d, 0x06, 0x09,
+	0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01,
+	0x01, 0x05, 0x00, 0x03, 0x82, 0x01, 0x0f, 0x00,
+	0x30, 0x82, 0x01, 0x0a, 0x02, 0x82, 0x01, 0x01
+};
+
+static const uint8_t der_rsa256_pkey_mod_header[] = { 0x02, 0x03 };
 
 /*
  * Firmware states
@@ -93,12 +106,12 @@ static TEE_Result rproc_pta_capabilities(uint32_t pt,
 	return TEE_SUCCESS;
 }
 
-static TEE_Result rproc_get_otp_key(const char *name, uint8_t **key,
-				    size_t key_len)
+static TEE_Result rproc_alloc_and_get_otp(const char *name, uint8_t **value,
+					  size_t value_len)
 {
 	TEE_Result res = TEE_SUCCESS;
 	uint8_t otp_bit_offset = 0;
-	uint32_t *key_buf = NULL;
+	uint32_t *value_buf = NULL;
 	size_t otp_bit_size = 0;
 	uint32_t otp_start = 0;
 	size_t otp_length = 0;
@@ -112,31 +125,30 @@ static TEE_Result rproc_get_otp_key(const char *name, uint8_t **key,
 		return res;
 	}
 
-	if (otp_bit_offset || otp_bit_size != key_len * CHAR_BIT) {
-		EMSG("Bad key OTP alignment");
+	if (otp_bit_offset || otp_bit_size != value_len * CHAR_BIT) {
+		EMSG("Bad OTP alignment");
 		return TEE_ERROR_GENERIC;
 	}
 
-	otp_length = key_len / sizeof(uint32_t);
-	key_buf = (uint32_t *)calloc(otp_length, sizeof(uint32_t));
-	if (!key_buf)
+	otp_length = value_len / sizeof(uint32_t);
+	value_buf = calloc(otp_length, sizeof(uint32_t));
+	if (!value_buf)
 		return TEE_ERROR_OUT_OF_MEMORY;
 
-	*key = (uint8_t *)key_buf;
+	*value = (uint8_t *)value_buf;
 
 	for (otp_id = otp_start; otp_id < otp_start + otp_length;
-	     otp_id++, key_buf++) {
-		/* Read key in OTP */
-		res = stm32_bsec_read_otp(key_buf, otp_id);
+	     otp_id++, value_buf++) {
+		/* Read value in OTP */
+		res = stm32_bsec_read_otp(value_buf, otp_id);
 		if (res)
-			goto clean_key;
+			goto clean_value;
 	}
 
 	return TEE_SUCCESS;
 
-clean_key:
-	free_wipe(*key);
-	*key = NULL;
+clean_value:
+	free_wipe(*value);
 
 	return res;
 }
@@ -152,7 +164,8 @@ static TEE_Result rproc_pta_decrypt_aes(uint32_t enc_algo, uint8_t *iv,
 	if (IS_ENABLED(CFG_REMOTEPROC_ENC_TESTKEY)) {
 		key = aes_test_key;
 	} else {
-		res = rproc_get_otp_key("oem_rproc_enc_key", &key, key_len);
+		res = rproc_alloc_and_get_otp("oem_rproc_enc_key", &key,
+					      key_len);
 		if (res)
 			return res;
 	}
@@ -393,42 +406,91 @@ out:
 	return res;
 }
 
-static TEE_Result rproc_pta_verify_rsa_signature(TEE_Param *hash,
-						 TEE_Param *sig, uint32_t algo)
+static TEE_Result parse_der_rsa_public_key(uint8_t *der, size_t der_len,
+					   struct rsa_public_key *key,
+					   uint8_t *key_hash)
+{
+	size_t h_len = sizeof(der_rsa256_pkey_header);
+	uint8_t *mod = der + h_len + 1;
+	uint8_t *exp = mod + PTA_RSA_MOD_SIZE + 2;
+	TEE_Result res = TEE_ERROR_GENERIC;
+
+	/*
+	 * We do not use the mbedtls lib that contains helper to parse the DER
+	 * key and extract the RSA key. A static approach is used supporting
+	 * only DER format for the RSA public key with the ECDSA P256 algorithm.
+	 * The expected DER format is starting with following header:
+	 * { 0x30, 0x82, 0x01, 0x22, 0x30, 0x0d, 0x06, 0x09,
+	 *   0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01,
+	 *   0x01, 0x05, 0x00, 0x03, 0x82, 0x01, 0x0f, 0x00,
+	 *   0x30, 0x82, 0x01, 0x0a, 0x02, 0x82, 0x01, 0x01,
+	 *   0x00, <modulus binary data>,
+	 *   0x02, 0x03, <exponent binary data> }
+	 *
+	 * 30 82 01 22 # Sequence length 0x82 - 290 bytes long
+	 *    30 0d # Sequence length 0x0d - 13 bytes long
+	 *       06 09 2a864886f70d010101 # OID - 9 bytes long - rsa (PKCS #1)
+	 *       05 00 # Null Object
+	 *    03 82 01 0f 00 # Bit stream - 271 bytes long
+	 *       30 82 01 0a: # Sequence length 0x10a - 266 bytes long
+	 *          02 82 01 01: #int modulus - 257 bytes long (0x00 + modulus)
+	 *          02 03 : #int exponent - 3 bytes long
+	 */
+
+	if (der_len != PTA_RSA_DER_SIZE) {
+		EMSG("Invalid public key size");
+		return TEE_ERROR_BAD_FORMAT;
+	}
+
+	if (consttime_memcmp(der, der_rsa256_pkey_header, h_len) != 0 ||
+	    consttime_memcmp(exp - 2, der_rsa256_pkey_mod_header,
+			     sizeof(der_rsa256_pkey_mod_header)) != 0) {
+		EMSG("Invalid public key format");
+		return TEE_ERROR_BAD_FORMAT;
+	}
+
+	/* Extract the modulus and exponent */
+	res = crypto_bignum_bin2bn(mod, PTA_RSA_MOD_SIZE, key->n);
+	if (res)
+		return res;
+
+	res = crypto_bignum_bin2bn(exp, PTA_RSA_E_SIZE, key->e);
+	if (res)
+		return res;
+
+	/* Compute the hash of the 256-bytes modulus + 3-bytes exponent */
+	return rproc_compute_hash(key_hash, mod, PTA_RSA_MOD_SIZE,
+				  exp, PTA_RSA_E_SIZE);
+}
+
+static TEE_Result
+rproc_pta_verify_rsa_signature(TEE_Param *hash, TEE_Param *sig,
+			       struct rproc_pta_key_info *keyinfo)
 {
 	uint32_t e = TEE_U32_TO_BIG_ENDIAN(rproc_pub_key_exponent);
 	uint8_t publickey_hash[TEE_SHA256_HASH_SIZE] = { };
-	size_t hash_size = (size_t)hash->memref.size;
-	size_t sig_size = (size_t)sig->memref.size;
-	size_t key_len = TEE_AES_MAX_KEY_SIZE;
+	size_t hash_size = hash->memref.size;
+	size_t sig_size = sig->memref.size;
+	size_t hash_len = TEE_SHA256_HASH_SIZE;
 	TEE_Result res = TEE_ERROR_GENERIC;
-	size_t exponent_size = sizeof(e);
 	struct rsa_public_key key = { };
+	uint32_t algo = keyinfo->algo;
 	uint8_t *key_hash = NULL;
 
 	res = crypto_acipher_alloc_rsa_public_key(&key, sig_size);
 	if (res)
 		return res;
 
-	res = crypto_bignum_bin2bn((uint8_t *)&e, sizeof(e), key.e);
-	if (res)
-		goto out;
-
-	res = crypto_bignum_bin2bn(rproc_pub_key_modulus,
-				   rproc_pub_key_modulus_size, key.n);
-	if (res)
-		goto out;
-
 	if (IS_ENABLED(CFG_REMOTEPROC_PUB_KEY_VERIFY)) {
-		res = rproc_get_otp_key("oem_rproc_pkh", &key_hash,
-					key_len);
+		/* Use the public key provided with the image in keyinfo */
+		res = parse_der_rsa_public_key(keyinfo->info,
+					       keyinfo->info_size,
+					       &key, publickey_hash);
 		if (res)
-			goto clean_key_hash;
+			goto out;
 
-		res = rproc_compute_hash(publickey_hash, rproc_pub_key_modulus,
-					 rproc_pub_key_modulus_size,
-					 (const uint8_t *)&e,
-					 exponent_size);
+		res = rproc_alloc_and_get_otp("oem_rproc_pkh", &key_hash,
+					      hash_len);
 		if (res)
 			goto clean_key_hash;
 
@@ -438,6 +500,16 @@ static TEE_Result rproc_pta_verify_rsa_signature(TEE_Param *hash,
 			res = TEE_ERROR_SECURITY;
 			goto clean_key_hash;
 		}
+	} else {
+		/* Use the public key embedded in OP-TEE */
+		res = crypto_bignum_bin2bn((uint8_t *)&e, sizeof(e), key.e);
+		if (res)
+			goto out;
+
+		res = crypto_bignum_bin2bn(rproc_pub_key_modulus,
+					   rproc_pub_key_modulus_size, key.n);
+		if (res)
+			goto out;
 	}
 
 	res = crypto_acipher_rsassa_verify(algo, &key, hash_size,
@@ -480,8 +552,7 @@ static TEE_Result rproc_pta_verify_digest(uint32_t pt,
 	if (keyinfo->algo != TEE_ALG_RSASSA_PKCS1_V1_5_SHA256)
 		return TEE_ERROR_NOT_SUPPORTED;
 
-	return rproc_pta_verify_rsa_signature(&params[2], &params[3],
-					      keyinfo->algo);
+	return rproc_pta_verify_rsa_signature(&params[2], &params[3], keyinfo);
 }
 
 static TEE_Result rproc_pta_tlv_param(uint32_t pt,
