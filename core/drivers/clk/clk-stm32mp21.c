@@ -4481,6 +4481,26 @@ static struct clk_stm32_priv stm32mp21_clock_data = {
 	.is_critical		= clk_stm32_clock_is_critical,
 };
 
+static bool is_rcc_rif_reserved(unsigned int id)
+{
+	switch (id) {
+	case 72:
+	case 79:
+	case 80:
+	case 81:
+	case 82:
+	case 89:
+	case 99:
+	case 100:
+	case 105:
+	case 107:
+	case 111:
+		return true;
+	default:
+		return false;
+	}
+}
+
 static TEE_Result handle_available_semaphores(void)
 {
 	struct stm32_clk_platdata *pdata = &stm32mp21_clock_pdata;
@@ -4494,7 +4514,8 @@ static TEE_Result handle_available_semaphores(void)
 
 		index = i / 32;
 
-		if (!(BIT(i % 32) & pdata->conf_data.access_mask[index]))
+		if (is_rcc_rif_reserved(i) ||
+		    (!(BIT(i % 32) & pdata->conf_data.access_mask[index])))
 			continue;
 
 		cidcfgr = io_read32(pdata->rcc_base + RCC_CIDCFGR(i));
@@ -4535,8 +4556,10 @@ static TEE_Result apply_rcc_rif_config(bool is_tdcid)
 	if (is_tdcid) {
 		for (i = 0; i < RCC_NB_RIF_RES; i++) {
 			index = i / 32;
-			if (!(BIT(i % 32) &
-			      pdata->conf_data.access_mask[index]))
+
+			if (is_rcc_rif_reserved(i) ||
+			    (!(BIT(i % 32) &
+			       pdata->conf_data.access_mask[index])))
 				continue;
 
 			/*
@@ -4570,7 +4593,8 @@ static TEE_Result apply_rcc_rif_config(bool is_tdcid)
 	for (i = 0; i < RCC_NB_RIF_RES; i++) {
 		index = i / 32;
 
-		if (!(BIT(i % 32) & pdata->conf_data.access_mask[index]))
+		if (is_rcc_rif_reserved(i) ||
+		    !(BIT(i % 32) & pdata->conf_data.access_mask[index]))
 			continue;
 
 		io_clrsetbits32(pdata->rcc_base + RCC_CIDCFGR(i),
