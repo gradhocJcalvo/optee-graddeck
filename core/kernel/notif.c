@@ -128,7 +128,13 @@ uint32_t it_get_value(bool *value_valid, bool *value_pending)
 
 	old_itr_status = cpu_spin_lock_xsave(&it_lock);
 
-	bit_ffs(it_pending, (int)NOTIF_IT_VALUE_MAX, &bit);
+	while (1) {
+		bit_ffs_from(it_pending, (int)NOTIF_IT_VALUE_MAX, bit, &bit);
+		if (bit < 0 || !bit_test(it_masked, bit))
+			break;
+
+		++bit;
+	};
 
 	*value_valid = (bit >= 0);
 	if (!*value_valid) {
@@ -138,7 +144,14 @@ uint32_t it_get_value(bool *value_valid, bool *value_pending)
 
 	res = bit;
 	bit_clear(it_pending, res);
-	bit_ffs(it_pending, (int)NOTIF_IT_VALUE_MAX, &bit);
+
+	while (1) {
+		bit_ffs_from(it_pending, (int)NOTIF_IT_VALUE_MAX, bit, &bit);
+		if (bit < 0 || !bit_test(it_masked, bit))
+			break;
+
+		++bit;
+	};
 	*value_pending = (bit >= 0);
 out:
 	cpu_spin_unlock_xrestore(&it_lock, old_itr_status);
