@@ -2120,15 +2120,20 @@ static int stm32_clk_configure_mux(struct clk_stm32_priv *priv __unused,
 	bool sem_taken = false;
 	int ret = 0;
 
-	if (tab_mux_rifsc[mux].is_rifsc &&
-	    stm32_rif_semaphore_enabled_and_ok(cidcfgr, RIF_CID1)) {
-		if (stm32_rif_acquire_semaphore(rifsc_base +
-						_RIFSC_RISC_PER0_SEMCR +
-						per_offset,
-						MAX_CID_SUPPORTED))
-			return -1;
+	if (tab_mux_rifsc[mux].is_rifsc) {
+		if ((cidcfgr & _CIDCFGR_CFEN) &&
+		    !stm32_rif_scid_ok(cidcfgr, _CIDCRGR_SCID_MASK, RIF_CID1))
+			return 0;
 
-		sem_taken = true;
+		if (stm32_rif_semaphore_enabled_and_ok(cidcfgr, RIF_CID1)) {
+			if (stm32_rif_acquire_semaphore(rifsc_base +
+							_RIFSC_RISC_PER0_SEMCR +
+							per_offset,
+							MAX_CID_SUPPORTED))
+				return -1;
+
+			sem_taken = true;
+		}
 	}
 
 	if (stm32_mux_set_parent(mux, sel))
