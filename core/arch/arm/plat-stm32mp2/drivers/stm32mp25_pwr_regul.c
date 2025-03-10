@@ -85,7 +85,8 @@
  * @suspend_uv: Supply voltage level at PM suspend time to be restored at resume
  * @suspend_state: Supply state at PM suspend time to be restored at resume
  * @is_an_iod: True if regulator relates to an IO domain, else false
- * @keep_monitor_on: True if regulator required monitoring state (see refman)
+ * @keep_monitor_on: Never turn of the voltage monitor
+ * @has_clamp: Handle clamp workaround
  */
 struct pwr_regu {
 	uint32_t enable_reg;
@@ -102,7 +103,16 @@ struct pwr_regu {
 	 * and the IOs have IO compensation cell
 	 */
 	bool is_an_iod;
+
 	bool keep_monitor_on;
+	/*
+	 * Has_clamp: The VDDA regulator implements a workaround
+	 * to reduce power consumption that occurs when the regulator
+	 * is disabled but its supply is still present.
+	 * In this case, activating the monitor also activates a clamping
+	 * mechanism.
+	 */
+	bool has_clamp;
 	/*
 	 * rifsc_filtering_id is used to disable filtering when
 	 * accessing to the register
@@ -150,8 +160,11 @@ static TEE_Result pwr_enable_reg(struct pwr_regu *pwr_regu)
 
 	io_setbits32(reg, pwr_regu->valid_mask);
 
-	/* Do not keep the voltage monitor enabled except for GPU */
-	if (!pwr_regu->keep_monitor_on)
+	/*
+	 * Disable voltage monitor to reduce consumption.
+	 * Not for GPU or for clamp workaround
+	 */
+	if (!(pwr_regu->keep_monitor_on || pwr_regu->has_clamp))
 		io_clrbits32(reg, pwr_regu->enable_mask);
 
 	if (cid_enabled)
@@ -176,7 +189,13 @@ static void pwr_disable_reg(struct pwr_regu *pwr_regu)
 
 		/* Make sure the previous operations are visible */
 		dsb();
-		io_clrbits32(reg, pwr_regu->enable_mask | pwr_regu->valid_mask);
+
+		io_clrbits32(reg, pwr_regu->valid_mask);
+
+		if (pwr_regu->has_clamp)
+			io_setbits32(reg, pwr_regu->enable_mask);
+		else
+			io_clrbits32(reg, pwr_regu->enable_mask);
 	}
 
 	if (cid_enabled)
@@ -225,8 +244,7 @@ static TEE_Result pwr_get_state(struct regulator *regulator, bool *enabled)
 	FMSG("%s: get state", regulator_name(regulator));
 
 	if (pwr_regu->enable_mask)
-		*enabled = io_read32(pwr_reg) & (pwr_regu->enable_mask |
-						 pwr_regu->valid_mask);
+		*enabled = io_read32(pwr_reg) & pwr_regu->valid_mask;
 	else
 		*enabled = true;
 
@@ -425,6 +443,12 @@ static TEE_Result pwr_supplied_init(struct regulator *regulator,
 		}
 	}
 
+	if (pwr_regu->has_clamp) {
+		uintptr_t reg = stm32_pwr_base() + pwr_regu->enable_reg;
+
+		io_setbits32(reg, pwr_regu->enable_mask);
+	}
+
 	register_pm_driver_cb(pwr_regu_pm, regulator, "pwr-regu");
 
 	return TEE_SUCCESS;
@@ -523,6 +547,9 @@ static struct pwr_regu pwr_regulators[PWR_REGU_COUNT] = {
 		.enable_mask = PWR_CR1_AVMEN,
 		.ready_mask = PWR_CR1_ARDY,
 		.valid_mask = PWR_CR1_ASV,
+#if defined(CFG_STM32MP21)
+		.has_clamp = true,
+#endif
 	 },
 #ifndef CFG_STM32MP21
 	 [REGU_GPU] = {
