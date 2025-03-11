@@ -534,6 +534,9 @@ TEE_Result stm32_rproc_clean(uint32_t rproc_id)
 	if (stm32_rproc_release_mems_access(rproc) != TEE_SUCCESS)
 		panic();
 
+	rproc->boot_addr = 0;
+	rproc->tzen = false;
+
 	return res;
 }
 
