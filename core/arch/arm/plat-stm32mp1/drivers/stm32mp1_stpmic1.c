@@ -76,9 +76,6 @@ static SLIST_HEAD(pmic_it_handle_head, pmic_it_handle_s) pmic_it_handle_list =
 /* CPU voltage supplier if found */
 static char cpu_supply_name[PMIC_REGU_SUPPLY_NAME_LEN];
 
-/* Flag set when bottom half thread is to enable PMIC interrupts */
-static bool start_stpmic1_interrupt;
-
 static bool pmic_is_secure(void)
 {
 	assert(pmic_status != -1);
@@ -757,7 +754,7 @@ static TEE_Result initialize_pmic(const void *fdt, int pmic_node)
 	return TEE_SUCCESS;
 }
 
-static void pmic_thread_irq_handler(void)
+static void pmic_event_handler(void)
 {
 	uint8_t read_val = 0U;
 	unsigned int i = 0U;
@@ -808,24 +805,16 @@ static void pmic_thread_irq_handler(void)
 	stm32mp_put_pmic();
 }
 
-static void start_stop_stpmic1_interrupt(bool start_not_stop)
+static void enable_stpmic1_interrupt(void)
 {
 	struct pmic_it_handle_s *prv = NULL;
-	uint8_t val = 0;
-
 	stm32mp_get_pmic();
 
 	/* Enable requested interrupt */
 	SLIST_FOREACH(prv, &pmic_it_handle_list, link) {
-		if (stpmic1_register_read(prv->pmic_reg, &val))
-			panic();
-
-		if (start_not_stop)
-			val |= BIT(prv->pmic_bit);
-		else
-			val &= ~BIT(prv->pmic_bit);
-
-		if (stpmic1_register_write(prv->pmic_reg, val))
+		if (stpmic1_register_update(prv->pmic_reg,
+					    BIT(prv->pmic_bit),
+					    BIT(prv->pmic_bit)))
 			panic();
 	}
 
@@ -837,18 +826,14 @@ static void yielding_stm32mp1_stpmic1_notif(struct notif_driver *ndrv __unused,
 {
 	switch (ev) {
 	case NOTIF_EVENT_DO_BOTTOM_HALF:
-		if (start_stpmic1_interrupt) {
-			IMSG("STPMIC1 notif started");
-			start_stpmic1_interrupt = false;
-			start_stop_stpmic1_interrupt(true /*start_not_stop*/);
-		}
-
-		pmic_thread_irq_handler();
+		pmic_event_handler();
 		break;
 	case NOTIF_EVENT_STOPPED:
-		IMSG("STPMIC1 notif stopped");
-		start_stpmic1_interrupt = false;
-		start_stop_stpmic1_interrupt(false /*!start_not_stop*/);
+		/*
+		 * Treat events pending by the time NOTIF_EVENT_SOPPED
+		 * is handled by OP-TEE notif framework.
+		 */
+		pmic_event_handler();
 		break;
 	default:
 		EMSG("Unknown event %d", ev);
@@ -860,9 +845,6 @@ static bool atomic_stm32mp1_stpmic1_notif(struct notif_driver *ndrv __unused,
 					  enum notif_event ev __maybe_unused)
 {
 	assert(ev == NOTIF_EVENT_STARTED);
-
-	/* Ask for the bottom half to enable PMIC interrupts */
-	start_stpmic1_interrupt = true;
 
 	return true;
 }
@@ -878,6 +860,8 @@ static enum itr_return pmic_it_handler(struct itr_handler *handler __unused)
 {
 	if (notif_async_is_started())
 		notif_send_async(NOTIF_VALUE_DO_BOTTOM_HALF);
+	else
+		pmic_event_handler();
 
 	return ITRR_HANDLED;
 }
@@ -941,6 +925,10 @@ static TEE_Result stm32_pmic_init_it(const void *fdt, int node)
 				       NULL, 0, NULL);
 	if (res)
 		panic("pmic: Could not create interrupt handler");
+
+	stm32_i2c_interrupt_access_lockdeps(i2c_handle, itr_chip, itr_num);
+
+	enable_stpmic1_interrupt();
 
 	interrupt_enable(itr_chip, itr_num);
 	if (fdt_getprop(fdt, node, "wakeup-source", NULL)) {
