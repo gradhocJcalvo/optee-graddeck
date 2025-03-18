@@ -196,6 +196,7 @@ struct stm32_clk_opp_cfg {
 
 struct stm32_clk_opp_dt_cfg {
 	struct stm32_clk_opp_cfg cpu1_opp[MAX_OPP];
+	struct stm32_clk_opp_cfg gpu_opp[MAX_OPP];
 };
 
 struct stm32_clk_platdata {
@@ -204,6 +205,7 @@ struct stm32_clk_platdata {
 	struct stm32_osci_dt_cfg *osci;
 	uint32_t npll;
 	struct stm32_pll_dt_cfg *pll;
+	struct stm32_pll_dt_cfg *pll3_current_opp;
 	struct stm32_clk_opp_dt_cfg *opp;
 	uint32_t nbusclk;
 	uint32_t *busclk;
@@ -1362,6 +1364,10 @@ static int stm32_clk_parse_fdt_all_opp(const void *fdt, int node,
 	if (ret < 0)
 		return ret;
 
+	ret = stm32_clk_parse_fdt_opp(fdt, node, "st,ck_gpu", opp->gpu_opp);
+	if (ret < 0)
+		return ret;
+
 	return 0;
 }
 
@@ -1610,6 +1616,7 @@ static void clk_stm32_debug_display_ker_dt_cfg(struct clk_stm32_priv *priv)
 }
 
 static void clk_stm32_debug_display_opp_cfg(const char *opp_name,
+					    int pll_id,
 					    struct stm32_clk_opp_cfg *opp_cfg)
 {
 	unsigned int i = 0;
@@ -1620,9 +1627,9 @@ static void clk_stm32_debug_display_opp_cfg(const char *opp_name,
 		if (opp_cfg->frq == 0UL || opp_cfg->frq == UINT32_MAX)
 			break;
 
-		printf("frequency = %"PRIu32, opp_cfg->frq);
+		printf("frequency = %"PRIu32": ", opp_cfg->frq);
 
-		clk_stm32_debug_display_pll_cfg(PLL1_ID, &opp_cfg->pll_cfg);
+		clk_stm32_debug_display_pll_cfg(pll_id, &opp_cfg->pll_cfg);
 
 		opp_cfg++;
 	}
@@ -1635,7 +1642,8 @@ static void clk_stm32_debug_display_opp_dt_cfg(struct clk_stm32_priv *priv)
 	struct stm32_clk_platdata *pdata = priv->pdata;
 	struct stm32_clk_opp_dt_cfg *opp = pdata->opp;
 
-	clk_stm32_debug_display_opp_cfg("st,ck_cpu1", opp->cpu1_opp);
+	clk_stm32_debug_display_opp_cfg("st,ck_cpu1", PLL1_ID, opp->cpu1_opp);
+	clk_stm32_debug_display_opp_cfg("ck_gpu", PLL3_ID, opp->gpu_opp);
 }
 
 static void clk_stm32_debug_display_others_dt_cfg(struct clk_stm32_priv *priv)
@@ -2842,14 +2850,37 @@ static const struct clk_ops clk_stm32_pll_ops = {
 	.restore_context = clk_stm32_pll_pm_restore,
 };
 
+static TEE_Result clk_stm32_pll3_set_rate(struct clk *clk __unused,
+					  unsigned long rate,
+					  unsigned long parent_rate __unused)
+{
+	struct clk_stm32_priv *priv = clk_stm32_get_priv();
+	struct stm32_clk_platdata *pdata = priv->pdata;
+	struct stm32_clk_opp_cfg *opp = NULL;
+
+	opp = clk_stm32_get_opp_config(pdata->opp->gpu_opp, rate);
+	if (!opp) {
+		EMSG("OPP for %ld rate not found", rate);
+		return TEE_ERROR_ITEM_NOT_FOUND;
+	}
+
+	pdata->pll3_current_opp = &opp->pll_cfg;
+
+	return TEE_SUCCESS;
+}
+
 static TEE_Result clk_stm32_pll3_enable(struct clk *clk)
 {
 	struct clk_stm32_pll_cfg *cfg = clk->priv;
 	struct clk_stm32_priv *priv = clk_stm32_get_priv();
+	struct stm32_clk_platdata *pdata = priv->pdata;
 	struct stm32_pll_dt_cfg *pll_conf = clk_stm32_pll_get_pdata(PLL3_ID);
 	TEE_Result res = TEE_SUCCESS;
 	struct clk *parent = NULL;
 	size_t pidx = 0;
+
+	if (pdata->pll3_current_opp)
+		pll_conf = pdata->pll3_current_opp;
 
 	/* ck_icn_p_gpu activate */
 	stm32_gate_enable(GATE_GPU);
@@ -2894,6 +2925,7 @@ static const struct clk_ops clk_stm32_pll3_ops = {
 	.enable		= clk_stm32_pll3_enable,
 	.disable	= clk_stm32_pll3_disable,
 	.is_enabled	= clk_stm32_pll_is_enabled,
+	.set_rate	= clk_stm32_pll3_set_rate,
 };
 
 struct clk_stm32_flexgen_cfg {
@@ -4077,7 +4109,7 @@ static STM32_GATE(ck_ker_eth1ptp, &ck_flexgen_56, 0, GATE_ETH1);
 static STM32_GATE(ck_ker_eth2ptp, &ck_flexgen_56, 0, GATE_ETH2);
 static STM32_GATE(ck_ker_usb2phy2, &ck_flexgen_58, 0, GATE_USB3DR);
 static STM32_GATE(ck_icn_m_gpu, &ck_flexgen_59, 0, GATE_GPU);
-static STM32_GATE(ck_ker_gpu, &ck_pll3, 0, GATE_GPU);
+static STM32_GATE(ck_ker_gpu, &ck_pll3, CLK_SET_RATE_PARENT, GATE_GPU);
 static STM32_GATE(ck_ker_ethswref, &ck_flexgen_60, 0, GATE_ETHSWREF);
 
 static STM32_GATE(ck_ker_eth1stp, &ck_icn_ls_mcu, 0, GATE_ETH1STP);
