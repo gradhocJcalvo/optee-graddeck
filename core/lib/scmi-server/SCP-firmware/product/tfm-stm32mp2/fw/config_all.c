@@ -504,6 +504,7 @@ static void set_scmi_comm_resources(struct scpfw_config *cfg)
 #endif
 #ifdef CFG_SCPFW_MOD_TFM_SMT
             case STM32MP25_AGENT_ID_CA35 :
+            case STM32MP25_AGENT_ID_CA35_BL31:
                 *service_data = (struct mod_scmi_service_config){
                     .transport_id = (fwk_id_t)FWK_ID_ELEMENT_INIT(FWK_MODULE_IDX_TFM_SMT, tfm_smt_index),
                     .transport_api_id = (fwk_id_t)FWK_ID_API_INIT(FWK_MODULE_IDX_TFM_SMT,
