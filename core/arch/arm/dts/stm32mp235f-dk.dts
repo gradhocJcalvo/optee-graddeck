@@ -397,6 +397,12 @@
 				st,pll = <&pll1_cfg_1200Mhz>;
 			};
 		};
+		st,ck_gpu {
+			cfg_1 {
+				hz = <400000000>;
+				st,pll = <&pll3_cfg_400Mhz>;
+			};
+		};
 	};
 };
 
