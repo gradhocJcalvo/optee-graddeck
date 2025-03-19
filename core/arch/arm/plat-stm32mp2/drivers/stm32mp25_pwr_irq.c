@@ -53,6 +53,8 @@ struct pwr_wkup_data {
 	struct itr_handler *parent_hdl;
 	struct stm32_exti_pdata *exti;
 	unsigned int spinlock;
+	uint8_t itr_enable_bitmask;
+	uint8_t itr_mask_bitmask;
 };
 
 static struct pwr_wkup_data *pwr_wkup_d;
@@ -197,10 +199,10 @@ static void stm32mp25_pwr_op_enable(struct itr_chip *chip __unused, size_t it)
 	uint32_t exceptions = 0;
 
 	exceptions = cpu_spin_lock_xsave(&priv->spinlock);
+	priv->itr_enable_bitmask |= BIT(it);
 	stm32mp25_pwr_itr_enable_nolock(it);
-	cpu_spin_unlock_xrestore(&priv->spinlock, exceptions);
-
 	interrupt_enable(priv->parent_hdl->chip, priv->parent_hdl->it);
+	cpu_spin_unlock_xrestore(&priv->spinlock, exceptions);
 }
 
 /* Disable an interrupt */
@@ -210,10 +212,12 @@ static void stm32mp25_pwr_op_disable(struct itr_chip *chip __unused, size_t it)
 	uint32_t exceptions = 0;
 
 	exceptions = cpu_spin_lock_xsave(&priv->spinlock);
+	priv->itr_enable_bitmask &= ~BIT(it);
 	stm32mp25_pwr_itr_disable_nolock(it);
+	if (!priv->itr_enable_bitmask)
+		interrupt_disable(priv->parent_hdl->chip,
+				  priv->parent_hdl->it);
 	cpu_spin_unlock_xrestore(&priv->spinlock, exceptions);
-
-	interrupt_disable(priv->parent_hdl->chip, priv->parent_hdl->it);
 }
 
 /* Mask an interrupt, may be called from an interrupt context */
@@ -223,10 +227,10 @@ static void stm32mp25_pwr_op_mask(struct itr_chip *chip __unused, size_t it)
 	uint32_t exceptions = 0;
 
 	exceptions = cpu_spin_lock_xsave(&priv->spinlock);
+	priv->itr_mask_bitmask |= BIT(it);
 	stm32mp25_pwr_itr_disable_nolock(it);
-	cpu_spin_unlock_xrestore(&priv->spinlock, exceptions);
-
 	interrupt_mask(priv->parent_hdl->chip, priv->parent_hdl->it);
+	cpu_spin_unlock_xrestore(&priv->spinlock, exceptions);
 }
 
 /* Unmask an interrupt, may be called from an interrupt context */
@@ -236,10 +240,11 @@ static void stm32mp25_pwr_op_unmask(struct itr_chip *chip __unused, size_t it)
 	uint32_t exceptions = 0;
 
 	exceptions = cpu_spin_lock_xsave(&priv->spinlock);
+	priv->itr_mask_bitmask &= ~BIT(it);
 	stm32mp25_pwr_itr_enable_nolock(it);
+	if (!priv->itr_mask_bitmask)
+		interrupt_unmask(priv->parent_hdl->chip, priv->parent_hdl->it);
 	cpu_spin_unlock_xrestore(&priv->spinlock, exceptions);
-
-	interrupt_unmask(priv->parent_hdl->chip, priv->parent_hdl->it);
 }
 
 /* Raise per-cpu interrupt (optional) */
