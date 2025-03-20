@@ -4139,34 +4139,25 @@ static struct clk *stm32mp21_clk_provided[STM32MP21_ALL_CLK_NB] = {
 	[CK_MSI_KER]		= &ck_msi_ker,
 };
 
-static void clk_stm32_set_flexgen_as_critical(void)
-{
-	uint32_t i = 0;
-
-	for (i = 0; i < XBAR_CHANNEL_NB; i++) {
-		unsigned long clock_id = CK_ICN_HS_MCU + i;
-		struct clk *clk = NULL;
-
-		if (!stm32_rcc_has_access_by_id(i) || i == 6)
-			continue;
-
-		clk = stm32mp_rcc_clock_id_to_clk(clock_id);
-		assert(clk);
-
-		clk_enable(clk);
-	}
-}
-
 static bool clk_stm32_clock_is_critical(struct clk *clk __maybe_unused)
 {
-#ifndef CFG_STM32_CM33TDCID
-
 	struct clk *clk_criticals[] = {
+#ifdef CFG_STM32_CM33TDCID
+		&ck_flexgen_63,
+#else /* CFG_STM32_CM33TDCID */
 		&ck_hsi,
 		&ck_hse,
 		&ck_msi,
 		&ck_lsi,
 		&ck_lse,
+		&ck_icn_hs_mcu,
+		&ck_icn_ls_mcu,
+		&ck_icn_sdmmc,
+		&ck_icn_ddr,
+		&ck_icn_display,
+		&ck_icn_hsl,
+		&ck_icn_nic,
+		&ck_flexgen_63,
 		&ck_cpu1,
 		&ck_icn_p_syscpu1,
 		&ck_icn_s_ddr,
@@ -4190,7 +4181,8 @@ static bool clk_stm32_clock_is_critical(struct clk *clk __maybe_unused)
 		&ck_icn_p_gpioh,
 		&ck_icn_p_gpioi,
 		&ck_icn_p_gpioz,
-		&ck_icn_p_ipcc1
+		&ck_icn_p_ipcc1,
+#endif /* CFG_STM32_CM33TDCID */
 	};
 	size_t i = 0;
 
@@ -4200,7 +4192,7 @@ static bool clk_stm32_clock_is_critical(struct clk *clk __maybe_unused)
 		if (clk == clk_critical)
 			return true;
 	}
-#endif /* CFG_STM32_CM33TDCID */
+
 	return false;
 }
 
@@ -4626,9 +4618,6 @@ end:
 				panic("rcc resource sec conf is incorrect");
 		}
 	}
-
-	/* TEMPORARY: Enables all root clocks (could be used by M33) */
-	clk_stm32_set_flexgen_as_critical();
 
 	return TEE_SUCCESS;
 }
