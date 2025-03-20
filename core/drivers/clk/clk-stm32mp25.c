@@ -4550,29 +4550,12 @@ static struct clk *stm32mp25_clk_provided[STM32MP25_ALL_CLK_NB] = {
 	[CK_MSI_KER]		= &ck_msi_ker,
 };
 
-static void clk_stm32_set_flexgen_as_critical(void)
-{
-	uint32_t i = 0;
-
-	for (i = 0; i < XBAR_CHANNEL_NB; i++) {
-		unsigned long clock_id = CK_ICN_HS_MCU + i;
-		struct clk *clk = NULL;
-
-		if (!stm32_rcc_has_access_by_id(i))
-			continue;
-
-		clk = stm32mp_rcc_clock_id_to_clk(clock_id);
-		assert(clk);
-
-		clk_enable(clk);
-	}
-}
-
 static bool clk_stm32_clock_is_critical(struct clk *clk)
 {
 
 	struct clk *clk_criticals[] = {
 #ifdef CFG_STM32_CM33TDCID
+		&ck_flexgen_63,
 		&ck_icn_p_gicv2m
 #else
 		&ck_hsi,
@@ -4580,6 +4563,16 @@ static bool clk_stm32_clock_is_critical(struct clk *clk)
 		&ck_msi,
 		&ck_lsi,
 		&ck_lse,
+		&ck_icn_hs_mcu,
+		&ck_icn_ls_mcu,
+		&ck_icn_sdmmc,
+		&ck_icn_ddr,
+		&ck_icn_display,
+		&ck_icn_hsl,
+		&ck_icn_nic,
+		&ck_icn_vid,
+		&ck_flexgen_59,
+		&ck_flexgen_63,
 		&ck_cpu1,
 		&ck_icn_p_syscpu1,
 		&ck_icn_s_ddr,
@@ -5026,9 +5019,6 @@ end:
 				panic("rcc resource sec conf is incorrect");
 		}
 	}
-
-	/* TEMPORARY: Enables all root clocks (could be used by M33) */
-	clk_stm32_set_flexgen_as_critical();
 
 	return TEE_SUCCESS;
 }
