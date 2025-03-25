@@ -156,7 +156,7 @@ void boot_secondary_init_intc(void)
 void stm32_rif_access_violation_action(void)
 {
 #ifdef CFG_STM32_RISAF
-	stm32_risaf_dump_erroneous_data();
+	stm32_risaf_print_erroneous_data();
 	stm32_risaf_clear_illegal_access_flags();
 #endif
 #ifdef CFG_STM32_RISAB
