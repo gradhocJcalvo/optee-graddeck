@@ -2068,14 +2068,6 @@ static TEE_Result stm32_tamp_probe(const void *fdt, int node,
 		stm32mp_syscfg_write(SYSCFG_POTTAMPRSTCR, BIT(0), BIT(0));
 #endif /* defined(CFG_STM32MP25) || defined(CFG_STM32MP23) || defined(CFG_STM32MP21) */
 
-	/*
-	 * Select extra IP to add in the deleted/blocked IP in case of
-	 * tamper event
-	 *
-	 * No IP added.
-	 */
-	stm32_tamp_set_secret_list(&stm32_tamp, 0);
-
 	if (stm32_tamp.pdata.compat->tags & TAMP_HAS_RIF_SUPPORT) {
 		apply_rif_config();
 
@@ -2105,6 +2097,14 @@ static TEE_Result stm32_tamp_probe(const void *fdt, int node,
 					 _TAMP_PRIVCFG_BKPRWPRIV |
 					 _TAMP_PRIVCFG_BKPWPRIV);
 	}
+
+	/*
+	 * Select extra IP to add in the deleted/blocked IP in case of
+	 * tamper event
+	 *
+	 * No IP added.
+	 */
+	stm32_tamp_set_secret_list(&stm32_tamp, 0);
 
 	if (!(stm32_tamp.pdata.compat->tags & TAMP_HAS_RIF_SUPPORT) ||
 	    stm32_tamp.pdata.is_tdcid) {
