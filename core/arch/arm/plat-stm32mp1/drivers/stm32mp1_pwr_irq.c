@@ -150,6 +150,8 @@ static void stm32mp1_pwr_itr_enable_nolock(size_t it)
 
 	VERBOSE_PWR("Pwr irq enable");
 
+	/* Clear flag before enable to avoid false interrupt */
+	io_setbits32(priv->base + WKUPCR, BIT(it));
 	io_setbits32(priv->base + MPUWKUPENR, BIT(it));
 }
 
@@ -239,7 +241,6 @@ static void stm32mp1_pwr_op_mask(struct itr_chip *chip __unused, size_t it)
 
 	exceptions = cpu_spin_lock_xsave(&priv->spinlock);
 	priv->itr_mask_bitmask |= BIT(it);
-	stm32mp1_pwr_itr_disable_nolock(it);
 	interrupt_mask(priv->parent_hdl->chip, priv->parent_hdl->it);
 	cpu_spin_unlock_xrestore(&priv->spinlock, exceptions);
 }
@@ -252,7 +253,6 @@ static void stm32mp1_pwr_op_unmask(struct itr_chip *chip __unused, size_t it)
 
 	exceptions = cpu_spin_lock_xsave(&priv->spinlock);
 	priv->itr_mask_bitmask &= ~BIT(it);
-	stm32mp1_pwr_itr_enable_nolock(it);
 	if (!priv->itr_mask_bitmask)
 		interrupt_unmask(priv->parent_hdl->chip, priv->parent_hdl->it);
 	cpu_spin_unlock_xrestore(&priv->spinlock, exceptions);
