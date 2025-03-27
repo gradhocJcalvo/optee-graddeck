@@ -90,6 +90,4 @@ void stm32_exti_set_gpio_port_sel(struct stm32_exti_pdata *exti, uint8_t bank,
  */
 void stm32_exti_set_tz(struct stm32_exti_pdata *exti, uint32_t exti_line);
 
-uint32_t stm32_exti_read_imr(struct stm32_exti_pdata *exti, unsigned int bank);
-
 #endif /*__STM32_EXTI_H*/
