@@ -3042,8 +3042,19 @@ static TEE_Result clk_cpu1_determine_rate(struct clk *clk,
 	return TEE_SUCCESS;
 }
 
+static TEE_Result clk_cpu1_set_rate(struct clk *clk __unused,
+				    unsigned long rate,
+				    unsigned long parent_rate)
+{
+	if (rate == parent_rate)
+		return TEE_SUCCESS;
+
+	return TEE_ERROR_GENERIC;
+}
+
 static const struct clk_ops clk_stm32_cpu1_ops = {
 	.determine_rate = clk_cpu1_determine_rate,
+	.set_rate	= clk_cpu1_set_rate,
 	.get_parent	= clk_cpu1_get_parent,
 };
 
@@ -3532,7 +3543,6 @@ static STM32_FLEXGEN(ck_flexgen_63, 0, 63);
 static struct clk ck_cpu1 = {
 	.ops		= &clk_stm32_cpu1_ops,
 	.name		= "ck_cpu1",
-	.flags		= CLK_SET_RATE_PARENT,
 	.num_parents	= 2,
 	.parents	= { &ck_pll1, &ck_flexgen_63 },
 };

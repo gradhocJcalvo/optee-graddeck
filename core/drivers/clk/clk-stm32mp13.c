@@ -2151,8 +2151,19 @@ static TEE_Result clk_stm32_mpu_determine_rate(struct clk *clk,
 	return TEE_SUCCESS;
 }
 
+static TEE_Result clk_stm32_mpu_set_rate(struct clk *clk __unused,
+					 unsigned long rate,
+					 unsigned long parent_rate)
+{
+	if (rate == parent_rate)
+		return TEE_SUCCESS;
+
+	return TEE_ERROR_GENERIC;
+}
+
 static const struct clk_ops clk_stm32_mpu_ops = {
 	.determine_rate = clk_stm32_mpu_determine_rate,
+	.set_rate	= clk_stm32_mpu_set_rate,
 	.get_parent	= clk_stm32_composite_get_parent,
 	.set_parent	= clk_stm32_composite_set_parent,
 };
@@ -2449,7 +2460,7 @@ static struct clk ck_mpu = {
 		.mux_id	= MUX_MPU,
 	},
 	.name		= "ck_mpu",
-	.flags		= CLK_OPS_PARENT_ENABLE | CLK_SET_RATE_PARENT,
+	.flags		= CLK_OPS_PARENT_ENABLE,
 	.num_parents	= 4,
 	.parents	= { &ck_hsi, &ck_hse, &ck_pll1p, &ck_pll1p_div },
 };
@@ -2461,7 +2472,7 @@ static struct clk ck_axi = {
 		.div_id	= DIV_AXI,
 	},
 	.name		= "ck_axi",
-	.flags		= CLK_OPS_PARENT_ENABLE | CLK_SET_RATE_PARENT,
+	.flags		= CLK_OPS_PARENT_ENABLE,
 	.num_parents	= 3,
 	.parents	= { &ck_hsi, &ck_hse, &ck_pll2p },
 };
@@ -2473,7 +2484,7 @@ static struct clk ck_mlahb = {
 		.div_id	= DIV_MLAHB,
 	},
 	.name		= "ck_mlahb",
-	.flags		= CLK_OPS_PARENT_ENABLE | CLK_SET_RATE_PARENT,
+	.flags		= CLK_OPS_PARENT_ENABLE,
 	.num_parents	= 4,
 	.parents	= { &ck_hsi, &ck_hse, &ck_csi, &ck_pll3p },
 };
