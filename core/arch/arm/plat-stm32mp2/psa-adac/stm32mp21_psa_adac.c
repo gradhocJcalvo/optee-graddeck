@@ -16,24 +16,6 @@
 #include "platform/platform.h"
 #include "platform/msg_interface.h"
 
-#define STM32MP21_PERM_MASK_A35NSTO	BIT(0) /* A35 Non-Secure Trace-only */
-#define STM32MP21_PERM_MASK_A35NSFD	BIT(1) /* A35 Non-Secure Full-Debug */
-#define STM32MP21_PERM_MASK_A35STO	BIT(2) /* A35 Secure Trace-only */
-#define STM32MP21_PERM_MASK_A35SFD	BIT(3) /* A35 Secure Full-Debug */
-#define STM32MP21_PERM_MASK_M33NSTO	BIT(4) /* M33 Non-Secure Trace-only */
-#define STM32MP21_PERM_MASK_M33NSFD	BIT(5) /* M33 Non-Secure Full-Debug */
-#define STM32MP21_PERM_MASK_M33STO	BIT(6) /* M33 Secure Trace-only */
-#define STM32MP21_PERM_MASK_M33SFD	BIT(7) /* M33 Secure Full-Debug */
-#define STM32MP21_PERM_MASK_A35HDPL	BIT(8) /* A35 Minimal Debug level */
-#define STM32MP21_PERM_MASK_A35HDP(lvl) (STM32MP21_PERM_MASK_A35HDPL << (lvl))
-#define STM32MP21_PERM_MASK_M33HDPL	BIT(12) /* M33 Minimal Debug level */
-#define STM32MP21_PERM_MASK_M33HDP(lvl) (STM32MP21_PERM_MASK_M33HDPL << (lvl))
-#define STM32MP21_PERM_MASK_A35SDDIS	BIT(16) /* A35 Secure Dbg Disabled */
-#define STM32MP21_PERM_MASK_A35NSDDIS	BIT(17) /* A35 Non-Sec Dbg Disabled */
-#define STM32MP21_PERM_MASK_M33SDDIS	BIT(18) /* M33 Secure Dbg Disabled */
-#define STM32MP21_PERM_MASK_M33NSDDIS	BIT(19) /* M33 Non-Sec Dbg Disabled */
-#define STM32MP21_PERM_MASK_WAITATTACH	BIT(31) /* Wait for attach at boot tm */
-
 /* TODO Discovery template */
 uint8_t discovery_template[] = {
 	// @+00 (12 bytes) psa_auth_version: 1.0
@@ -143,6 +125,10 @@ int psa_adac_platform_check_certificate(uint8_t *crt __unused,
 
 int psa_adac_apply_permissions(uint8_t permissions_mask[16])
 {
+	TEE_Result res = TEE_ERROR_GENERIC;
+	uint32_t dbg_a_ctrl_val = 0;
+	uint32_t dbg_m_ctrl_val = 0;
+	uint32_t dbg_en_val = 0;
 	uint32_t perm_mask = 0;
 
 	/* Permission mask on this platform is defined on 32 bits */
@@ -150,9 +136,15 @@ int psa_adac_apply_permissions(uint8_t permissions_mask[16])
 
 	DMSG("perm_mask=%#" PRIx32, perm_mask);
 
-	/* TODO: psa_adac_apply_permissions: use BSEC API */
+	stm32_bsec_parse_permissions(perm_mask, &dbg_en_val,
+				     &dbg_a_ctrl_val, &dbg_m_ctrl_val);
 
-	return PSA_SUCCESS;
+	res = stm32_bsec_write_debug_conf(dbg_en_val);
+	if (!res)
+		res = stm32_bsec_write_debug_ctrl(dbg_a_ctrl_val,
+						  dbg_m_ctrl_val);
+
+	return (!res) ? PSA_SUCCESS : PSA_ERROR_HARDWARE_FAILURE;
 }
 
 void platform_init(void)
