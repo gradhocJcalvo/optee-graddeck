@@ -148,7 +148,7 @@ static enum itr_return stm32_dbgmcu_mbx_itr_auth_rd(struct itr_handler *h
 						    __unused)
 {
 	TEE_Result res __maybe_unused = TEE_ERROR_GENERIC;
-	uint32_t value = 0xdeadbeef;
+	uint32_t value = 0xbadf00d1;
 
 	/*
 	 * We should theoretically never enter this interrupt handler. As per
@@ -262,6 +262,8 @@ static TEE_Result stm32_dbgmcu_mbx_probe(const void *fdt, int node,
 
 	if (IS_ENABLED(CFG_CORE_ASYNC_NOTIF))
 		notif_register_driver(&stm32_dbgmcu_mbx_notif);
+
+	stm32_dbgmcu_mbx_write_auth_dev(0xbadf00d0, 1000);
 
 	/* Before enabling interrupts, handle early debug request */
 	if (stm32_dbgmcu_mbx_early_request())
