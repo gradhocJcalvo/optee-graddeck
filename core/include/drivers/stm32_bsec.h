@@ -12,6 +12,19 @@
 #include <types_ext.h>
 
 /* BSEC_DEBUG */
+#if defined(CFG_STM32MP25) || defined(CFG_STM32MP23) || defined(CFG_STM32MP21)
+#define BSEC_DBGENA			BIT(1)
+#define BSEC_NIDENA			BIT(2)
+#define BSEC_DEVICEEN			BIT(3)
+#define BSEC_HDPEN			BIT(4)
+#define BSEC_SPIDENA			BIT(5)
+#define BSEC_SPNIDENA			BIT(6)
+#define BSEC_DBGSWEN			BIT(7)
+#define BSEC_DBGENM			BIT(8)
+#define BSEC_NIDENM			BIT(9)
+#define BSEC_SPIDENM			BIT(10)
+#define BSEC_SPNIDENM			BIT(11)
+#else /* STM32MP1x */
 #define BSEC_HDPEN			BIT(4)
 #define BSEC_SPIDEN			BIT(5)
 #define BSEC_SPINDEN			BIT(6)
@@ -20,6 +33,21 @@
 					 BSEC_SPIDEN | \
 					 BSEC_SPINDEN | \
 					 BSEC_DBGSWGEN)
+#endif
+#if defined(CFG_STM32MP21)
+#define BSEC_AUTH_UNLOCK_MSK		GENMASK_32(15, 8)
+#define BSEC_AUTH_UNLOCK(val)		(((val) << 8) & BSEC_AUTH_UNLOCK_MSK)
+#define BSEC_AUTH_HDPL_MSK		GENMASK_32(23, 16)
+#define BSEC_AUTH_HDPL(val)		(((val) << 16) & BSEC_AUTH_HDPL_MSK)
+#define BSEC_AUTH_SEC_MSK		GENMASK_32(31, 24)
+#define BSEC_AUTH_SEC(val)		(((val) << 24) & BSEC_AUTH_SEC_MSK)
+#define BSEC_AUTH_UNLOCKED		0xb4
+#define BSEC_AUTH_LOCKED		0xff
+#define BSEC_AUTH_HDPL0			0xb4
+#define BSEC_AUTH_HDPL1			0x51
+#define BSEC_AUTH_HDPL2			0x8a
+#define BSEC_AUTH_HDPL3			0x6f
+#endif
 
 #define BSEC_BITS_PER_WORD		(8U * sizeof(uint32_t))
 #define BSEC_BYTES_PER_WORD		sizeof(uint32_t)
