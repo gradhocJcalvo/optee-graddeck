@@ -38,9 +38,11 @@ static_assert(!(IS_ENABLED(CFG_STM32_CM33TDCID) &&
 #define BSEC_DENR			U(0xE20)
 #define BSEC_SR				U(0xE40)
 #define BSEC_OTPSR			U(0xE44)
+#if defined(CFG_STM32MP21)
 #define BSEC_DBGMCR			U(0xE8C)
 #define BSEC_AP_UNLOCK			U(0xE90)
 #define BSEC_DBGACR			U(0xEAC)
+#endif /* CFG_STM32MP21 */
 #define BSEC_VERR			U(0xFF4)
 #define BSEC_IPIDR			U(0xFF8)
 
@@ -97,9 +99,9 @@ static_assert(!(IS_ENABLED(CFG_STM32_CM33TDCID) &&
 #endif
 
 #if defined(CFG_STM32MP21)
-#define BSEC_DENR_ALL_MASK		GENMASK_32(17, 0)
+#define BSEC_DENR_ALL_MASK		GENMASK_32(17, 1)
 #define BSEC_DENR_WRITE_CONF		U(0xDEB00000)
-#endif
+#endif /* CFG_STM32MP21 */
 
 // compute SECDED ECC as HAMMING(17,12) with parity
 #define PARITY_4BIT(x)		((((x) >> 3) ^ ((x) >> 2) ^ ((x) >> 1) ^ (x)) \
@@ -113,8 +115,13 @@ static_assert(!(IS_ENABLED(CFG_STM32_CM33TDCID) &&
 				 ((PARITY_12BIT((x) ^ 0xcb7)) << 12))
 #define BSEC_DENR_v(x)		(BSEC_DENR_WRITE_CONF | BSEC_DENR_ECC(x) | \
 				 ((x) & 0xfff))
-#define BSEC_DENR_I		BSEC_DENR_v(0x0fff)
-#define BSEC_DENR_NI		BSEC_DENR_v(0x0fdf)
+
+#if defined(CFG_STM32MP21)
+/* BSEC_DBGMCR/BSEC_DBGACR register fields */
+#define BSEC_DBGxCR_UNLOCK		GENMASK_32(15, 8)
+#define BSEC_DBGxCR_AUTH_HDPL		GENMASK_32(23, 16)
+#define BSEC_DBGxCR_AUTH_SEC		GENMASK_32(31, 24)
+#endif /* CFG_STM32MP21 */
 
 /* BSEC_SR register fields */
 #define BSEC_SR_BUSY			BIT(0)
@@ -639,6 +646,7 @@ bool stm32_bsec_self_hosted_debug_is_enabled(void)
 	return stm32_bsec_read_debug_conf() & BSEC_DENR_DBGSWEN;
 }
 
+#if defined(CFG_STM32MP21)
 /*
  * Dummy ADAC requires setting BSEC_DBGACR and BSEC_DBGMCR.
  */
@@ -660,6 +668,36 @@ void stm32_bsec_mp21_ap0_unlock(void)
 {
 	io_write32(bsec_base() + BSEC_AP_UNLOCK, BSEC_AP_UNLOCK_DUMMY_ADAC);
 }
+
+TEE_Result stm32_bsec_write_debug_ctrl(uint32_t ca_value, uint32_t cm_value)
+{
+	TEE_Result result = TEE_ERROR_BAD_STATE;
+	uint32_t exceptions = 0U;
+	uint32_t ca_chk = 0;
+	uint32_t cm_chk = 0;
+
+	if (IS_ENABLED(CFG_STM32_CM33TDCID))
+		return TEE_ERROR_ACCESS_DENIED;
+
+	if (is_bsec_write_locked())
+		return TEE_ERROR_ACCESS_DENIED;
+
+	exceptions = bsec_lock();
+
+	io_write32(bsec_base() + BSEC_DBGACR, ca_value);
+	io_write32(bsec_base() + BSEC_DBGMCR, cm_value);
+
+	ca_chk = io_read32(bsec_base() + BSEC_DBGACR);
+	cm_chk = io_read32(bsec_base() + BSEC_DBGMCR);
+
+	if (ca_chk == ca_value && cm_chk == cm_value)
+		result = TEE_SUCCESS;
+
+	bsec_unlock(exceptions);
+
+	return result;
+}
+#endif /* CFG_STM32MP21 */
 
 /*
  * bsec_get_version: return BSEC version.

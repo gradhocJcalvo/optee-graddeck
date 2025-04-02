@@ -156,6 +156,16 @@ TEE_Result stm32_bsec_write_debug_conf(uint32_t value);
 /* Return debug configuration read from BSEC */
 uint32_t stm32_bsec_read_debug_conf(void);
 
+#ifdef CFG_STM32MP21
+/*
+ * Enable/disable debug with temporal isolation level for Cortex-A and Cortex-M
+ * @ca_value: Value to write in BSEC debug control register for Cortex-A
+ * @cm_value: Value to write in BSEC debug control register for Cortex-M
+ * Return a TEE_Result compliant return value
+ */
+TEE_Result stm32_bsec_write_debug_ctrl(uint32_t ca_value, uint32_t cm_value);
+#endif
+
 /*
  * Write shadow-read lock
  * @otp_id: OTP number
