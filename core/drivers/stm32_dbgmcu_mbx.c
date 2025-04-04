@@ -166,10 +166,13 @@ static enum itr_return stm32_dbgmcu_mbx_itr_auth_rd(struct itr_handler *h
 static void yielding_stm32_dbgmcu_mbx_notif(struct notif_driver *ndrv __unused,
 					    enum notif_event ev)
 {
+	vaddr_t reg_auth_ack = dbgmcu_d.base + DBGMCU_DBG_AUTH_ACK;
+
 	switch (ev) {
 	case NOTIF_EVENT_DO_BOTTOM_HALF:
 		DMSG("Notif DO_BOTTOM_HALF");
-		stm32_dbgmcu_mbx_threaded_itr();
+		if (io_read32(reg_auth_ack) & DBGMCU_DBG_AUTH_ACK_HOST)
+			stm32_dbgmcu_mbx_threaded_itr();
 		break;
 	case NOTIF_EVENT_STOPPED:
 		DMSG("Notif STOPPED");
