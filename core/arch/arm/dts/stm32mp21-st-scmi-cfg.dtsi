@@ -858,7 +858,7 @@
 			scmi-channel-id = <0>;
 			mbox-names = "scmi_cm33";
 			mboxes = <&ipcc1 RIF_IPCC_CPU1_CHANNEL(16)>;
-			shmem = <&ipc_shmem>;
+			shmem = <&scmi_cid2_ns>;
 			#address-cells = <1>;
 			#size-cells = <0>;
 
