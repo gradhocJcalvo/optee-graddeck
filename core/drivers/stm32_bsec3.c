@@ -157,6 +157,26 @@ static_assert(!(IS_ENABLED(CFG_STM32_CM33TDCID) &&
 #define OTP_SECURE_BOOT			18U
 #define OTP_CLOSED_SECURE		GENMASK_32(3, 0)
 
+#if defined(CFG_STM32MP21)
+#define STM32MP21_PERM_MASK_A35NSTO	BIT(0) /* A35 Non-Secure Trace-only */
+#define STM32MP21_PERM_MASK_A35NSFD	BIT(1) /* A35 Non-Secure Full-Debug */
+#define STM32MP21_PERM_MASK_A35STO	BIT(2) /* A35 Secure Trace-only */
+#define STM32MP21_PERM_MASK_A35SFD	BIT(3) /* A35 Secure Full-Debug */
+#define STM32MP21_PERM_MASK_M33NSTO	BIT(4) /* M33 Non-Secure Trace-only */
+#define STM32MP21_PERM_MASK_M33NSFD	BIT(5) /* M33 Non-Secure Full-Debug */
+#define STM32MP21_PERM_MASK_M33STO	BIT(6) /* M33 Secure Trace-only */
+#define STM32MP21_PERM_MASK_M33SFD	BIT(7) /* M33 Secure Full-Debug */
+#define STM32MP21_PERM_MASK_A35HDPL	BIT(8) /* A35 Minimal Debug level */
+#define STM32MP21_PERM_MASK_A35HDP(lvl) (STM32MP21_PERM_MASK_A35HDPL << (lvl))
+#define STM32MP21_PERM_MASK_M33HDPL	BIT(12) /* M33 Minimal Debug level */
+#define STM32MP21_PERM_MASK_M33HDP(lvl) (STM32MP21_PERM_MASK_M33HDPL << (lvl))
+#define STM32MP21_PERM_MASK_A35SDDIS	BIT(16) /* A35 Secure Dbg Disabled */
+#define STM32MP21_PERM_MASK_A35NSDDIS	BIT(17) /* A35 Non-Sec Dbg Disabled */
+#define STM32MP21_PERM_MASK_M33SDDIS	BIT(18) /* M33 Secure Dbg Disabled */
+#define STM32MP21_PERM_MASK_M33NSDDIS	BIT(19) /* M33 Non-Sec Dbg Disabled */
+#define STM32MP21_PERM_MASK_WAITATTACH	BIT(31) /* Wait for attach at boot tm */
+#endif
+
 struct nvmem_cell {
 	char *name;
 	uint32_t phandle;
@@ -696,6 +716,63 @@ TEE_Result stm32_bsec_write_debug_ctrl(uint32_t ca_value, uint32_t cm_value)
 	bsec_unlock(exceptions);
 
 	return result;
+}
+
+void stm32_bsec_parse_permissions(uint32_t perm_mask,
+				  uint32_t *dbg_en_val,
+				  uint32_t *dbg_a_ctrl_val,
+				  uint32_t *dbg_m_ctrl_val)
+{
+	uint32_t hdpl_values[] = { BSEC_AUTH_HDPL0, BSEC_AUTH_HDPL1,
+				   BSEC_AUTH_HDPL2, BSEC_AUTH_HDPL3 };
+	int8_t lvl = ARRAY_SIZE(hdpl_values) - 1;
+
+	*dbg_en_val = 0;
+	*dbg_a_ctrl_val = 0;
+	*dbg_m_ctrl_val = 0;
+
+	/* Prepare value for BSEC debug enable register */
+	*dbg_en_val |= BSEC_DEVICEEN | BSEC_HDPEN | BSEC_DBGSWEN;
+	if (perm_mask & STM32MP21_PERM_MASK_A35NSTO)
+		*dbg_en_val |= BSEC_NIDENA;
+	if (perm_mask & STM32MP21_PERM_MASK_A35NSFD)
+		*dbg_en_val |= BSEC_NIDENA | BSEC_DBGENA;
+	if (perm_mask & STM32MP21_PERM_MASK_A35STO)
+		*dbg_en_val |= BSEC_SPNIDENA;
+	if (perm_mask & STM32MP21_PERM_MASK_A35SFD)
+		*dbg_en_val |= BSEC_SPNIDENA | BSEC_SPIDENA;
+	if (perm_mask & STM32MP21_PERM_MASK_M33NSTO)
+		*dbg_en_val |= BSEC_NIDENM;
+	if (perm_mask & STM32MP21_PERM_MASK_M33NSFD)
+		*dbg_en_val |= BSEC_NIDENM | BSEC_DBGENM;
+	if (perm_mask & STM32MP21_PERM_MASK_M33STO)
+		*dbg_en_val |= BSEC_SPNIDENM;
+	if (perm_mask & STM32MP21_PERM_MASK_M33SFD)
+		*dbg_en_val |= BSEC_SPNIDENM | BSEC_SPIDENM;
+
+	/* Prepare values for BSEC debug control registers */
+	for (lvl = ARRAY_SIZE(hdpl_values) - 1; lvl >= 0; lvl--) {
+		if (perm_mask & STM32MP21_PERM_MASK_A35HDP(lvl)) {
+			*dbg_a_ctrl_val |= BSEC_AUTH_HDPL(hdpl_values[lvl]);
+			break;
+		}
+	}
+	for (lvl = ARRAY_SIZE(hdpl_values) - 1; lvl >= 0; lvl--) {
+		if (perm_mask & STM32MP21_PERM_MASK_M33HDP(lvl)) {
+			*dbg_m_ctrl_val |= BSEC_AUTH_HDPL(hdpl_values[lvl]);
+			break;
+		}
+	}
+	if (!(perm_mask & STM32MP21_PERM_MASK_A35NSDDIS))
+		*dbg_a_ctrl_val |= BSEC_AUTH_UNLOCK(BSEC_AUTH_UNLOCKED);
+	if (!(perm_mask & STM32MP21_PERM_MASK_A35SDDIS))
+		*dbg_a_ctrl_val |= BSEC_AUTH_SEC(BSEC_AUTH_UNLOCKED);
+	if (!(perm_mask & STM32MP21_PERM_MASK_M33NSDDIS))
+		*dbg_m_ctrl_val |= BSEC_AUTH_UNLOCK(BSEC_AUTH_UNLOCKED);
+	if (!(perm_mask & STM32MP21_PERM_MASK_M33SDDIS))
+		*dbg_m_ctrl_val |= BSEC_AUTH_SEC(BSEC_AUTH_UNLOCKED);
+
+	/* TODO: STM32MP21_PERM_MASK_WAITATTACH */
 }
 #endif /* CFG_STM32MP21 */
 

@@ -164,6 +164,21 @@ uint32_t stm32_bsec_read_debug_conf(void);
  * Return a TEE_Result compliant return value
  */
 TEE_Result stm32_bsec_write_debug_ctrl(uint32_t ca_value, uint32_t cm_value);
+
+/*
+ * Parse permissions mask and prepare values to feed stm32_bsec_write_debug_conf
+ * and stm32_bsec_write_debug_ctrl functions to enable/disable debug
+ * @perm_mask: Permissions mask to enable/disable debug features
+ * @dbg_en_val: (out) Value to write in BSEC debug enable register
+ * @dbg_a_ctrl_val: (out) Value to write in BSEC debug control register for
+ *			  Cortex-A
+ * @dbg_m_ctrl_val: (out) Value to write in BSEC debug control register for
+ *			  Cortex-M
+ */
+void stm32_bsec_parse_permissions(uint32_t perm_mask,
+				  uint32_t *dbg_en_val,
+				  uint32_t *dbg_a_ctrl_val,
+				  uint32_t *dbg_m_ctrl_val);
 #endif
 
 /*
