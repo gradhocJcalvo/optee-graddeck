@@ -74,16 +74,17 @@
 		};
 	};
 
-	usart2_pins_a: usart2-0 {
+	uart5_pins_mx: uart5_mx-0 {
 		pins1 {
-			pinmux = <STM32_PINMUX_NSEC('A', 4, AF6)>; /* USART2_TX */
+			pinmux = <STM32_PINMUX('G', 10, AF5)>; /* UART5_RX */
+			bias-disable;
+			drive-push-pull;
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('G', 9, AF5)>; /* UART5_TX */
 			bias-disable;
 			drive-push-pull;
 			slew-rate = <0>;
-		};
-		pins2 {
-			pinmux = <STM32_PINMUX_NSEC('A', 8, AF8)>; /* USART2_RX */
-			bias-disable;
 		};
 	};
 };
